@@ -1,26 +1,154 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Background hues match the live site: warm near-black for the header
+     and dominant navy/black areas, cream for soft sections. */
+  --bg: #ffffff;
+  --bg-dark: #15110b;        /* header / dark sections */
+  --bg-dark-2: #1c1610;      /* slightly lifted dark surface */
+  --bg-cream: #f6efde;       /* warm cream like the live site */
+  --fg: #15110b;
+  --fg-on-dark: #f4ecd9;     /* off-white on dark bg */
+  --muted: #6b6357;
+  --gold: #d4a657;           /* primary brand gold */
+  --gold-soft: #e8c789;
+  --gold-deep: #b8862f;
+  --border: #e7e2d3;
+  --border-dark: rgba(244, 236, 217, 0.15);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-brand-dark: var(--bg-dark);
+  --color-brand-dark-2: var(--bg-dark-2);
+  --color-brand-cream: var(--bg-cream);
+  --color-brand-gold: var(--gold);
+  --color-brand-gold-soft: var(--gold-soft);
+  --color-brand-gold-deep: var(--gold-deep);
+  --color-muted: var(--muted);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+}
+
+.font-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+}
+
+.container-x {
+  width: 100%;
+  max-width: 84rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .container-x { padding-inline: 2.5rem; }
+}
+
+.section-y {
+  padding-block: 4.5rem;
+}
+
+@media (min-width: 768px) {
+  .section-y { padding-block: 6.5rem; }
+}
+
+/* Pill buttons match the live site (rounded full, gold fill, dark text) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.75rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  transition: transform 0.18s ease, background-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease, border-color 0.2s ease;
+  will-change: transform;
+  white-space: nowrap;
+}
+
+.btn:hover { transform: translateY(-1px); }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+.btn-gold {
+  background: var(--gold);
+  color: var(--bg-dark);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+}
+.btn-gold:hover { background: var(--gold-deep); color: #fff; }
+
+.btn-gold-outline {
+  background: transparent;
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+}
+.btn-gold-outline:hover { background: var(--gold); color: var(--bg-dark); }
+
+.btn-light-outline {
+  background: transparent;
+  color: var(--fg-on-dark);
+  border: 1.5px solid rgba(244, 236, 217, 0.6);
+}
+.btn-light-outline:hover { background: var(--fg-on-dark); color: var(--bg-dark); }
+
+.btn-dark {
+  background: var(--bg-dark);
+  color: var(--fg-on-dark);
+}
+.btn-dark:hover { background: var(--bg-dark-2); }
+
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Nav link underline */
+.nav-link {
+  position: relative;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--fg-on-dark);
+  opacity: 0.85;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.nav-link:hover,
+.nav-link[aria-current="page"] {
+  color: var(--gold);
+  opacity: 1;
+}
+.nav-link[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -8px;
+  height: 2px;
+  background: var(--gold);
+}
+
+/* Decorative hairline under cream sections */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border), transparent);
 }
