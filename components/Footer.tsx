@@ -75,7 +75,7 @@ export function Footer() {
           <h3 className="text-xs font-semibold tracking-[0.25em] uppercase text-[var(--gold)]">Affiliations</h3>
           <ul className="mt-4 space-y-2.5 text-sm text-[var(--fg-on-dark)]/70">
             {PARTNER_LOGOS.map((p) => (
-              <li key={p}>{p}</li>
+              <li key={p.name}>{p.name}</li>
             ))}
           </ul>
           <p className="mt-6 text-sm">

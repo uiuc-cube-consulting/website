@@ -1,9 +1,9 @@
 import { ALUMNI_PLACEMENTS } from "@/lib/content";
 
 /**
- * "What Comes After CUBE?" — alumni placement logos.
- * Currently renders styled name chips; swap to <img> once you drop logo
- * files into /public/alumni/<slug>.svg and add a `logo` field per item.
+ * "What Comes After CUBE?" — alumni placement logos rendered as a wall
+ * matching the live site layout. Each tile is a transparent dark cell so
+ * the white-foreground company logos read cleanly.
  */
 export function AlumniGrid() {
   return (
@@ -21,15 +21,24 @@ export function AlumniGrid() {
           </p>
         </div>
 
-        <ul className="mt-12 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
-          {ALUMNI_PLACEMENTS.map((name) => (
+        <ul className="mt-12 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-10 md:gap-y-12 items-center">
+          {ALUMNI_PLACEMENTS.map((brand) => (
             <li
-              key={name}
-              className="aspect-[5/2] rounded-xl bg-white/[0.04] border border-white/[0.08] grid place-items-center text-center px-3"
+              key={brand.name}
+              className="h-16 md:h-20 flex items-center justify-center"
             >
-              <span className="font-display font-bold text-white/85 text-sm md:text-base tracking-tight">
-                {name}
-              </span>
+              {brand.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={brand.logo}
+                  alt={brand.name}
+                  className="max-h-12 md:max-h-14 max-w-[80%] object-contain opacity-90 hover:opacity-100 transition-opacity"
+                />
+              ) : (
+                <span className="font-display font-bold text-white/85 text-sm md:text-base tracking-tight">
+                  {brand.name}
+                </span>
+              )}
             </li>
           ))}
         </ul>

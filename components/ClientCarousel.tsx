@@ -3,16 +3,13 @@
 import useEmblaCarousel from "embla-carousel-react";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Brand } from "@/lib/content";
 
 /**
- * Horizontal scrolling strip of client logos / name chips.
- * Falls back to styled text chips when logo files aren't available.
+ * Horizontal scrolling strip of client logos. Falls back to a styled text
+ * chip when a brand has no logo file.
  */
-export function ClientCarousel({
-  items,
-}: {
-  items: { name: string; logo?: string }[];
-}) {
+export function ClientCarousel({ items }: { items: readonly Brand[] }) {
   const [emblaRef, embla] = useEmblaCarousel({
     loop: true,
     align: "start",
@@ -43,13 +40,13 @@ export function ClientCarousel({
               key={i}
               className="shrink-0 grow-0 basis-[42%] sm:basis-[28%] md:basis-[20%] lg:basis-[16%]"
             >
-              <div className="h-24 md:h-28 rounded-xl bg-white border border-[var(--border-dark)] flex items-center justify-center px-4">
+              <div className="h-24 md:h-28 rounded-xl bg-white border border-[var(--border)] flex items-center justify-center px-4 hover:shadow-md transition-shadow">
                 {c.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={c.logo}
                     alt={c.name}
-                    className="max-h-12 max-w-full object-contain"
+                    className="max-h-14 max-w-full object-contain"
                   />
                 ) : (
                   <span className="font-display font-bold text-[var(--bg-dark)] text-sm md:text-base text-center tracking-tight">

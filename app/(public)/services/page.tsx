@@ -31,7 +31,7 @@ export default function ServicesPage() {
             Companies we&apos;ve worked with.
           </h2>
           <div className="mt-10 px-4 md:px-6">
-            <ClientCarousel items={CLIENT_LOGOS.map((n) => ({ name: n }))} />
+            <ClientCarousel items={CLIENT_LOGOS} />
           </div>
         </div>
       </section>

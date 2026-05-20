@@ -12,7 +12,7 @@ export const SITE = {
   linktree: "https://linktr.ee/cubeconsulting",
   applyForm: "https://forms.gle/Jb4gFisrQe7AfK7e7",
   mailingListForm: "https://forms.gle/BWdrC9vJka7QwDeC8",
-  copyrightYear: 2024,
+  copyrightYear: 2026,
 } as const;
 
 export const NAV_LINKS = [
@@ -114,140 +114,167 @@ export const SERVICE_CATEGORIES = [
   },
 ] as const;
 
-export const TESTIMONIALS = [
-  {
-    quote:
-      "The CUBE team brought fresh thinking and a level of execution that exceeded what we expected from a student org. They moved fast and the work they delivered slotted right into our roadmap.",
-    author: "Client Partner",
-    role: "Series-A Startup",
-  },
-  {
-    quote:
-      "Working with the CUBE consultants was a real pleasure. They cared deeply about our problem and showed up with the kind of professionalism you'd expect from a senior firm.",
-    author: "Founder",
-    role: "Energy Tech",
-  },
-  {
-    quote:
-      "Smart, organized, full of ideas. The engagement felt smoother than partnerships we've had with much larger consulting firms.",
-    author: "Director of Engineering",
-    role: "Fortune 500",
-  },
-] as const;
-
-// Project team member.
-// `photo` is an optional path under /public; if absent the avatar renders initials.
-export type TeamMember = {
-  name: string;
-  year?: string; // Freshman / Sophomore / Junior / Senior
-  role: "Project Manager" | "Senior Consultant" | "Executive Partner" | "Consultant";
-  photo?: string;
+export type Testimonial = {
+  quote: string;
+  author: string;
+  title?: string;
+  company: string;
 };
 
+export const TESTIMONIALS: Testimonial[] = [
+  {
+    quote:
+      "Lucky us! We at Inprentus enjoyed working with the University of Illinois Champaign-Urbana Business and Engineering (CUBE) Consulting Group on a spring project. The group offered great analyses to achieve further momentum in the AR market with our revolutionary blazed waveguides. Looking forward to a fall follow-on project!",
+    author: "Cynthia Otteman",
+    title: "Chief of Staff",
+    company: "Inprentus",
+  },
+  {
+    quote:
+      "I really enjoyed working with the students from CUBE Consulting. Students have more fresh and innovative ideas that you could expect to find in the professional world.",
+    author: "Daniel Krause",
+    title: "Co-Owner",
+    company: "Cracked",
+  },
+  {
+    quote:
+      "It was a pleasure working with CUBE Consulting. They care deeply about their clients' needs and strive to provide innovative solutions. They are very respectful of your time and showed the utmost professionalism. I recommend working with them if you're given the opportunity.",
+    author: "Todd Thorstenson",
+    title: "Owner",
+    company: "Hammerhead Coffee",
+  },
+];
+
+// Project team composite image (pre-rendered photo card with names + roles).
+// Drop a new file under /public/projects/team-<slug>.png and reference here.
 export type Project = {
   name: string;
-  /** Path under /public to the client logo (e.g. /clients/aws.svg). */
+  /** Path under /public to the client logo. */
   logo?: string;
+  /** Path under /public to the team composite photo. */
+  teamImage?: string;
   bullets: string[];
-  team?: TeamMember[];
 };
 
 export const PROJECTS: Project[] = [
   {
     name: "AllPeople Marketplace",
+    logo: "/clients/allpeople.webp",
+    teamImage: "/projects/team-allpeople.png",
     bullets: [
       "Conducting primary market research and investor discovery to assess demand.",
       "Developing unit economics and financial models to evaluate margins, costs, and impact.",
     ],
-    team: [
-      { name: "Daniel Zhang", year: "Sophomore", role: "Project Manager" },
-      { name: "Neha Nallamala", year: "Freshman", role: "Senior Consultant" },
-      { name: "Megan Zeng", year: "Junior", role: "Executive Partner" },
-    ],
   },
   {
     name: "AWS",
+    logo: "/clients/aws.png",
+    teamImage: "/projects/team-aws.png",
     bullets: [
       "Identifying high-impact opportunities for AI-driven efficiency and automation.",
       "Designing and testing light-weight AI-enabled solutions using the CRAFT framework.",
     ],
-    team: [
-      { name: "Mann Talati", year: "Sophomore", role: "Project Manager" },
-      { name: "Andrea Turek", year: "Sophomore", role: "Senior Consultant" },
-      { name: "Emily Park", year: "Junior", role: "Executive Partner" },
-    ],
-  },
-  {
-    name: "APM",
-    bullets: [
-      "Conducting market research and investor discovery alongside financial modeling.",
-      "Evaluating unit margins, expenses, and runway across the business.",
-    ],
-  },
-  {
-    name: "Optura",
-    bullets: [
-      "Prototyping Workshop Mode to support live in-session collaboration.",
-      "Research, workflow design, and feature scoping for the workshop experience.",
-    ],
   },
   {
     name: "Panasonic",
+    logo: "/clients/panasonic.png",
+    teamImage: "/projects/team-panasonic.png",
     bullets: [
       "Researching smart-manufacturing trends and adoption across the industry.",
       "Synthesizing insights on AI and automation within Panasonic's platform.",
     ],
   },
   {
-    name: "Member Intelligence",
+    name: "Wrike",
+    logo: "/clients/wrike.png",
+    teamImage: "/projects/team-wrike.png",
     bullets: [
-      "Centralizing member data and automating intake into a single system of record.",
-      "Building engagement workflows that fire from the unified data layer.",
+      "Building a member intelligence system to centralize data and automate intake.",
+      "Implementing automated engagement workflows fired from a unified data layer.",
     ],
   },
   {
-    name: "Inventory Platform",
+    name: "Squint",
+    logo: "/clients/squint.png",
+    teamImage: "/projects/team-squint.png",
     bullets: [
-      "Centralized stock management with audit trails and consistent documentation.",
+      "Prototyping Workshop Mode to support live in-session collaboration.",
+      "Research, workflow design, and feature scoping for the workshop experience.",
+    ],
+  },
+  {
+    name: "Nucurrent",
+    logo: "/clients/nucurrent.png",
+    teamImage: "/projects/team-nucurrent.png",
+    bullets: [
+      "Centralized inventory management with audit trails and consistent documentation.",
       "Automated reorder workflows triggered by inventory thresholds.",
     ],
   },
   {
-    name: "Workflow AI",
+    name: "GTMshift",
+    logo: "/clients/gtmshift.png",
+    teamImage: "/projects/team-gtmshift.png",
     bullets: [
-      "Diagnosing inefficiencies across team workflows.",
+      "Diagnosing inefficiencies across go-to-market workflows.",
       "Designing targeted AI-driven solutions and piloting them with stakeholders.",
     ],
   },
 ];
 
-export const CLIENT_LOGOS = [
-  "Earnest Earth",
-  "Cache Energy",
-  "Rapyuta Robotics",
-  "PC Buildee",
-  "Panasonic",
-  "Optura",
-  "Inprentus",
-  "Yummy Future",
-  "Nasadya",
-  "AWS",
-  "AllPeople",
-] as const;
+// Brand directory used by LogoStrip / ClientCarousel / AlumniGrid.
+// `logo` is optional — components fall back to a styled text chip when missing.
+export type Brand = { name: string; logo?: string };
 
-export const PARTNER_LOGOS = [
-  "Junior Enterprise",
-  "Accenture",
-  "Texas Instruments",
-] as const;
+export const CLIENT_LOGOS: Brand[] = [
+  { name: "Earnest Earth",    logo: "/clients/earnest-earth.jpeg" },
+  { name: "Cache Energy",     logo: "/clients/cache-energy.jpeg" },
+  { name: "Rapyuta Robotics", logo: "/clients/rapyuta-robotics.webp" },
+  { name: "PC Buildee",       logo: "/clients/pc-buildee.png" },
+  { name: "Panasonic",        logo: "/clients/panasonic.png" },
+  { name: "AWS",              logo: "/clients/aws.png" },
+  { name: "Inprentus",        logo: "/clients/inprentus.jpg" },
+  { name: "Yummy Future",     logo: "/clients/yummy-future.png" },
+  { name: "Nasadya",          logo: "/clients/nasadya.png" },
+  { name: "AllPeople",        logo: "/clients/allpeople.webp" },
+  { name: "Wrike",            logo: "/clients/wrike.png" },
+  { name: "Squint",           logo: "/clients/squint.png" },
+  { name: "Nucurrent",        logo: "/clients/nucurrent.png" },
+  { name: "GTMshift",         logo: "/clients/gtmshift.png" },
+];
 
-export const ALUMNI_PLACEMENTS = [
-  "Microsoft", "Google", "Apple", "Amazon", "Meta", "Adobe",
-  "McKinsey", "BCG", "Bain & Co.", "Capital One", "Bank of America",
-  "Citi", "BMO", "Synchrony", "KPMG", "Crowe",
-  "Intuit", "Scale AI", "Rivian", "Caterpillar", "Boeing",
-  "Tropicana", "Deloitte",
-] as const;
+export const PARTNER_LOGOS: Brand[] = [
+  { name: "Junior Enterprise",  logo: "/partners/junior-enterprise.png" },
+  { name: "Accenture",          logo: "/partners/accenture.png" },
+  { name: "Texas Instruments",  logo: "/partners/ti.png" },
+];
+
+export const ALUMNI_PLACEMENTS: Brand[] = [
+  { name: "Microsoft",       logo: "/alumni/microsoft.png" },
+  { name: "Google",          logo: "/alumni/google.png" },
+  { name: "Apple",           logo: "/alumni/apple.webp" },
+  { name: "Amazon",          logo: "/alumni/amazon.png" },
+  { name: "Meta",            logo: "/alumni/meta.png" },
+  { name: "Adobe",           logo: "/alumni/adobe.png" },
+  { name: "McKinsey",        logo: "/alumni/mckinsey.png" },
+  { name: "BCG",             logo: "/alumni/bcg.png" },
+  { name: "Bain & Co.",      logo: "/alumni/bain.png" },
+  { name: "Deloitte",        logo: "/alumni/deloitte.png" },
+  { name: "Capital One",     logo: "/alumni/capital-one.webp" },
+  { name: "Bank of America", logo: "/alumni/bank-of-america.png" },
+  { name: "Citi",            logo: "/alumni/citi.png" },
+  { name: "BMO",             logo: "/alumni/bmo.png" },
+  { name: "Synchrony",       logo: "/alumni/synchrony.png" },
+  { name: "KPMG",            logo: "/alumni/kpmg.png" },
+  { name: "Crowe",           logo: "/alumni/crowe.png" },
+  { name: "Intuit",          logo: "/alumni/intuit.png" },
+  { name: "Scale AI",        logo: "/alumni/scale.webp" },
+  { name: "Rivian",          logo: "/alumni/rivian.png" },
+  { name: "Caterpillar",     logo: "/alumni/caterpillar.png" },
+  { name: "Boeing",          logo: "/alumni/boeing.png" },
+  { name: "Tropicana",       logo: "/alumni/tropicana.webp" },
+  { name: "UChicago",        logo: "/alumni/uchicago.webp" },
+];
 
 export const FALL_RECRUITMENT = {
   semester: "Fall 2026",

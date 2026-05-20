@@ -11,25 +11,25 @@ export function Testimonials() {
           </h2>
         </div>
 
-        <div className="mt-14 grid md:grid-cols-3 gap-6 md:gap-8">
+        <div className="mt-14 grid md:grid-cols-3 gap-8 md:gap-10">
           {TESTIMONIALS.map((t, i) => (
-            <blockquote
-              key={i}
-              className="text-center px-2 md:px-4"
-            >
+            <blockquote key={i} className="text-center px-2 md:px-4">
               <span
                 aria-hidden
-                className="block font-display font-black text-[var(--gold)] text-7xl leading-none mb-2"
+                className="block font-display font-black text-[var(--gold)] text-7xl leading-none mb-3"
               >
                 &ldquo;
               </span>
-              <p className="text-white/85 text-[15px] leading-relaxed">{t.quote}</p>
-              <footer className="mt-6">
-                <div className="font-display font-bold text-white">{t.author}</div>
+              <footer className="mb-4">
+                <div className="font-display font-bold text-white text-[15px]">
+                  {t.author}
+                  {t.title && `, ${t.title}`}
+                </div>
                 <div className="text-[11px] tracking-[0.22em] uppercase text-[var(--gold)] mt-1">
-                  {t.role}
+                  {t.company}
                 </div>
               </footer>
+              <p className="text-white/80 text-[14px] leading-relaxed">{t.quote}</p>
             </blockquote>
           ))}
         </div>
