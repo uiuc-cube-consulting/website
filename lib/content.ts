@@ -177,7 +177,7 @@ export const PROJECTS: Project[] = [
   },
   {
     name: "Panasonic",
-    logo: "/clients/panasonic.png",
+    logo: "/clients/panasonic2.png",
     teamImage: "/projects/team-panasonic.png",
     bullets: [
       "Researching smart-manufacturing trends and adoption across the industry.",
@@ -186,7 +186,7 @@ export const PROJECTS: Project[] = [
   },
   {
     name: "Wrike",
-    logo: "/clients/wrike.png",
+    logo: "/clients/wrike2.png",
     teamImage: "/projects/team-wrike.png",
     bullets: [
       "Building a member intelligence system to centralize data and automate intake.",
@@ -195,7 +195,7 @@ export const PROJECTS: Project[] = [
   },
   {
     name: "Squint",
-    logo: "/clients/squint.png",
+    logo: "/clients/squint2.png",
     teamImage: "/projects/team-squint.png",
     bullets: [
       "Prototyping Workshop Mode to support live in-session collaboration.",
@@ -204,7 +204,7 @@ export const PROJECTS: Project[] = [
   },
   {
     name: "Nucurrent",
-    logo: "/clients/nucurrent.png",
+    logo: "/clients/nucurrent2.png",
     teamImage: "/projects/team-nucurrent.png",
     bullets: [
       "Centralized inventory management with audit trails and consistent documentation.",
@@ -213,13 +213,23 @@ export const PROJECTS: Project[] = [
   },
   {
     name: "GTMshift",
-    logo: "/clients/gtmshift.png",
+    logo: "/clients/gtmshift2.png",
     teamImage: "/projects/team-gtmshift.png",
     bullets: [
       "Diagnosing inefficiencies across go-to-market workflows.",
       "Designing targeted AI-driven solutions and piloting them with stakeholders.",
     ],
   },
+  {
+    name: "Optura",
+    logo: "/clients/optura2.png",
+    teamImage: "/projects/team-optura.png",
+    bullets: [
+      "Prototyping Optura's Workshop Mode to support collaboration and decision-making.",
+      "Leading research, workflow design, and core feature development for a scalable end-to-end workshop experience.",
+    ],
+  },
+
 ];
 
 // Brand directory used by LogoStrip / ClientCarousel / AlumniGrid.
@@ -238,9 +248,10 @@ export const CLIENT_LOGOS: Brand[] = [
   { name: "Nasadya",          logo: "/clients/nasadya.png" },
   { name: "AllPeople",        logo: "/clients/allpeople.webp" },
   { name: "Wrike",            logo: "/clients/wrike.png" },
-  { name: "Squint",           logo: "/clients/squint.png" },
+  { name: "Squint",           logo: "/clients/squint.webp" },
   { name: "Nucurrent",        logo: "/clients/nucurrent.png" },
-  { name: "GTMshift",         logo: "/clients/gtmshift.png" },
+  { name: "GTMshift",         logo: "/clients/gtmshift.jpeg" },
+  { name: "Optura",           logo: "/clients/optura.jpeg"},
 ];
 
 export const PARTNER_LOGOS: Brand[] = [
@@ -319,7 +330,7 @@ export const PORTAL_RESOURCES = [
   {
     title: "Slide Templates",
     description: "Branded slide deck templates for client deliverables.",
-    href: "https://drive.google.com",
+    href: "https://drive.google.com/drive/u/0/folders/1PZu8aAHQR6jsX7Aor6eOVlTL2G152xp1",
     icon: "presentation",
   },
   {
@@ -331,13 +342,13 @@ export const PORTAL_RESOURCES = [
   {
     title: "Project SOPs",
     description: "Standard operating procedures for kickoff, midpoint, and final delivery.",
-    href: "https://drive.google.com",
+    href: "https://drive.google.com/drive/u/0/folders/1W2mPlLQ1CwIPFghbXzyO-s0dP9cf69Rr",
     icon: "file",
   },
   {
     title: "Brand Assets",
     description: "Logo files, color tokens, and approved photography.",
-    href: "https://drive.google.com",
+    href: "https://drive.google.com/drive/u/0/folders/1PZu8aAHQR6jsX7Aor6eOVlTL2G152xp1",
     icon: "image",
   },
   {
@@ -349,7 +360,7 @@ export const PORTAL_RESOURCES = [
   {
     title: "Member Handbook",
     description: "Onboarding, policies, and expectations for consultants.",
-    href: "https://drive.google.com",
+    href: "https://drive.google.com/drive/u/0/folders/1Cq1PIjUgjuJ6qkuxWPLGvumn4SiHyki2",
     icon: "users",
   },
 ] as const;

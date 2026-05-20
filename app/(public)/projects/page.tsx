@@ -20,7 +20,6 @@ export default function ProjectsPage() {
 
       <section className="section-y bg-[var(--bg-cream)]/40">
         <div className="container-x">
-          <p className="eyebrow text-center">Spring 2026</p>
           <h2 className="mt-3 text-center font-display font-extrabold text-[var(--gold-deep)] text-4xl md:text-5xl">
             Spring 2026
           </h2>

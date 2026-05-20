@@ -6,7 +6,7 @@ export function Hero() {
   return (
     <section className="relative isolate w-full overflow-hidden bg-[var(--bg-dark)] text-white">
       <Image
-        src="/hero-team.png"
+        src="/hero.JPG"
         alt="CUBE Consulting team"
         fill
         priority

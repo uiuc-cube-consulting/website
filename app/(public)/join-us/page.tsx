@@ -11,16 +11,14 @@ export const metadata: Metadata = {
 };
 
 const GALLERY_IMAGES = [
-  { src: "/scraped/join-us/1ae7010d6f.jpg", alt: "CUBE team event" },
-  { src: "/scraped/join-us/4c7f97f6f7.jpg", alt: "Consultants collaborating" },
-  { src: "/scraped/join-us/710b9f81ae.jpg", alt: "Members at a CUBE event" },
-  { src: "/scraped/join-us/bd70808e04.jpg", alt: "Team gathering" },
-  { src: "/scraped/join-us/bf05ef2f60.jpg", alt: "CUBE social" },
-  { src: "/scraped/join-us/c1aa3bd3ef.jpg", alt: "CUBE retreat" },
-  { src: "/scraped/join-us/e13956bd2a.jpg", alt: "Team photo" },
-  { src: "/scraped/join-us/e26a0ac439.jpg", alt: "Team photo" },
-  { src: "/scraped/join-us/f0f1038eba.jpg", alt: "Team photo" },
-  { src: "/scraped/join-us/f1179e3ea2.jpg", alt: "Team photo" },
+  { src: "/scraped/join-us/img1.JPG", alt: "CUBE team event" },
+  { src: "/scraped/join-us/img2.JPG", alt: "Consultants collaborating" },
+  { src: "/scraped/join-us/img3.JPG", alt: "Members at a CUBE event" },
+  { src: "/scraped/join-us/img4.JPG", alt: "Team gathering" },
+  { src: "/scraped/join-us/img5.JPG", alt: "CUBE social" },
+  { src: "/scraped/join-us/img6.JPG", alt: "CUBE retreat" },
+  { src: "/scraped/join-us/img7.JPG", alt: "Team photo" },
+  { src: "/scraped/join-us/img8.png", alt: "Team photo" },
 ];
 
 export default function JoinUsPage() {

@@ -9,11 +9,11 @@ import { Testimonials } from "@/components/Testimonials";
 import { HOME_FEATURE_CARDS, PILLARS, SITE, PARTNER_LOGOS } from "@/lib/content";
 
 const HOME_GALLERY = [
-  { src: "/scraped/join-us/1ae7010d6f.jpg", alt: "CUBE team event" },
-  { src: "/scraped/join-us/4c7f97f6f7.jpg", alt: "Consultants collaborating" },
-  { src: "/scraped/join-us/710b9f81ae.jpg", alt: "Members on campus" },
-  { src: "/scraped/join-us/bd70808e04.jpg", alt: "Team gathering" },
-  { src: "/scraped/join-us/c1aa3bd3ef.jpg", alt: "CUBE retreat" },
+  { src: "/scraped/join-us/img1.JPG", alt: "CUBE team event" },
+  { src: "/scraped/join-us/img2.JPG", alt: "Consultants collaborating" },
+  { src: "/scraped/join-us/img3.JPG", alt: "Members on campus" },
+  { src: "/scraped/join-us/img4.JPG", alt: "Team gathering" },
+  { src: "/scraped/join-us/img6.JPG", alt: "CUBE retreat" },
 ];
 
 export default function HomePage() {
