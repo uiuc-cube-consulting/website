@@ -258,6 +258,7 @@ export const PARTNER_LOGOS: Brand[] = [
   { name: "Junior Enterprise",  logo: "/partners/junior-enterprise.png" },
   { name: "Accenture",          logo: "/partners/accenture.png" },
   { name: "Texas Instruments",  logo: "/partners/ti.png" },
+  { name: "Grainger Engineering", logo: "/partners/grainger-engineering.png"}
 ];
 
 export const ALUMNI_PLACEMENTS: Brand[] = [
