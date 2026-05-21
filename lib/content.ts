@@ -8,7 +8,7 @@ export const SITE = {
   tagline: "Where Passion Meets Purpose.",
   email: "CUBEUIUC@gmail.com",
   instagram: "https://www.instagram.com/cubeconsulting_",
-  linkedin: "https://www.linkedin.com/company/cube-consulting",
+  linkedin: "https://www.linkedin.com/company/je-cube-consulting/",
   linktree: "https://linktr.ee/cubeconsulting",
   applyForm: "https://forms.gle/Jb4gFisrQe7AfK7e7",
   mailingListForm: "https://forms.gle/BWdrC9vJka7QwDeC8",
