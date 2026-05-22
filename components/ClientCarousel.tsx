@@ -1,6 +1,7 @@
 "use client";
 
 import useEmblaCarousel from "embla-carousel-react";
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Brand } from "@/lib/content";
@@ -42,12 +43,15 @@ export function ClientCarousel({ items }: { items: readonly Brand[] }) {
             >
               <div className="h-24 md:h-28 rounded-xl bg-white border border-[var(--border)] flex items-center justify-center px-4 hover:shadow-md transition-shadow">
                 {c.logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={c.logo}
-                    alt={c.name}
-                    className="max-h-14 max-w-full object-contain"
-                  />
+                  <div className="relative h-14 w-full">
+                    <Image
+                      src={c.logo}
+                      alt={c.name}
+                      fill
+                      sizes="200px"
+                      className="object-contain"
+                    />
+                  </div>
                 ) : (
                   <span className="font-display font-bold text-[var(--bg-dark)] text-sm md:text-base text-center tracking-tight">
                     {c.name}

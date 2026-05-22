@@ -1,6 +1,7 @@
 "use client";
 
 import useEmblaCarousel from "embla-carousel-react";
+import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -31,12 +32,12 @@ export function PhotoCarousel({ images }: { images: { src: string; alt: string }
           {images.map((img, i) => (
             <div key={i} className="relative shrink-0 grow-0 basis-full md:basis-1/2 lg:basis-1/3 px-2">
               <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-[var(--brand-cream)]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={img.src}
                   alt={img.alt}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  loading="lazy"
+                  fill
+                  sizes="(min-width:1024px) 33vw, (min-width:768px) 50vw, 100vw"
+                  className="object-cover"
                 />
               </div>
             </div>

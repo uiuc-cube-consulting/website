@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Project } from "@/lib/content";
 
 /**
@@ -13,12 +14,15 @@ export function ProjectShowcase({ project }: { project: Project }) {
     <article className="rounded-3xl bg-[var(--bg-cream)] border border-[var(--border)] p-6 md:p-9 hover:shadow-xl transition-shadow flex flex-col">
       <div className="h-20 md:h-24 flex items-center justify-center">
         {project.logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={project.logo}
-            alt={project.name}
-            className="max-h-16 md:max-h-20 max-w-[65%] object-contain"
-          />
+          <div className="relative h-16 md:h-20 w-[65%]">
+            <Image
+              src={project.logo}
+              alt={project.name}
+              fill
+              sizes="(min-width:768px) 16rem, 40vw"
+              className="object-contain"
+            />
+          </div>
         ) : (
           <span className="font-display font-extrabold text-3xl md:text-4xl text-[var(--bg-dark)] tracking-tight">
             {project.name}
@@ -28,12 +32,13 @@ export function ProjectShowcase({ project }: { project: Project }) {
 
       {project.teamImage && (
         <div className="mt-7 flex justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={project.teamImage}
             alt={`${project.name} project team`}
-            className="w-full max-w-md mx-auto"
-            loading="lazy"
+            width={570}
+            height={268}
+            sizes="(min-width:768px) 28rem, 90vw"
+            className="w-full max-w-md h-auto mx-auto"
           />
         </div>
       )}

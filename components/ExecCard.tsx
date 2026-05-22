@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ExecMember, initials } from "@/lib/team";
 
 export function ExecCard({ member }: { member: ExecMember }) {
@@ -5,11 +6,12 @@ export function ExecCard({ member }: { member: ExecMember }) {
     <article className="group rounded-2xl bg-white border border-[var(--border)] overflow-hidden hover:shadow-xl transition-shadow">
       <div className="aspect-[4/5] bg-gradient-to-br from-[var(--bg-cream)] to-white grid place-items-center relative">
         {member.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={member.photo}
             alt={member.name}
-            className="absolute inset-0 w-full h-full object-cover"
+            fill
+            sizes="(min-width:1024px) 25vw, (min-width:768px) 33vw, 50vw"
+            className="object-cover"
           />
         ) : (
           <span aria-hidden className="font-display text-6xl font-extrabold text-[var(--gold)]/35 select-none">

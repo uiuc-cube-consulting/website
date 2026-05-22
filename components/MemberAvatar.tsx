@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import Image from "next/image";
 import { initials } from "@/lib/team";
 
 /**
@@ -37,12 +38,12 @@ export function MemberAvatar({
       )}
     >
       {photo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={photo}
           alt={name}
-          className="absolute inset-0 w-full h-full object-cover"
-          loading="lazy"
+          fill
+          sizes="112px"
+          className="object-cover"
         />
       ) : (
         <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-[var(--gold-soft)]/40 to-[var(--bg-cream)]">

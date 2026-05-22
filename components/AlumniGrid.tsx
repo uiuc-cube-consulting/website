@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ALUMNI_PLACEMENTS } from "@/lib/content";
 
 /**
@@ -28,12 +29,15 @@ export function AlumniGrid() {
               className="h-16 md:h-20 flex items-center justify-center"
             >
               {brand.logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={brand.logo}
-                  alt={brand.name}
-                  className="max-h-12 md:max-h-14 max-w-[80%] object-contain opacity-90 hover:opacity-100 transition-opacity"
-                />
+                <div className="relative h-12 md:h-14 w-[80%]">
+                  <Image
+                    src={brand.logo}
+                    alt={brand.name}
+                    fill
+                    sizes="140px"
+                    className="object-contain opacity-90 hover:opacity-100 transition-opacity"
+                  />
+                </div>
               ) : (
                 <span className="font-display font-bold text-white/85 text-sm md:text-base tracking-tight">
                   {brand.name}

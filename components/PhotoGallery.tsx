@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 /**
  * Static photo collage. Mosaic layout with subtle hover lifts.
  * Pass 5+ images for the best result.
@@ -33,12 +35,12 @@ function Tile({
         "relative overflow-hidden rounded-2xl bg-[var(--bg-cream)] " + className
       }
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={img.src}
         alt={img.alt}
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-        loading="lazy"
+        fill
+        sizes="(min-width:768px) 50vw, 100vw"
+        className="object-cover transition-transform duration-500 hover:scale-105"
       />
     </div>
   );

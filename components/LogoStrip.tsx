@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Brand } from "@/lib/content";
 
 export function LogoStrip({
@@ -27,16 +28,15 @@ export function LogoStrip({
           {items.map((brand) => (
             <li key={brand.name} className="flex items-center justify-center h-14 md:h-16">
               {brand.logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={brand.logo}
-                  alt={brand.name}
-                  className={
-                    "max-h-12 md:max-h-14 w-auto object-contain " +
-                    (isDark ? "opacity-90 hover:opacity-100" : "opacity-90 hover:opacity-100") +
-                    " transition-opacity"
-                  }
-                />
+                <div className="relative h-12 md:h-14 w-28 md:w-36">
+                  <Image
+                    src={brand.logo}
+                    alt={brand.name}
+                    fill
+                    sizes="160px"
+                    className="object-contain opacity-90 hover:opacity-100 transition-opacity"
+                  />
+                </div>
               ) : (
                 <span
                   className={
