@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { auth } from "@/types/auth";
 import { fetchPoints } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";

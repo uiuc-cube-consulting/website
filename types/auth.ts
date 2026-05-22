@@ -16,17 +16,17 @@ import Google from "next-auth/providers/google";
  *   PORTAL_ALLOWLIST      — comma-separated emails (lowercase)
  */
 
-function parseAllowlist(raw: string | undefined): Set<string> {
-  if (!raw) return new Set();
-  return new Set(
-    raw
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
+// function parseAllowlist(raw: string | undefined): Set<string> {
+//   if (!raw) return new Set();
+//   return new Set(
+//     raw
+//       .split(",")
+//       .map((s) => s.trim().toLowerCase())
+//       .filter(Boolean)
+//   );
+// }
 
-export const PORTAL_ALLOWLIST = parseAllowlist(process.env.PORTAL_ALLOWLIST);
+// export const PORTAL_ALLOWLIST = parseAllowlist(process.env.PORTAL_ALLOWLIST);
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [Google],
@@ -40,9 +40,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (!email) return false;
       // If the allowlist is empty, allow any signed-in Google user. This
       // is a development convenience — set PORTAL_ALLOWLIST in prod.
-      if (PORTAL_ALLOWLIST.size === 0) return true;
-      return PORTAL_ALLOWLIST.has(email);
-    },
+      
+    //   if (PORTAL_ALLOWLIST.size === 0) return true;
+    //   return PORTAL_ALLOWLIST.has(email);
+    // },
     async session({ session }) {
       if (session.user?.email) {
         session.user.email = session.user.email.toLowerCase();

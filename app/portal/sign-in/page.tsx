@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { signIn, auth } from "@/auth";
+import { signIn, auth } from "@/types/auth";
 import { redirect } from "next/navigation";
 
 export const metadata = {
