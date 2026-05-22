@@ -18,7 +18,7 @@ const GALLERY_IMAGES = [
   { src: "/scraped/join-us/img5.JPG", alt: "CUBE social" },
   { src: "/scraped/join-us/img6.JPG", alt: "CUBE retreat" },
   { src: "/scraped/join-us/img7.JPG", alt: "Team photo" },
-  { src: "/scraped/join-us/img8.png", alt: "Team photo" },
+  { src: "/scraped/join-us/img8.jpg", alt: "Team photo" },
 ];
 
 export default function JoinUsPage() {
