@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { auth, signOut } from "@/types/auth";
+import { auth, signOut } from "@/auth";
 
 export const metadata: Metadata = {
   title: "Member Portal",

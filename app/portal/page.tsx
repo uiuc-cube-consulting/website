@@ -1,4 +1,4 @@
-import { auth } from "@/types/auth";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { CalendarEmbed } from "@/components/portal/CalendarEmbed";
 import { PointsLookup } from "@/components/portal/PointsLookup";
