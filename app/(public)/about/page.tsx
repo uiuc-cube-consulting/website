@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { PillarCard } from "@/components/PillarCard";
+import { PillarsFlow } from "@/components/PillarsFlow";
 import { ExecCard } from "@/components/ExecCard";
 import { LogoStrip } from "@/components/LogoStrip";
 import { PageHero } from "@/components/PageHero";
 import { AlumniGrid } from "@/components/AlumniGrid";
-import { PILLARS, PARTNER_LOGOS } from "@/lib/content";
+import { PARTNER_LOGOS } from "@/lib/content";
 import { EXEC_BOARD } from "@/lib/team";
 
 export const metadata: Metadata = {
@@ -30,9 +30,7 @@ export default function AboutPage() {
               What we stand for.
             </h2>
           </div>
-          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {PILLARS.map((p) => <PillarCard key={p.key} pillar={p} />)}
-          </div>
+          <PillarsFlow />
         </div>
       </section>
 

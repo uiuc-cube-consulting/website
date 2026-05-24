@@ -53,7 +53,7 @@ export const PILLARS = [
     key: "diversity",
     title: "Diversity",
     blurb:
-      "Engineers, business majors, designers, and scientists working side-by-side — a real cross-disciplinary team.",
+      "Engineers, business majors, designers, and scientists working side-by-side. A real cross-disciplinary team.",
   },
 ] as const;
 
@@ -61,7 +61,7 @@ export const HOME_FEATURE_CARDS = [
   {
     title: "Services",
     blurb:
-      "Engagements span strategy, engineering, and design — fresh thinking applied to real client problems.",
+      "Engagements span strategy, engineering, and design. Fresh thinking applied to real client problems.",
     href: "/services",
   },
   {
@@ -77,7 +77,7 @@ export const SOLUTION_AREAS = [
     key: "engineering",
     title: "Engineering",
     blurb:
-      "Co-built technical solutions that ship. Web, hardware, AI pipelines, and infrastructure — we work in tight feedback loops with the client engineering team.",
+      "Co-built technical solutions that ship. Web, hardware, AI pipelines, and infrastructure, all delivered in tight feedback loops with the client engineering team.",
   },
   {
     key: "business",
@@ -103,13 +103,13 @@ export const SERVICE_CATEGORIES = [
   {
     title: "Engineering",
     blurb:
-      "Hands-on technical work — software, hardware, and infrastructure — built in tight loops with the client team.",
+      "Hands-on technical work across software, hardware, and infrastructure, built in tight loops with the client team.",
     points: ["Full-stack web development", "Cloud & SaaS solutions", "Hardware prototyping", "Data pipelines & AI"],
   },
   {
     title: "Design",
     blurb:
-      "Brand systems, marketing collateral, and user-centric product design — built with modern tooling.",
+      "Brand systems, marketing collateral, and user-centric product design, built with modern tooling.",
     points: ["Web & mobile UI", "Brand & marketing assets", "CAD & industrial design", "Design systems"],
   },
 ] as const;
@@ -313,7 +313,7 @@ export const FAQS = [
   },
   {
     q: "How long is a project?",
-    a: "Twelve to fourteen weeks — one UIUC semester. Teams kick off in week one and present final deliverables in week thirteen or fourteen.",
+    a: "Twelve to fourteen weeks, one UIUC semester. Teams kick off in week one and present final deliverables in week thirteen or fourteen.",
   },
   {
     q: "Who is on a project team?",
@@ -321,7 +321,7 @@ export const FAQS = [
   },
   {
     q: "What makes CUBE different from other consulting clubs?",
-    a: "Two things: real social belonging — most of our consultants describe CUBE as where they made their closest friends at UIUC — and a project pipeline that punches well above its weight, with alumni placed at top firms across consulting, banking, tech, and product.",
+    a: "Two things. First, real social belonging. Most of our consultants describe CUBE as where they made their closest friends at UIUC. Second, a project pipeline that punches well above its weight, with alumni placed at top firms across consulting, banking, tech, and product.",
   },
 ] as const;
 
