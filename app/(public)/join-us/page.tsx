@@ -3,6 +3,7 @@ import { TimelineEvent } from "@/components/TimelineEvent";
 import { FAQAccordion } from "@/components/FAQAccordion";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
 import { PageHero } from "@/components/PageHero";
+import { CTABand } from "@/components/CTABand";
 import { FALL_RECRUITMENT, FAQS, SITE } from "@/lib/content";
 
 export const metadata: Metadata = {
@@ -101,25 +102,32 @@ export default function JoinUsPage() {
         </div>
       </section>
 
-      <section className="bg-[var(--bg-dark)] text-white">
-        <div className="container-x section-y text-center">
-          <h2 className="font-display font-extrabold text-4xl md:text-5xl leading-tight">
-            Ready to apply?
-          </h2>
-          <p className="mt-4 max-w-xl mx-auto text-white/75 text-[17px] leading-relaxed">
+      <CTABand
+        title="Ready to apply?"
+        blurb={
+          <>
             The application is short and the process moves quickly. Final decisions go out on{" "}
             {FALL_RECRUITMENT.timeline.at(-1)?.date}.
-          </p>
-          <a
-            href={SITE.applyForm}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="btn btn-gold mt-9"
-          >
-            Apply Now
-          </a>
-        </div>
-      </section>
+          </>
+        }
+      >
+        <a
+          href={SITE.applyForm}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="btn btn-gold"
+        >
+          Apply Now
+        </a>
+        <a
+          href={SITE.mailingListForm}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="btn btn-gold-outline"
+        >
+          Mailing List
+        </a>
+      </CTABand>
     </>
   );
 }

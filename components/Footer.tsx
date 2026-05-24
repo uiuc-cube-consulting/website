@@ -17,7 +17,7 @@ export function Footer() {
             </span>
           </Link>
           <p className="mt-5 max-w-md text-sm text-[var(--fg-on-dark)]/70 leading-relaxed">
-            {SITE.longName} — a student-run consulting organization at the University of Illinois
+            {SITE.longName}. A student-run consulting organization at the University of Illinois
             at Urbana-Champaign.
           </p>
           <div className="mt-6 flex items-center gap-2">

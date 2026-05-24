@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, Briefcase, Code2, PenTool } from "lucide-react";
-import { SERVICE_CATEGORIES, CLIENT_LOGOS } from "@/lib/content";
+import { CLIENT_LOGOS } from "@/lib/content";
 import { ClientCarousel } from "@/components/ClientCarousel";
-import { MultidisciplinarySolutions } from "@/components/MultidisciplinarySolutions";
+import { EngagementProcess } from "@/components/EngagementProcess";
+import { ServicePractices } from "@/components/ServicePractices";
 import { Testimonials } from "@/components/Testimonials";
 import { PageHero } from "@/components/PageHero";
 
@@ -12,8 +12,6 @@ export const metadata: Metadata = {
   description:
     "Business, engineering, and design services delivered by CUBE Consulting at UIUC.",
 };
-
-const ICONS = [Briefcase, Code2, PenTool];
 
 export default function ServicesPage() {
   return (
@@ -36,45 +34,21 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      <MultidisciplinarySolutions />
-
       <section className="section-y bg-white">
         <div className="container-x">
           <div className="max-w-2xl mx-auto text-center">
-            <p className="eyebrow">How we deliver</p>
+            <p className="eyebrow">What we do</p>
             <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl text-[var(--bg-dark)] leading-[1.05]">
-              Service breakdown.
+              Three practices, one team.
             </h2>
           </div>
-          <div className="mt-14 grid md:grid-cols-3 gap-6">
-            {SERVICE_CATEGORIES.map((cat, i) => {
-              const Icon = ICONS[i] ?? Briefcase;
-              return (
-                <article
-                  key={cat.title}
-                  className="rounded-2xl bg-[var(--bg-cream)] border border-[var(--border)] p-7 md:p-8 hover:shadow-xl hover:border-[var(--gold)] transition-all"
-                >
-                  <div className="grid place-items-center w-12 h-12 rounded-xl bg-white text-[var(--bg-dark)]">
-                    <Icon size={22} />
-                  </div>
-                  <h2 className="mt-5 font-display font-extrabold text-2xl md:text-3xl text-[var(--bg-dark)]">
-                    {cat.title}
-                  </h2>
-                  <p className="mt-3 text-sm text-[var(--muted)] leading-relaxed">{cat.blurb}</p>
-                  <ul className="mt-5 space-y-2 text-sm">
-                    {cat.points.map((point) => (
-                      <li key={point} className="flex items-start gap-2 text-[var(--bg-dark)]">
-                        <Check size={16} className="mt-0.5 text-[var(--gold-deep)] shrink-0" />
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              );
-            })}
+          <div className="mt-16">
+            <ServicePractices />
           </div>
         </div>
       </section>
+
+      <EngagementProcess />
 
       <Testimonials />
 
