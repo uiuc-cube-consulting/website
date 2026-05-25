@@ -327,41 +327,65 @@ export const FAQS = [
 
 // Member portal resources (Drive folders, templates, forms).
 // Update these links to point at the real Drive folder / Doc URLs.
+// `group` controls how resources are clustered in the portal UI.
+export type ResourceGroup = "onboarding" | "project" | "brand";
+
 export const PORTAL_RESOURCES = [
   {
-    title: "Slide Templates",
-    description: "Branded slide deck templates for client deliverables.",
-    href: "https://drive.google.com/drive/u/0/folders/1PZu8aAHQR6jsX7Aor6eOVlTL2G152xp1",
-    icon: "presentation",
+    title: "Member Handbook",
+    description: "Start here. Onboarding, policies, and expectations for consultants.",
+    href: "https://drive.google.com/drive/u/0/folders/1Cq1PIjUgjuJ6qkuxWPLGvumn4SiHyki2",
+    icon: "users",
+    group: "onboarding" as ResourceGroup,
   },
   {
     title: "Case Prep Library",
     description: "Curated case interview prep materials and worked examples.",
     href: "https://drive.google.com",
     icon: "book",
+    group: "onboarding" as ResourceGroup,
   },
   {
     title: "Project SOPs",
     description: "Standard operating procedures for kickoff, midpoint, and final delivery.",
     href: "https://drive.google.com/drive/u/0/folders/1W2mPlLQ1CwIPFghbXzyO-s0dP9cf69Rr",
     icon: "file",
+    group: "project" as ResourceGroup,
   },
   {
-    title: "Brand Assets",
-    description: "Logo files, color tokens, and approved photography.",
+    title: "Slide Templates",
+    description: "Branded slide deck templates for client deliverables.",
     href: "https://drive.google.com/drive/u/0/folders/1PZu8aAHQR6jsX7Aor6eOVlTL2G152xp1",
-    icon: "image",
+    icon: "presentation",
+    group: "project" as ResourceGroup,
   },
   {
     title: "Forms",
     description: "Reimbursement, project intake, and feedback forms.",
     href: "https://drive.google.com",
     icon: "clipboard",
+    group: "project" as ResourceGroup,
   },
   {
-    title: "Member Handbook",
-    description: "Onboarding, policies, and expectations for consultants.",
-    href: "https://drive.google.com/drive/u/0/folders/1Cq1PIjUgjuJ6qkuxWPLGvumn4SiHyki2",
-    icon: "users",
+    title: "Brand Assets",
+    description: "Logo files, color tokens, and approved photography.",
+    href: "https://drive.google.com/drive/u/0/folders/1PZu8aAHQR6jsX7Aor6eOVlTL2G152xp1",
+    icon: "image",
+    group: "brand" as ResourceGroup,
   },
 ] as const;
+
+export const RESOURCE_GROUP_LABELS: Record<ResourceGroup, { title: string; blurb: string }> = {
+  onboarding: {
+    title: "Onboarding",
+    blurb: "Where new consultants should start.",
+  },
+  project: {
+    title: "Project work",
+    blurb: "Templates, SOPs, and forms used during engagements.",
+  },
+  brand: {
+    title: "Brand",
+    blurb: "Approved assets for decks, social, and external comms.",
+  },
+};

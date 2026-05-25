@@ -1,15 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Calendar, MapPin, Users } from "lucide-react";
+import { ArrowRight, Briefcase, Code2, Palette } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { SITE } from "@/lib/content";
 
-/**
- * Editorial replacement for the boxy 5/7 home About section. Foregrounds a
- * tight thesis statement and pairs the supporting copy with a vertical
- * "EST. 2012" sidebar so the lower half doesn't read as an empty void.
- */
 export function AboutEditorial() {
   const reduced = useReducedMotion();
 
@@ -49,31 +44,8 @@ export function AboutEditorial() {
           delivering work that actually ships.
         </motion.h2>
 
-        <motion.ul
-          initial={reduced ? false : { opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.4 }}
-          transition={{ duration: 0.5, delay: 0.18 }}
-          className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-[12px] font-semibold tracking-[0.2em] uppercase text-[var(--muted)]"
-        >
-          <li className="inline-flex items-center gap-2">
-            <Calendar size={14} className="text-[var(--gold-deep)]" />
-            Founded 2012
-          </li>
-          <span aria-hidden className="h-3 w-px bg-[var(--border)]" />
-          <li className="inline-flex items-center gap-2">
-            <MapPin size={14} className="text-[var(--gold-deep)]" />
-            UIUC
-          </li>
-          <span aria-hidden className="h-3 w-px bg-[var(--border)]" />
-          <li className="inline-flex items-center gap-2">
-            <Users size={14} className="text-[var(--gold-deep)]" />
-            50+ Consultants
-          </li>
-        </motion.ul>
-
-        <div className="mt-14 grid lg:grid-cols-12 gap-10 lg:gap-12 items-start">
-          {/* Vertical sidebar: anchors the lower half so it doesn't sit empty */}
+        <div className="mt-12 grid lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+          {/* Vertical sidebar: anchors the lower half with practice areas (additive, not duplicative of the StatsBar above) */}
           <motion.aside
             initial={reduced ? false : { opacity: 0, x: -16 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -87,30 +59,39 @@ export function AboutEditorial() {
                 className="absolute inset-y-0 left-0 w-1 rounded-l-2xl bg-[var(--gold)]"
               />
               <p className="text-[10.5px] tracking-[0.28em] uppercase font-bold text-[var(--gold-deep)]">
-                Est. 2012
+                Three practices
               </p>
-              <p className="mt-3 font-display font-extrabold text-[var(--bg-dark)] text-[1.6rem] leading-[1.1]">
-                Over a decade of student-run consulting at UIUC.
+              <p className="mt-3 font-display font-extrabold text-[var(--bg-dark)] text-[1.45rem] leading-[1.15]">
+                One team, three disciplines.
               </p>
 
-              <ul className="mt-6 space-y-3 text-[13px] text-[var(--muted)] leading-relaxed">
-                <li className="flex items-baseline gap-3">
-                  <span className="font-display font-extrabold text-[var(--gold-deep)] text-base tabular-nums">
-                    180+
+              <ul className="mt-6 space-y-4 text-[13.5px] text-[var(--muted)] leading-relaxed">
+                <li className="flex items-start gap-3">
+                  <span className="mt-0.5 grid place-items-center w-8 h-8 rounded-lg bg-white border border-[var(--border)] text-[var(--gold-deep)] shrink-0">
+                    <Briefcase size={15} />
                   </span>
-                  <span>Client engagements delivered</span>
+                  <div>
+                    <p className="font-semibold text-[var(--bg-dark)]">Business</p>
+                    <p className="mt-0.5">Strategy, market research, financial modeling.</p>
+                  </div>
                 </li>
-                <li className="flex items-baseline gap-3">
-                  <span className="font-display font-extrabold text-[var(--gold-deep)] text-base tabular-nums">
-                    50+
+                <li className="flex items-start gap-3">
+                  <span className="mt-0.5 grid place-items-center w-8 h-8 rounded-lg bg-white border border-[var(--border)] text-[var(--gold-deep)] shrink-0">
+                    <Code2 size={15} />
                   </span>
-                  <span>Active consultants every semester</span>
+                  <div>
+                    <p className="font-semibold text-[var(--bg-dark)]">Engineering</p>
+                    <p className="mt-0.5">Full-stack, AI pipelines, hardware prototyping.</p>
+                  </div>
                 </li>
-                <li className="flex items-baseline gap-3">
-                  <span className="font-display font-extrabold text-[var(--gold-deep)] text-base tabular-nums">
-                    3
+                <li className="flex items-start gap-3">
+                  <span className="mt-0.5 grid place-items-center w-8 h-8 rounded-lg bg-white border border-[var(--border)] text-[var(--gold-deep)] shrink-0">
+                    <Palette size={15} />
                   </span>
-                  <span>Practices: business, engineering, design</span>
+                  <div>
+                    <p className="font-semibold text-[var(--bg-dark)]">Design</p>
+                    <p className="mt-0.5">Brand systems, product UX, marketing collateral.</p>
+                  </div>
                 </li>
               </ul>
             </div>

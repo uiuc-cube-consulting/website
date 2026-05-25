@@ -20,10 +20,16 @@ export default function ProjectsPage() {
 
       <section className="section-y bg-[var(--bg-cream)]/40">
         <div className="container-x">
-          <h2 className="mt-3 text-center font-display font-extrabold text-[var(--gold-deep)] text-4xl md:text-5xl">
-            Spring 2026
-          </h2>
-          <div className="mt-14 grid md:grid-cols-2 gap-6 md:gap-8">
+          <div className="max-w-2xl">
+            <p className="eyebrow">This semester</p>
+            <h2 className="mt-4 font-display font-extrabold text-[var(--bg-dark)] text-4xl md:text-5xl leading-[1.05]">
+              Engagements in flight.
+            </h2>
+            <p className="mt-5 text-[var(--muted)] text-[17px] leading-relaxed">
+              Eight teams, eight clients. Each project runs the full UIUC semester from kickoff to final delivery.
+            </p>
+          </div>
+          <div className="mt-12 grid md:grid-cols-2 gap-6 md:gap-8">
             {PROJECTS.map((p) => (
               <ProjectShowcase key={p.name} project={p} />
             ))}
