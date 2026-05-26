@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 
 declare module "next-auth" {
   interface Session {
@@ -26,7 +26,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       const email = profile?.email?.toLowerCase();
       if (!email) return false;
 
-      const supabase = await createClient();
+      const supabase = createServerClient();
       const { data, error } = await supabase
         .from("users")
         .select("id")
@@ -39,7 +39,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     async jwt({ token, trigger }) {
       // Only re-fetch from DB on initial sign-in or explicit refresh
       if (trigger === "signIn" || trigger === "update") {
-        const supabase = await createClient();
+        const supabase = createServerClient();
         const { data } = await supabase
           .from("users")
           .select("role, cohort")
