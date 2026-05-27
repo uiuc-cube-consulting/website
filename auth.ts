@@ -28,7 +28,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
       const supabase = createServerClient();
       const { data, error } = await supabase
-        .from("users")
+        .from("members")
         .select("id")
         .eq("email", email)
         .single();
@@ -41,10 +41,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (trigger === "signIn" || trigger === "update") {
         const supabase = createServerClient();
         const { data } = await supabase
-          .from("users")
+          .from("members")
           .select("role, cohort")
           .eq("email", token.email)
           .single();
+
         if (data) {
           token.role = data.role;
           token.cohort = data.cohort;
