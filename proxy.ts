@@ -24,6 +24,8 @@ export default auth((req) => {
   if (pathname.startsWith("/portal/recruitment") && !recruitmentRoles.includes(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
+
+  return NextResponse.next();
 });
 
 export const config = {
