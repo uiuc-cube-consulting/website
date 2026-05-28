@@ -27,7 +27,7 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/portal/((?!sign-in).*)"],
+  matcher: ["/portal((?!/sign-in).*)"],
 };
 
 // export const config = {
