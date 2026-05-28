@@ -39,24 +39,32 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     async jwt({ token, trigger }) {
       // Only re-fetch from DB on initial sign-in or explicit refresh
       if (trigger === "signIn" || trigger === "update") {
-        const supabase = createServerClient();
-        const { data } = await supabase
-          .from("members")
-          .select("role, cohort")
-          .eq("email", token.email)
-          .single();
+        const email = token.email?.toLowerCase();
 
-        if (data) {
-          token.role = data.role;
-          token.cohort = data.cohort;
+        if (email) {
+          const supabase = createServerClient();
+          const { data } = await supabase
+            .from("members")
+            .select("role, cohort")
+            .eq("email", email)
+            .single();
+
+          if (data) {
+            token.role = data.role;
+            token.cohort = data.cohort;
+          }
         }
       }
       return token;
     },
     async session({ session, token }) {
       session.user.email = session.user.email.toLowerCase();
-      session.user.role = token.role as string;
-      session.user.cohort = token.cohort as string;
+      if (typeof token.role === "string") {
+        session.user.role = token.role;
+      }
+      if (typeof token.cohort === "string") {
+        session.user.cohort = token.cohort;
+      }
       return session;
     },
   },
