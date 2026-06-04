@@ -18,7 +18,7 @@ export function StatusBadge({ status, effectiveType }: StatusBadgeProps) {
       label = "Voided";
       cls = "bg-slate-100 text-slate-600 border-slate-200";
     } else {
-      label = "Active";
+      label = "Approved";
       cls = "bg-green-50 text-green-700 border-green-200";
     }
   }
