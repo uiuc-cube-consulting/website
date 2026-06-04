@@ -23,9 +23,9 @@ export default async function StrikeDetailPage({ params }: PageProps) {
     .from("strikes")
     .select(`
       *,
-      member:member_id ( id, name, email ),
-      filer:filed_by ( id, name, email ),
-      resolver:resolved_by ( id, name, email )
+      member:member_id ( id, full_name, email ),
+      filer:filed_by ( id, full_name, email ),
+      resolver:resolved_by ( id, full_name, email )
     `)
     .eq("id", id)
     .single();
@@ -69,7 +69,7 @@ export default async function StrikeDetailPage({ params }: PageProps) {
         <div>
           <p className="eyebrow">Strike detail</p>
           <h1 className="mt-3 font-display font-extrabold text-3xl md:text-4xl text-[var(--bg-dark)] leading-tight">
-            {strike.member?.name ?? "Unknown member"}
+            {strike.member?.full_name ?? "Unknown member"}
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{strike.member?.email}</p>
         </div>
@@ -89,7 +89,7 @@ export default async function StrikeDetailPage({ params }: PageProps) {
 
       {/* Details grid */}
       <div className="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-5 mb-8">
-        <DetailRow label="Filed by" value={strike.filer?.name ?? "—"} />
+        <DetailRow label="Filed by" value={strike.filer?.full_name ?? "—"} />
         <DetailRow label="Filed on" value={filed} />
         <DetailRow label="Original weight" value={weightLabel(strike.strike_type)} />
         {mod !== "unmodified" && strike.effective_type && (
@@ -104,7 +104,7 @@ export default async function StrikeDetailPage({ params }: PageProps) {
         )}
         {resolved && (
           <>
-            <DetailRow label="Reviewed by" value={strike.resolver?.name ?? "—"} />
+            <DetailRow label="Reviewed by" value={strike.resolver?.full_name ?? "—"} />
             <DetailRow label="Reviewed on" value={resolved} />
           </>
         )}

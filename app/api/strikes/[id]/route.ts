@@ -25,9 +25,9 @@ export async function GET(
     .from("strikes")
     .select(`
       *,
-      member:member_id ( id, name, email ),
-      filer:filed_by ( id, name, email ),
-      resolver:resolved_by ( id, name, email )
+      member:member_id ( id, full_name, email ),
+      filer:filed_by ( id, full_name, email ),
+      resolver:resolved_by ( id, full_name, email )
     `)
     .eq("id", id)
     .single();

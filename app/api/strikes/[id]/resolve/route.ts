@@ -59,8 +59,8 @@ export async function POST(
     .from("strikes")
     .select(`
       *,
-      member:member_id ( id, name, email ),
-      filer:filed_by ( id, name, email )
+      member:member_id ( id, full_name, email ),
+      filer:filed_by ( id, full_name, email )
     `)
     .eq("id", id)
     .single();
@@ -125,9 +125,9 @@ export async function POST(
   const resend = new Resend(process.env.RESEND_API_KEY);
   const from = "CUBE Consulting <noreply@cubeconsulting.org>";
   const targetEmail = strike.member.email;
-  const targetName = strike.member.name;
+  const targetName = strike.member.full_name;
   const filerEmail = strike.filer.email;
-  const filerName = strike.filer.name;
+  const filerName = strike.filer.full_name;
   const samePersonAsResolver = strike.filed_by === resolverMemberId;
 
   // Fetch updated totals for struck-member emails

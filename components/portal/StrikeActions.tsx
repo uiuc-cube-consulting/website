@@ -23,8 +23,8 @@ type Strike = {
   effective_type: "half" | "full" | "voided" | null;
   reason: string;
   filed_by: string;
-  member: { id: string; name: string; email: string };
-  filer: { id: string; name: string; email: string };
+  member: { id: string; full_name: string; email: string };
+  filer: { id: string; full_name: string; email: string };
   member_strike_total: number;
 };
 
@@ -53,8 +53,8 @@ export function StrikeActions({ strike, resolverMemberId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const samePersonAsResolver = strike.filed_by === resolverMemberId;
-  const memberName = strike.member.name;
-  const filerName = strike.filer.name;
+  const memberName = strike.member.full_name;
+  const filerName = strike.filer.full_name;
 
   // Calculate projected totals for email templates
   const currentTotal = strike.member_strike_total;
