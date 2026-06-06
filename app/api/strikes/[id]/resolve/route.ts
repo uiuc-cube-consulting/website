@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createServerClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
 import { computeStrikeTotal } from "@/lib/strikes";
 import {
-  voidTemplate,
-  downgradeTemplate,
-  upgradeTemplate,
-  requesterDenialTemplate,
-  requesterVoidTemplate,
-  requesterDowngradeTemplate,
-  requesterUpgradeTemplate,
   execAlertTemplate,
+  wrapInShell,
 } from "@/lib/email/strikes";
+import { sendEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -122,12 +116,9 @@ export async function POST(
   }
 
   // Send emails
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = "CUBE Consulting <noreply@cubeconsulting.org>";
   const targetEmail = strike.member.email;
   const targetName = strike.member.full_name;
   const filerEmail = strike.filer.email;
-  const filerName = strike.filer.full_name;
   const samePersonAsResolver = strike.filed_by === resolverMemberId;
 
   // Fetch updated totals for struck-member emails
@@ -136,7 +127,6 @@ export async function POST(
     .select("effective_type, status")
     .eq("member_id", strike.member_id);
 
-  // Apply the local update so computeStrikeTotal reflects the just-made change
   const updatedRows = (allStrikes ?? []).map(
     (r: { effective_type: string | null; status: string }) => r
   ) as { effective_type: "half" | "full" | "voided" | null; status: "pending" | "approved" | "denied" }[];
@@ -145,69 +135,43 @@ export async function POST(
   const emailPromises: Promise<unknown>[] = [];
 
   if (action === "approve") {
-    // Struck member — exec-edited subject/body
     if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
+      emailPromises.push(sendEmail({ to: targetEmail, subject: email_subject, html: wrapInShell(email_subject, email_body) }));
     }
-    // Requester
     if (requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
+      emailPromises.push(sendEmail({ to: filerEmail, subject: requester_email_subject, html: wrapInShell(requester_email_subject, requester_email_body) }));
     }
-    // 3-strike alert
     if (newTotal >= 3) {
-      const { data: execMembers } = await supabase
-        .from("members")
-        .select("email")
-        .eq("role", "exec");
+      const { data: execMembers } = await supabase.from("members").select("email").eq("role", "exec");
       if (execMembers?.length) {
         const alert = execAlertTemplate(targetName);
-        emailPromises.push(
-          resend.emails.send({ from, to: execMembers.map((m: { email: string }) => m.email), subject: alert.subject, html: alert.html })
-        );
+        emailPromises.push(sendEmail({ to: execMembers.map((m: { email: string }) => m.email), subject: alert.subject, html: wrapInShell(alert.subject, alert.innerHtml) }));
       }
     }
   } else if (action === "deny") {
     if (requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
+      emailPromises.push(sendEmail({ to: filerEmail, subject: requester_email_subject, html: wrapInShell(requester_email_subject, requester_email_body) }));
     }
   } else if (action === "void") {
     if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
+      emailPromises.push(sendEmail({ to: targetEmail, subject: email_subject, html: wrapInShell(email_subject, email_body) }));
     }
     if (!samePersonAsResolver && requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
+      emailPromises.push(sendEmail({ to: filerEmail, subject: requester_email_subject, html: wrapInShell(requester_email_subject, requester_email_body) }));
     }
   } else if (action === "downgrade") {
     if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
+      emailPromises.push(sendEmail({ to: targetEmail, subject: email_subject, html: wrapInShell(email_subject, email_body) }));
     }
     if (!samePersonAsResolver && requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
+      emailPromises.push(sendEmail({ to: filerEmail, subject: requester_email_subject, html: wrapInShell(requester_email_subject, requester_email_body) }));
     }
   } else if (action === "upgrade") {
     if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
+      emailPromises.push(sendEmail({ to: targetEmail, subject: email_subject, html: wrapInShell(email_subject, email_body) }));
     }
     if (!samePersonAsResolver && requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
+      emailPromises.push(sendEmail({ to: filerEmail, subject: requester_email_subject, html: wrapInShell(requester_email_subject, requester_email_body) }));
     }
   }
 

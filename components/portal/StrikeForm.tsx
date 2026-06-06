@@ -57,6 +57,10 @@ export function StrikeForm({ isExec }: Props) {
     _secondary: EmailPayload | null | undefined
   ) {
     if (!selectedMember) return;
+    if (isExec && (!primary?.subject?.trim() || !primary?.body?.trim())) {
+      setError("Email subject and body are required.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setShowEmailModal(false);
@@ -74,7 +78,7 @@ export function StrikeForm({ isExec }: Props) {
           strike_type: strikeType,
           reason,
           email_subject: primary?.subject ?? template.subject,
-          email_body: primary?.body ?? template.html,
+          email_body: primary?.body ?? template.innerHtml,
         }),
       });
 
@@ -208,7 +212,7 @@ export function StrikeForm({ isExec }: Props) {
           title={`Email to ${selectedMember.name}`}
           confirmLabel="Confirm & send strike"
           initialSubject={memberTemplate.subject}
-          initialBody={memberTemplate.html}
+          initialBody={memberTemplate.innerHtml}
           loading={submitting}
           onCancel={() => setShowEmailModal(false)}
           onConfirm={(primary) => doSubmit(primary, null)}

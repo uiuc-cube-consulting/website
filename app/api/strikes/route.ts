@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createServerClient } from "@/lib/supabase/server";
-import { Resend } from "resend";
 import { computeStrikeTotal } from "@/lib/strikes";
 import {
-  approvalTemplate,
-  requesterApprovalTemplate,
   execAlertTemplate,
+  wrapInShell,
 } from "@/lib/email/strikes";
+import { sendEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -147,6 +146,10 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  if (isExec && (!email_subject || !email_body)) {
+    return NextResponse.json({ error: "Missing email content" }, { status: 400 });
+  }
+
   // Send emails for exec-filed (immediately approved) strikes
   if (isExec && email_subject && email_body) {
     const { data: allStrikes } = await supabase
@@ -156,15 +159,10 @@ export async function POST(req: NextRequest) {
 
     const newTotal = computeStrikeTotal(allStrikes ?? []);
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const fromAddress = "CUBE Consulting <hr@cubeconsulting.org>";
-
-    // Email to struck member (exec-edited content)
-    await resend.emails.send({
-      from: fromAddress,
+    await sendEmail({
       to: targetMember.email,
       subject: email_subject,
-      html: email_body,
+      html: wrapInShell(email_subject, email_body),
     });
 
     // 3-strike exec alert
@@ -176,11 +174,10 @@ export async function POST(req: NextRequest) {
 
       if (execMembers && execMembers.length > 0) {
         const alert = execAlertTemplate(targetMember.full_name);
-        await resend.emails.send({
-          from: fromAddress,
+        await sendEmail({
           to: execMembers.map((m) => m.email),
           subject: alert.subject,
-          html: alert.html,
+          html: wrapInShell(alert.subject, alert.innerHtml),
         });
       }
     }

@@ -83,58 +83,58 @@ export function StrikeActions({ strike, resolverMemberId }: Props) {
       const newTotal = projectedTotal("approve");
       const primary = approvalTemplate(memberName, strike.reason, newTotal);
       primarySubject = primary.subject;
-      primaryBody = primary.html;
+      primaryBody = primary.innerHtml;
 
       const requester = requesterApprovalTemplate(filerName, memberName, weightLabel(originalType));
       secondEmail = {
         label: "Requester Email",
         initialSubject: requester.subject,
-        initialBody: requester.html,
+        initialBody: requester.innerHtml,
       };
     } else if (action === "deny") {
       const requester = requesterDenialTemplate(filerName, memberName, weightLabel(originalType));
       primarySubject = requester.subject;
-      primaryBody = requester.html;
+      primaryBody = requester.innerHtml;
     } else if (action === "void") {
       const newTotal = projectedTotal("void");
       const primary = voidTemplate(memberName, newTotal);
       primarySubject = primary.subject;
-      primaryBody = primary.html;
+      primaryBody = primary.innerHtml;
 
       if (!samePersonAsResolver) {
         const requester = requesterVoidTemplate(filerName, memberName);
         secondEmail = {
           label: "Requester Email",
           initialSubject: requester.subject,
-          initialBody: requester.html,
+          initialBody: requester.innerHtml,
         };
       }
     } else if (action === "downgrade") {
       const newTotal = projectedTotal("downgrade");
       const primary = downgradeTemplate(memberName, newTotal);
       primarySubject = primary.subject;
-      primaryBody = primary.html;
+      primaryBody = primary.innerHtml;
 
       if (!samePersonAsResolver) {
         const requester = requesterDowngradeTemplate(filerName, memberName);
         secondEmail = {
           label: "Requester Email",
           initialSubject: requester.subject,
-          initialBody: requester.html,
+          initialBody: requester.innerHtml,
         };
       }
     } else if (action === "upgrade") {
       const newTotal = projectedTotal("upgrade");
       const primary = upgradeTemplate(memberName, newTotal);
       primarySubject = primary.subject;
-      primaryBody = primary.html;
+      primaryBody = primary.innerHtml;
 
       if (!samePersonAsResolver) {
         const requester = requesterUpgradeTemplate(filerName, memberName);
         secondEmail = {
           label: "Requester Email",
           initialSubject: requester.subject,
-          initialBody: requester.html,
+          initialBody: requester.innerHtml,
         };
       }
     }
