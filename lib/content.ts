@@ -292,13 +292,15 @@ export const FALL_RECRUITMENT = {
   semester: "Fall 2026",
   appsOpen: "09/04/26",
   timeline: [
-    { date: "Sep 4", event: "First-round applications open" },
-    { date: "Sep 8", event: "First-round applications due (11:59 PM)" },
-    { date: "Sep 9", event: "Networking & Games Night (6:30–7:30 PM, Bevier 108/132/180)" },
-    { date: "Sep 11", event: "Info Night and Interview Workshop" },
-    { date: "Sep 15", event: "Invite-only Networking Night" },
-    { date: "Sep 17", event: "Invite-only Case Training" },
-    { date: "Sep 23", event: "Final decisions announced" },
+    { date: "Aug 23", event: "Quad Day/Tabling"},
+    { date: "Aug 25", event: "Informational Night (6:30pm-8:00pm, Business Casual, Networking Portion After)"},
+    { date: "Aug 26", event: "Networking Night + Case Workshop (4:00pm-6:00pm Networking, 7:00PM-9:00PM Case Workshop, Business Casual)"},
+    { date: "Aug 28", event: "First Round Applications Are Due!"},
+    { date: "Sep 1", event: "Invite-only Case Training (7:00PM-8:00PM)" },
+    { date: "Sep 2-4", event: "First Round Interviews (Grainger)" },
+    { date: "Sep 5", event: "Invite-only Social Round"},
+    { date: "Sep 8-10", event: "Second Round Interviews"},
+    { date: "Sep 10", event: "Final decisions announced" },
   ],
 } as const;
 
