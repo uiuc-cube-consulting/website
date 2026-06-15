@@ -158,7 +158,6 @@ export async function POST(req: NextRequest) {
       .eq("member_id", target_member_id);
 
     const newTotal = computeStrikeTotal(allStrikes ?? []);
-    // test for gtm
 
     await sendEmail({
       to: targetMember.email,
