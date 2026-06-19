@@ -33,7 +33,10 @@ export { default, metadata } from "@/features/01-case-study-engine/app/portal/ca
 
 `app/api/case-studies/route.ts`
 ```ts
-export { GET, dynamic } from "@/features/01-case-study-engine/app/api/case-studies/route";
+// `dynamic` is route segment config — Next requires it declared in the route file,
+// so re-export only the handler and declare the config locally.
+export { GET } from "@/features/01-case-study-engine/app/api/case-studies/route";
+export const dynamic = "force-dynamic";
 ```
 
 This works because the repo's `@/*` path alias maps to the repo root (`tsconfig.json`),
