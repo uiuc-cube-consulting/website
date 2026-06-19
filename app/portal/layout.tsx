@@ -34,6 +34,7 @@ export default async function PortalLayout({
             <Link href="/portal" className="nav-link">Dashboard</Link>
             <Link href="/portal#calendar" className="nav-link">Calendar</Link>
             <Link href="/portal#points" className="nav-link">Points</Link>
+            <Link href="/portal/case-studies" className="nav-link">Case Studies</Link>
             <Link href="/portal#resources" className="nav-link">Resources</Link>
             <Link href="/" className="nav-link">Public Site</Link>
           </nav>
