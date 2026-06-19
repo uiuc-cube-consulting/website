@@ -60,11 +60,11 @@ export function PipelineBoard() {
     return (
       <div className="rounded-3xl border border-dashed border-[var(--border)] bg-white/60 px-6 py-16 text-center">
         <p className="font-display text-xl font-bold text-[var(--bg-dark)]">
-          {restricted ? "Leadership only" : "Couldn’t load the pipeline"}
+          {restricted ? "Exec board only" : "Couldn’t load the pipeline"}
         </p>
         <p className="mx-auto mt-2 max-w-md text-[var(--muted)]">
           {restricted
-            ? "The pipeline is restricted to the leadership allowlist. Ask an exec to add you to PIPELINE_ALLOWLIST."
+            ? "The pipeline is restricted to the exec board. If you need access, ask an exec to add you to the members directory (exec role, or pipeline access granted)."
             : error.message}
         </p>
       </div>

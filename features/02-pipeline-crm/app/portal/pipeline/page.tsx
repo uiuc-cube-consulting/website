@@ -12,12 +12,12 @@ export default async function PipelinePage() {
   const session = await auth();
   if (!session?.user?.email) redirect("/portal/sign-in");
 
-  // The leadership allowlist (PIPELINE_ALLOWLIST) is enforced by /api/pipeline;
-  // the board renders a "leadership only" state if the API returns 403.
+  // Exec-board access is enforced by /api/pipeline via features/05-members
+  // (canViewPipeline); the board renders an "exec board only" state on 403.
   return (
     <div className="container-x py-10 md:py-14">
       <div>
-        <p className="eyebrow">Acquisition</p>
+        <p className="eyebrow">Acquisition · Exec board</p>
         <h1 className="mt-3 font-display text-4xl font-extrabold leading-[1.05] text-[var(--bg-dark)] md:text-5xl">
           Pipeline.
         </h1>

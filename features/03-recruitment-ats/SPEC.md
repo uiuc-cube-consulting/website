@@ -1,8 +1,10 @@
 # SPEC · Recruitment ATS in the Portal  (#3 in the build plan & menu)
 
-> Status: **spec'd, not yet built.** The single project that most directly compounds:
-> better recruiting → better members → better deliverables → better case studies → easier
-> recruiting.
+> Status: **built — core (phase 1).** Public intake (`/apply`), reviewer console with the
+> calibrated rubric + funnel/calibration analytics (`/portal/recruiting`), Supabase-backed
+> with a demo fallback. Interview scheduling, decision emails, and reviewer load-balancing
+> remain phase 2 (below). The single project that most directly compounds: better recruiting
+> → better members → better deliverables → better case studies → easier recruiting.
 
 ## Problem
 

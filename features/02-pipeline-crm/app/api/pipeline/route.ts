@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import {
-  canViewPipeline,
-  computeMetrics,
-  STAGES,
-} from "@/features/02-pipeline-crm/lib/pipeline";
+import { computeMetrics, STAGES } from "@/features/02-pipeline-crm/lib/pipeline";
 import { fetchPipeline } from "@/features/02-pipeline-crm/lib/source";
+import { canViewPipeline } from "@/features/05-members/lib/members";
 
 // Auth-gated pipeline feed for the portal board. Reads the outreach Sheet (or demo
 // data when unconfigured), computes funnel metrics, and returns both. Restricted to
@@ -17,7 +14,7 @@ export async function GET() {
   const session = await auth();
   const email = session?.user?.email;
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canViewPipeline(email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await canViewPipeline(email))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     const { leads, source } = await fetchPipeline();
