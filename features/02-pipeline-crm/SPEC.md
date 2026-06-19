@@ -1,7 +1,10 @@
 # SPEC · Pipeline / CRM in the Portal  (#2 in the build plan, #1 in the original menu)
 
-> Status: **spec'd, not yet built.** This is the highest "build on what exists" move — it
-> connects CUBE's two engineering assets (the outreach bot and the portal) into one loop.
+> Status: **built — read path (phase 1).** Live board + funnel metrics at
+> `/portal/pipeline`, reading the outreach Sheet (demo data until configured). Write-back and
+> the inbound intake on-ramp remain phase 2 (below). This is the highest "build on what
+> exists" move — it connects CUBE's two engineering assets (the outreach bot and the portal)
+> into one loop.
 
 ## Problem
 
