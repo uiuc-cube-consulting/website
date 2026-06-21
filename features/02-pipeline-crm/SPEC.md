@@ -27,7 +27,9 @@ Stages: `prospect → contacted → replied → call booked → LOI → active �
 - `lib/sheets.ts` — the portal already reads Google Sheets (currently the points tab) with
   a read-only API key. Pattern to extend.
 - `app/api/points/route.ts` — auth-gated JSON API pattern (NextAuth session check) to copy.
-- The portal is auth-gated (`auth.ts`, Google + allowlist) — leadership-only views are free.
+- The portal is auth-gated (`auth.ts`, Google). The **strike_system PR** makes auth role-aware
+  (`session.user.role`, loaded from the Supabase `members` table), so an **exec-board-only** view
+  is just a `role === "exec"` check — no new auth, no duplicate members table.
 - The bot (`project-acquisition`) owns the Sheet and a **service account with Sheets write**
   access. It already detects sends, replies, and hot leads (`reply_check.py`,
   `summary.py`) — the stage transitions mostly already happen; they just aren't recorded as
@@ -86,7 +88,7 @@ profiles to weight (`config/search_profiles.yaml`).
 
 ## Risks / notes
 
-- Prospect data is PII — keep `/portal/pipeline` behind the leadership allowlist; read with a
-  service account, not a public key.
+- Prospect data is PII — `/portal/pipeline` is **exec-board only** via `session.user.role`
+  (strike_system auth), and read with a service account, not a public key.
 - Coordinate the Sheet schema change with the bot's maintainer so a column rename doesn't
   break `sheets.py` on either side.

@@ -131,9 +131,9 @@ export function computeMetrics(leads: Lead[]): PipelineMetrics {
   return { total, stages, replyRate, winRate, avgDaysToLOI, bySource };
 }
 
-// Access control lives in features/05-members/lib/members.ts (canViewPipeline) —
-// the pipeline is exec-board-only, sourced from the Supabase members table (with an
-// env fallback). It's enforced in app/api/pipeline/route.ts.
+// Access control: the pipeline is exec-board-only, enforced in
+// app/api/pipeline/route.ts via session.user.role === "exec" (the role comes from
+// the strike_system PR's members table + auth.ts). No members table is defined here.
 
 // ──────────────────────────────────────────────────────────────────────────
 // Demo pipeline (used until PIPELINE_SHEET_ID + creds are set). Fictional

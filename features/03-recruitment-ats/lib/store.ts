@@ -2,14 +2,22 @@
 // falls back to demo data for reads (and reports demo mode for writes). Never import
 // from client code.
 
-import { supabaseAdmin } from "./supabase";
+import { createServerClient } from "@/lib/supabase/server";
 import { DEMO_APPLICANTS, DEMO_REVIEWS } from "./demo";
 import { weightedTotal, type Applicant, type Review, type Scores, type Stage } from "./types";
+
+// Reuses the shared Supabase client from the strike_system foundation
+// (lib/supabase/server.ts) — we do NOT define our own client. Returns null when
+// Supabase env is absent → the ATS runs on demo data.
+function db() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createServerClient();
+}
 
 export type Snapshot = { applicants: Applicant[]; reviews: Review[]; demo: boolean };
 
 export async function getSnapshot(): Promise<Snapshot> {
-  const sb = supabaseAdmin();
+  const sb = db();
   if (!sb) return { applicants: DEMO_APPLICANTS, reviews: DEMO_REVIEWS, demo: true };
 
   const [{ data: applicants, error: aErr }, { data: reviews, error: rErr }] = await Promise.all([
@@ -35,7 +43,7 @@ export async function createApplicant(input: {
   college?: string;
   responses?: Record<string, string>;
 }): Promise<WriteResult> {
-  const sb = supabaseAdmin();
+  const sb = db();
   if (!sb) return { ok: false, demo: true };
   const { data, error } = await sb
     .from("applicants")
@@ -59,7 +67,7 @@ export async function submitReview(input: {
   scores: Scores;
   notes?: string;
 }): Promise<WriteResult> {
-  const sb = supabaseAdmin();
+  const sb = db();
   if (!sb) return { ok: false, demo: true };
   const { error } = await sb.from("reviews").upsert(
     {
@@ -81,7 +89,7 @@ export async function setDecision(input: {
   decided_by: string;
   note?: string;
 }): Promise<WriteResult> {
-  const sb = supabaseAdmin();
+  const sb = db();
   if (!sb) return { ok: false, demo: true };
   const { error: uErr } = await sb.from("applicants").update({ stage: input.stage }).eq("id", input.applicant_id);
   if (uErr) return { ok: false, error: uErr.message };

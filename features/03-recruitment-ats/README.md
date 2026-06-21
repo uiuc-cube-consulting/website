@@ -18,8 +18,8 @@ analytics run on demo data so you can explore the whole flow; writes are disable
   lib/
     types.ts           PURE: stages, the calibrated rubric, scoring + funnel helpers
     demo.ts            demo applicants + reviews (used until Supabase is set)
-    supabase.ts        SERVER-ONLY: service-role client (null when unconfigured)
-    store.ts           SERVER-ONLY: data access with demo fallback
+    store.ts           SERVER-ONLY: data access (uses the shared lib/supabase/server
+                       client from the strike_system PR); demo fallback when unconfigured
   components/
     IntakeForm.tsx        public application form
     RecruitingDashboard.tsx  reviewer console + funnel/calibration analytics
@@ -40,5 +40,5 @@ npm run dev
 # reviewers (sign in): http://localhost:3000/portal/recruiting
 ```
 
-To persist data, set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` and run `db/schema.sql`
-in Supabase. See INTEGRATION.md.
+To persist data, set `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (the same vars
+the strike_system PR uses) and run `db/schema.sql` in Supabase. See INTEGRATION.md.

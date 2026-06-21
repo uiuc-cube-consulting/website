@@ -12,8 +12,8 @@ export default async function PipelinePage() {
   const session = await auth();
   if (!session?.user?.email) redirect("/portal/sign-in");
 
-  // Exec-board access is enforced by /api/pipeline via features/05-members
-  // (canViewPipeline); the board renders an "exec board only" state on 403.
+  // Exec-board access is enforced by /api/pipeline via session.user.role (from the
+  // strike_system auth foundation); the board renders an "exec board only" state on 403.
   return (
     <div className="container-x py-10 md:py-14">
       <div>

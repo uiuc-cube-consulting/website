@@ -64,7 +64,7 @@ export function PipelineBoard() {
         </p>
         <p className="mx-auto mt-2 max-w-md text-[var(--muted)]">
           {restricted
-            ? "The pipeline is restricted to the exec board. If you need access, ask an exec to add you to the members directory (exec role, or pipeline access granted)."
+            ? "The pipeline is restricted to the exec board. If you need access, ask an exec to set your role to exec in the member directory."
             : error.message}
         </p>
       </div>

@@ -5,21 +5,26 @@ Built as a public intake page + an auth-gated reviewer console, backed by Supaba
 
 ## Supabase setup (to persist data)
 
-> First: `npm install`. `@supabase/supabase-js` is already in `package.json` but this feature
-> is the first code to import it, so make sure deps are installed (otherwise `tsc`/`next build`
-> will report "Cannot find module '@supabase/supabase-js'").
+> **Shared Supabase, no overlap with the `strike_system` PR.** This feature reuses that PR's
+> client (`lib/supabase/server.ts` → `createServerClient()`) and its env vars — it does **not**
+> add its own client. The recruitment tables (`applicants`, `reviews`, …) are separate from
+> strike_system's (`members`, `strikes`), so they coexist in one project.
+>
+> `npm install` first — both PRs use `@supabase/supabase-js` (already in `package.json`).
 
-1. Create a Supabase project (free tier is fine).
-2. In the SQL editor, run `db/schema.sql` (creates tables + enables RLS).
-3. Project Settings → API → copy the **Project URL** and the **service_role** key.
-4. Set in `.env.local` (and Vercel env):
+1. Use the same Supabase project as strike_system (or create one if landing this first).
+2. In the SQL editor, run `db/schema.sql` (creates the recruitment tables + enables RLS).
+3. Set the shared env vars (same ones strike_system documents):
    ```
-   SUPABASE_URL=https://<project>.supabase.co
+   NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
    SUPABASE_SERVICE_ROLE_KEY=<service role key>   # secret — server only
    ```
-The service role key is used only in server code (`lib/supabase.ts`) and bypasses RLS;
-RLS is left deny-by-default so the anon role has no direct table access. Until these are set,
-the app uses `lib/demo.ts` and writes are disabled.
+The service role key is used only in server code (via `lib/supabase/server.ts`) and bypasses
+RLS; RLS is deny-by-default so anon has no direct table access. Until these are set, the app
+uses `lib/demo.ts` and writes are disabled.
+
+> Depends on the strike_system PR's `lib/supabase/server.ts`. If landing this branch first,
+> add that 8-line file (or rebase onto strike_system).
 
 ## Files outside this folder
 
