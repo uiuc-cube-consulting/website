@@ -17,6 +17,13 @@ export default async function PortalLayout({
   const email = session?.user?.email;
   const name = session?.user?.name;
 
+  // Role-aware nav: regular members see a focused set; leadership tools are grouped
+  // and only shown to the roles that can use them. Role comes from the members table
+  // (auth.ts → session.user.role).
+  const role = session?.user?.role;
+  const isExec = role === "exec";
+  const isLeadership = isExec || role === "project_manager" || role === "senior_consultant";
+
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-cream)]/40">
       {/* Portal-specific header — replaces the public site header on /portal/* */}
@@ -30,16 +37,19 @@ export default async function PortalLayout({
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-7 text-[14px]" aria-label="Portal">
+          <nav className="hidden md:flex items-center gap-6 text-[14px]" aria-label="Portal">
+            {/* Core — everyone. Calendar / Points / Resources live as sections on the Dashboard. */}
             <Link href="/portal" className="nav-link">Dashboard</Link>
-            <Link href="/portal#calendar" className="nav-link">Calendar</Link>
-            <Link href="/portal#points" className="nav-link">Points</Link>
             <Link href="/portal/case-studies" className="nav-link">Case Studies</Link>
-            <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>
-            <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>
             <Link href="/portal/brain" className="nav-link">CUBE Brain</Link>
-            <Link href="/portal#resources" className="nav-link">Resources</Link>
             <Link href="/portal/strikes" className="nav-link">Strikes</Link>
+
+            {/* Leadership tools — grouped, shown only to the roles that can use them. */}
+            {isLeadership && <span aria-hidden className="h-4 w-px bg-white/20" />}
+            {isExec && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
+            {isLeadership && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
+
+            <span aria-hidden className="h-4 w-px bg-white/20" />
             <Link href="/" className="nav-link">Public Site</Link>
           </nav>
 
