@@ -65,7 +65,8 @@ function main() {
     });
   }
 
-  writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), count: chunks.length, chunks }, null, 2) + "\n");
+  // No timestamp — keep output deterministic so re-runs produce clean git diffs.
+  writeFileSync(OUT, JSON.stringify({ count: chunks.length, chunks }, null, 2) + "\n");
   console.log(`Wrote ${chunks.length} corpus chunks -> ${OUT}`);
 }
 
