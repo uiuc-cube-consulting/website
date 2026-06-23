@@ -15,7 +15,10 @@ export default auth((req) => {
   }
 
   // Exec-only routes
-  if (pathname.startsWith("/portal/admin") && session.user.role !== "exec") {
+  if (
+    (pathname.startsWith("/portal/admin") || pathname.startsWith("/portal/strikes")) &&
+    session.user.role !== "exec"
+  ) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 

@@ -12,6 +12,7 @@ export default async function StrikesPage() {
   if (!session?.user?.memberId) redirect("/portal/sign-in");
 
   const { memberId, role } = session.user;
+  if (role !== "exec") redirect("/portal"); // strike management is exec-board only
   const supabase = createServerClient();
 
   const canFile = ["exec", "project_manager", "senior_consultant"].includes(role);
