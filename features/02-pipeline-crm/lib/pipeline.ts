@@ -39,9 +39,11 @@ export type Lead = {
   activeAt?: string;
   shippedAt?: string;
   notes?: string;
+  /** Arbitrary extra fields a user adds to a card (editable board). */
+  custom?: Record<string, string>;
 };
 
-export type SourceKind = "sheet" | "demo";
+export type SourceKind = "sheet" | "supabase" | "demo";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Stage normalization — the bot/humans may write free-text stages in the Sheet.
@@ -60,6 +62,25 @@ const STAGE_ALIASES: Record<string, StageKey> = {
 export function normalizeStage(raw: string): StageKey {
   const k = (raw || "").trim().toLowerCase();
   return STAGE_ALIASES[k] ?? (STAGE_KEYS.includes(k as StageKey) ? (k as StageKey) : "prospect");
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Access: the pipeline is EXEC-BOARD ONLY. Authorization uses session.user.role
+// (from the strike_system members table), with an env fallback before that auth is
+// live. Pure (no server-only imports) so routes can share it.
+// ──────────────────────────────────────────────────────────────────────────
+export type SessionLike = { user?: { email?: string | null; role?: string } } | null;
+
+export function isExec(session: SessionLike): boolean {
+  const role = session?.user?.role;
+  if (role) return role === "exec";
+  const allow = (process.env.PIPELINE_EXEC_ALLOWLIST || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const email = session?.user?.email?.toLowerCase();
+  if (allow.length) return Boolean(email && allow.includes(email));
+  return true; // fully unconfigured → open for local dev (board shows demo data)
 }
 
 // ──────────────────────────────────────────────────────────────────────────

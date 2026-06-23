@@ -12,8 +12,10 @@ Pulls `@supabase/supabase-js` and `resend` (both are in `package.json` / lockfil
 
 ## 2. Create the database
 
-In your Supabase project's SQL editor, run **`db/schema.sql`**. It creates the
-`members` and `strikes` tables with RLS.
+In your Supabase project's SQL editor, run these (same project for all):
+- **`db/schema.sql`** — `members` and `strikes` tables.
+- **`features/03-recruitment-ats/db/schema.sql`** — recruitment ATS (`applicants`, `reviews`, …).
+- **`features/02-pipeline-crm/db/schema.sql`** — `pipeline_leads` (the editable pipeline board).
 
 > **Seed `members` before anyone signs in.** `auth.ts` rejects sign-in for any email
 > not in `members`, so the portal is inaccessible until the table is seeded. Edit the
