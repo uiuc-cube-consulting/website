@@ -42,11 +42,11 @@ export default async function PortalLayout({
             <Link href="/portal" className="nav-link">Dashboard</Link>
             <Link href="/portal/case-studies" className="nav-link">Case Studies</Link>
             <Link href="/portal/brain" className="nav-link">CUBE Brain</Link>
-            <Link href="/portal/strikes" className="nav-link">Strikes</Link>
 
             {/* Leadership tools — grouped, shown only to the roles that can use them. */}
             {isLeadership && <span aria-hidden className="h-4 w-px bg-white/20" />}
             {isExec && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
+            {isExec && <Link href="/portal/strikes" className="nav-link">Strikes</Link>}
             {isLeadership && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
 
             <span aria-hidden className="h-4 w-px bg-white/20" />

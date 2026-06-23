@@ -110,9 +110,22 @@ export async function importFromSheet(): Promise<ImportResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
+  // Precise diagnostics: the sheet read needs BOTH an id and a credential.
+  const hasSheet = Boolean(process.env.PIPELINE_SHEET_ID || process.env.SHEET_ID);
+  const hasCred = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_API_KEY);
+  if (!hasSheet || !hasCred) {
+    const missing = [
+      !hasSheet && "PIPELINE_SHEET_ID",
+      !hasCred && "a Google credential (GOOGLE_API_KEY or GOOGLE_SERVICE_ACCOUNT_JSON)",
+    ]
+      .filter(Boolean)
+      .join(" and ");
+    return { ok: false, error: `Sync needs ${missing} set in the environment, then a redeploy.` };
+  }
+
   const { leads, source } = await fetchPipeline();
   if (source === "demo") {
-    return { ok: false, error: "No outreach sheet configured (set PIPELINE_SHEET_ID + credentials)." };
+    return { ok: false, error: "Couldn't read the outreach sheet — verify PIPELINE_SHEET_ID and that the credential can access it." };
   }
 
   const { data: existingRows, error: exErr } = await sb.from("pipeline_leads").select("lead_key");
