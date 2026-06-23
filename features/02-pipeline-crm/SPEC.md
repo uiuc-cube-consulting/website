@@ -1,10 +1,11 @@
 # SPEC · Pipeline / CRM in the Portal  (#2 in the build plan, #1 in the original menu)
 
-> Status: **built — read path (phase 1).** Live board + funnel metrics at
-> `/portal/pipeline`, reading the outreach Sheet (demo data until configured). Write-back and
-> the inbound intake on-ramp remain phase 2 (below). This is the highest "build on what
-> exists" move — it connects CUBE's two engineering assets (the outreach bot and the portal)
-> into one loop.
+> Status: **built — editable board (v2).** Exec-only Kanban at `/portal/pipeline` with funnel
+> metrics, **drag-to-restage**, **click-to-edit cards** (fields/notes/custom), and **Sync from
+> the outreach sheet**, all over a Supabase `pipeline_leads` store (demo data until configured).
+> The board never writes to the bot's sheet — sync is one-way in, human edits are preserved.
+> The inbound intake on-ramp (replace the Formspree `/contact` form) remains the next step.
+> This connects CUBE's two engineering assets (the outreach bot and the portal) into one loop.
 
 ## Problem
 

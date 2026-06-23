@@ -1,16 +1,31 @@
 # INTEGRATION · Pipeline / CRM
 
-Built as a members-only portal page (read path, phase 1). This records every file outside
-the folder and how to feed it real data.
+Members-only, **exec-board-only** Kanban board. **Editable (v2):** drag cards between
+stage columns and click a card to edit its fields/notes/custom data. The board reads/writes
+a Supabase `pipeline_leads` store; "Sync from outreach sheet" imports the bot's `Leads` tab
+into that store (new leads inserted; human edits — stage, notes, custom, position — preserved).
+
+## Editable board setup
+
+1. Run **`db/schema.sql`** in Supabase (creates `pipeline_leads` + RLS). Reuses the same
+   project/env as the rest of the app (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+2. Set `PIPELINE_SHEET_ID` (or it falls back to the bot's `SHEET_ID`) + `GOOGLE_SERVICE_ACCOUNT_JSON`
+   so Sync can read the `Leads` tab.
+3. In the board, click **Sync from outreach sheet** to populate. Without Supabase it shows demo data.
+
+Data flow: bot Leads sheet → (Sync) → Supabase `pipeline_leads` → board. The board never writes
+back to the bot's sheet, so automation is untouched; re-syncing refreshes source fields only.
 
 ## Files outside this folder
 
 | File | Change | Why |
 |---|---|---|
 | `app/portal/pipeline/page.tsx` | **new** — re-export shim | Registers the auth-gated `/portal/pipeline` route (inherits portal layout + `proxy.ts`). |
-| `app/api/pipeline/route.ts` | **new** — re-export shim (handler) + local `dynamic` | Registers `GET /api/pipeline`. `dynamic` is declared locally because route segment config can't be re-exported. |
-| `app/portal/layout.tsx` | **+1 line** in the portal `<nav>` | Adds the "Pipeline" link. |
-| `.env.example` | **+ pipeline section** | Documents `PIPELINE_SHEET_ID`, `PIPELINE_SHEET_RANGE`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `PIPELINE_EXEC_ALLOWLIST`. |
+| `app/api/pipeline/route.ts` | **new** — re-export shim + local `dynamic` | `GET /api/pipeline` — reads the Supabase store. |
+| `app/api/pipeline/lead/route.ts` | **new** — re-export shim + local `dynamic` | `POST` — update a card (drag stage / edit fields). Exec-only. |
+| `app/api/pipeline/import/route.ts` | **new** — re-export shim + local `dynamic` | `POST` — sync the bot sheet into the store. Exec-only. |
+| `app/portal/layout.tsx` | **+1 line** in the portal `<nav>` | Adds the "Pipeline" link (exec-only). |
+| `.env.example` | **pipeline section** | `PIPELINE_SHEET_ID`, `PIPELINE_SHEET_RANGE`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `PIPELINE_EXEC_ALLOWLIST` + the shared Supabase vars. |
 
 The route shim pattern (note — only the handler is re-exported):
 ```ts
