@@ -11,6 +11,7 @@ declare module "next-auth" {
       image?: string | null;
       role: string;
       cohort: string;
+      memberId: string;
     };
   }
 }
@@ -45,11 +46,12 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           const supabase = createServerClient();
           const { data } = await supabase
             .from("members")
-            .select("role, cohort")
+            .select("id, role, cohort")
             .eq("email", email)
             .single();
 
           if (data) {
+            token.memberId = data.id;
             token.role = data.role;
             token.cohort = data.cohort;
           }
@@ -59,6 +61,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       session.user.email = session.user.email.toLowerCase();
+      if (typeof token.memberId === "string") {
+        session.user.memberId = token.memberId;
+      }
       if (typeof token.role === "string") {
         session.user.role = token.role;
       }
