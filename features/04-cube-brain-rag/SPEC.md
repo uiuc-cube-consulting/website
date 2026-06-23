@@ -1,8 +1,10 @@
 # SPEC · "CUBE Brain" — Internal RAG Assistant  (#4 in the build plan, #5 in the menu)
 
-> Status: **spec'd, not yet built.** The highest-ceiling bet: improves delivery quality,
-> accelerates onboarding, and — critically — becomes a **sellable offering** once it works
-> internally (the bridge to menu #6, productizing the AI capability).
+> Status: **built — v1 (keyword retrieval + Claude/extractive answers).** Members-only chat at
+> `/portal/brain`, grounded in a corpus seeded from the 102 past projects, with a retrieval eval
+> gate. Semantic (pgvector) retrieval and full-deliverable ingestion remain phase 2 (below). The
+> highest-ceiling bet: improves delivery quality, accelerates onboarding, and — critically —
+> becomes a **sellable offering** once it works internally (the bridge to menu #6).
 
 ## Problem
 

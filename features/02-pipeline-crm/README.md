@@ -24,7 +24,7 @@ write-back and the inbound intake on-ramp are scoped as phase 2 in SPEC.md.
     LeadCard.tsx       one lead card
   app/
     portal/pipeline/page.tsx   the members-only page (auth-gated)
-    api/pipeline/route.ts      auth-gated feed (+ leadership allowlist)
+    api/pipeline/route.ts      auth-gated feed (exec-board only, via session.user.role)
 ```
 
 ## Run it

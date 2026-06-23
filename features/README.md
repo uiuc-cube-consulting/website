@@ -33,9 +33,23 @@ compounding membership play, then the high-ceiling AI bet.
 | # | Folder | What it does | Effort | Primary metric | Status |
 |---|--------|--------------|--------|----------------|--------|
 | 1 | `01-case-study-engine` | Members-only, searchable/filterable library of the 102 past projects in the portal (`/portal/case-studies`). Internal knowledge base so members can pull relevant prior work by topic/keyword/practice area; NDA-safe behind auth. Data already exists. | Low | member reuse / onboarding ramp | **Built** |
-| 2 | `02-pipeline-crm` | Pipeline board in the portal over the Sheets the bot already writes to (`prospect → contacted → replied → call → LOI → active → shipped → testimonial`). Connects the two assets; gives leadership a command center. | Medium | pipeline conversion rate, time-to-LOI | Spec'd |
-| 3 | `03-recruitment-ats` | Applicant intake + multi-reviewer scoring + interview scheduling + funnel analytics, gated behind existing portal auth. Highest membership leverage; build ahead of next cycle. | Medium-High | applicant volume, reviewer throughput, yield | Spec'd |
-| 4 | `04-cube-brain-rag` | Retrieval assistant grounded in past deliverables + playbooks ("how did we approach market sizing for Inprentus?"). Improves delivery, speeds onboarding, becomes a sellable offering. | High | onboarding ramp time, deliverable consistency | Spec'd |
+| 2 | `02-pipeline-crm` | **Exec-board-only** pipeline board over the Sheets the bot writes to (`prospect → … → testimonial`), with funnel/conversion/time-to-LOI metrics. Connects the two assets; gives the board a command center. Read path built (demo data until the Sheet is wired). | Medium | pipeline conversion rate, time-to-LOI | **Built** (read path) |
+| 3 | `03-recruitment-ats` | Public intake + multi-reviewer scoring on a calibrated rubric + funnel/calibration analytics, **on Supabase**. Replaces forms.gle + manual review. Scheduling/decision-emails are phase 2. | Medium-High | applicant volume, reviewer throughput, yield | **Built** (core) |
+| 4 | `04-cube-brain-rag` | Members-only assistant grounded in past projects ("how did we approach market sizing for Inprentus?"). Keyword retrieval + Claude/extractive answers with citations; pgvector + full-deliverable ingestion are phase 2. | High | onboarding ramp time, deliverable consistency | **Built** (v1) |
+
+## Built on the `strike_system` PR (Supabase + members + auth)
+
+The open **`strike_system`** PR owns the shared foundation: the Supabase client
+(`lib/supabase/server.ts`), the `members` table (with `role`), and a role-aware `auth.ts`
+(`session.user.role`). To avoid overlap, these features **build on it rather than duplicate it**:
+
+- **Pipeline (02)** is **exec-board only** via `session.user.role === "exec"` (env fallback
+  `PIPELINE_EXEC_ALLOWLIST` until that auth lands).
+- **Recruitment ATS (03)** reuses `lib/supabase/server.ts` and the `NEXT_PUBLIC_SUPABASE_*`
+  env vars; its tables (`applicants`, `reviews`, …) are separate from `members`/`strikes`.
+
+Land `strike_system` first (or rebase onto it); there is intentionally no separate members
+table or Supabase client in this set.
 
 ## Why this set
 

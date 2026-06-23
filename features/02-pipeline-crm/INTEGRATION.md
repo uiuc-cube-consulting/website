@@ -10,7 +10,7 @@ the folder and how to feed it real data.
 | `app/portal/pipeline/page.tsx` | **new** — re-export shim | Registers the auth-gated `/portal/pipeline` route (inherits portal layout + `proxy.ts`). |
 | `app/api/pipeline/route.ts` | **new** — re-export shim (handler) + local `dynamic` | Registers `GET /api/pipeline`. `dynamic` is declared locally because route segment config can't be re-exported. |
 | `app/portal/layout.tsx` | **+1 line** in the portal `<nav>` | Adds the "Pipeline" link. |
-| `.env.example` | **+ pipeline section** | Documents `PIPELINE_SHEET_ID`, `PIPELINE_SHEET_RANGE`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `PIPELINE_ALLOWLIST`. |
+| `.env.example` | **+ pipeline section** | Documents `PIPELINE_SHEET_ID`, `PIPELINE_SHEET_RANGE`, `GOOGLE_SERVICE_ACCOUNT_JSON`, `PIPELINE_EXEC_ALLOWLIST`. |
 
 The route shim pattern (note — only the handler is re-exported):
 ```ts
@@ -18,12 +18,20 @@ export { GET } from "@/features/02-pipeline-crm/app/api/pipeline/route";
 export const dynamic = "force-dynamic";
 ```
 
-## Access control
+## Access control — exec board only
+
+Authorization reuses the **strike_system PR's auth** (`session.user.role`, loaded from the
+Supabase `members` table). We do **not** define our own members table or Supabase client.
 
 - `/portal/*` is gated by `proxy.ts`; the page also re-checks the session.
-- `/api/pipeline` returns `401` if not signed in, and `403` if `PIPELINE_ALLOWLIST` is set and
-  the member isn't on it (the board shows a "leadership only" state). Leave the allowlist blank
-  to let any member view.
+- `/api/pipeline` returns `401` if not signed in, and `403` unless `session.user.role === "exec"`.
+  The board shows an "exec board only" state on 403.
+- **To grant a non-exec member** (the "different restriction"): set their `role` to `exec` in the
+  members table, or widen the allowed roles in `app/api/pipeline/route.ts` (mirrors
+  strike_system's `STRIKE_ROLES` list).
+- **Before strike_system merges** (auth not yet role-aware): `PIPELINE_EXEC_ALLOWLIST` (env,
+  comma-separated emails) is the fallback; fully unconfigured → open for local dev.
+- **Depends on** the strike_system foundation for the role in the session. No code is duplicated.
 
 ## Connecting the live Sheet
 

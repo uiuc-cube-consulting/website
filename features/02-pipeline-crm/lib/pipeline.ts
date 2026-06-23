@@ -131,23 +131,9 @@ export function computeMetrics(leads: Lead[]): PipelineMetrics {
   return { total, stages, replyRate, winRate, avgDaysToLOI, bySource };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Access control. The pipeline holds prospect PII, so it can be restricted to a
-// leadership subset via PIPELINE_ALLOWLIST (comma-separated emails). If unset,
-// any authenticated portal member may view it.
-// ──────────────────────────────────────────────────────────────────────────
-export function pipelineAllowlist(): Set<string> {
-  const raw = process.env.PIPELINE_ALLOWLIST;
-  if (!raw) return new Set();
-  return new Set(raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
-}
-
-export function canViewPipeline(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const allow = pipelineAllowlist();
-  if (allow.size === 0) return true; // no leadership list set → any member
-  return allow.has(email.toLowerCase());
-}
+// Access control: the pipeline is exec-board-only, enforced in
+// app/api/pipeline/route.ts via session.user.role === "exec" (the role comes from
+// the strike_system PR's members table + auth.ts). No members table is defined here.
 
 // ──────────────────────────────────────────────────────────────────────────
 // Demo pipeline (used until PIPELINE_SHEET_ID + creds are set). Fictional
