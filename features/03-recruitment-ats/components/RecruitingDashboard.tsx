@@ -25,6 +25,7 @@ type Row = {
   spread: number | null;
   perCriterion: Record<RubricKey, number | null>;
   hasReviewed: boolean;
+  assignedToMe: boolean;
   myReview: { scores: Scores; notes: string } | null;
 };
 
@@ -33,6 +34,9 @@ type ApiResponse = {
   funnel: { stage: Stage; count: number; reached: number }[];
   demo: boolean;
   reviewer: string;
+  progress: { assigned: number; reviewed: number; pending: number };
+  hasAssignments: boolean;
+  canManage: boolean;
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -49,6 +53,10 @@ export function RecruitingDashboard() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [queueMode, setQueueMode] = useState<"all" | "mine">("all");
+  const [managing, setManaging] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [importUrl, setImportUrl] = useState("");
 
   const reload = useCallback(async () => {
     try {
@@ -66,6 +74,48 @@ export function RecruitingDashboard() {
       await reload();
     })();
   }, [reload]);
+
+  // Exec-only: randomly assign reviewers across all active applicants.
+  async function assignReviewers() {
+    setManaging(true);
+    setNotice(null);
+    try {
+      const r = await fetch("/api/recruitment/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ k: 2 }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setNotice(`Assigned ${j.assigned} review slots across ${j.applicants} applicants (${j.reviewers} reviewers).`);
+        await reload();
+      } else setNotice(j.message || j.error || "Could not assign reviewers.");
+    } finally {
+      setManaging(false);
+    }
+  }
+
+  // Exec-only: import applicants from a Google Sheet of form responses.
+  async function importSheet() {
+    if (!importUrl.trim()) return;
+    setManaging(true);
+    setNotice(null);
+    try {
+      const r = await fetch("/api/recruitment/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetId: importUrl.trim() }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setNotice(`Imported ${j.inserted} new applicant(s); skipped ${j.skipped} duplicate(s).`);
+        setImportUrl("");
+        await reload();
+      } else setNotice(j.message || j.error || "Could not import.");
+    } finally {
+      setManaging(false);
+    }
+  }
 
   const selected = useMemo(
     () => data?.applicants.find((r) => r.applicant.id === selectedId) ?? null,
@@ -87,6 +137,7 @@ export function RecruitingDashboard() {
   const needsReview = data.applicants.filter((r) => r.reviewCount < 2 && !["rejected", "withdrawn"].includes(r.applicant.stage)).length;
   const disagreements = data.applicants.filter((r) => (r.spread ?? 0) >= 1.5).length;
   const maxReached = Math.max(1, ...data.funnel.map((f) => f.reached));
+  const visible = queueMode === "mine" ? data.applicants.filter((r) => r.assignedToMe) : data.applicants;
 
   return (
     <div className="space-y-6">
@@ -94,6 +145,53 @@ export function RecruitingDashboard() {
         <div className="rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-5 py-3 text-sm text-[var(--bg-dark)]">
           <span className="font-semibold">Demo data.</span> Configure Supabase (see the feature
           INTEGRATION.md) to store real applicants and reviews. Writes are disabled in demo mode.
+        </div>
+      )}
+
+      {/* Exec controls: import applicants from a sheet + randomly assign reviewers */}
+      {data.canManage && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
+          <button onClick={assignReviewers} disabled={managing} className="btn btn-gold text-xs px-4 py-2 disabled:opacity-50">
+            {managing ? "Working…" : "Assign reviewers (random)"}
+          </button>
+          <div className="flex items-center gap-2">
+            <input
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="Paste a Google Sheet URL to import applicants"
+              className="w-72 max-w-full rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
+            />
+            <button onClick={importSheet} disabled={managing || !importUrl.trim()} className="btn btn-gold-outline text-xs px-4 py-2 disabled:opacity-50">
+              Import
+            </button>
+          </div>
+          {notice && <span className="text-sm text-[var(--gold-deep)]">{notice}</span>}
+        </div>
+      )}
+
+      {/* Reviewer queue toggle + progress */}
+      {data.hasAssignments && (
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="inline-flex overflow-hidden rounded-full border border-[var(--border)]">
+            <button
+              onClick={() => setQueueMode("mine")}
+              className={`px-4 py-1.5 text-sm font-medium ${queueMode === "mine" ? "bg-[var(--gold)] text-[var(--bg-dark)]" : "bg-white text-[var(--bg-dark)]"}`}
+            >
+              My queue ({data.progress.assigned})
+            </button>
+            <button
+              onClick={() => setQueueMode("all")}
+              className={`px-4 py-1.5 text-sm font-medium ${queueMode === "all" ? "bg-[var(--gold)] text-[var(--bg-dark)]" : "bg-white text-[var(--bg-dark)]"}`}
+            >
+              All ({data.applicants.length})
+            </button>
+          </div>
+          {data.progress.assigned > 0 && (
+            <span className="text-sm text-[var(--muted)]">
+              Reviewed <span className="font-semibold text-[var(--bg-dark)]">{data.progress.reviewed}</span> / {data.progress.assigned}
+              {data.progress.pending > 0 && <> · {data.progress.pending} pending</>}
+            </span>
+          )}
         </div>
       )}
 
@@ -132,7 +230,12 @@ export function RecruitingDashboard() {
               <span>Applicant</span><span>Stage</span><span>Reviews</span><span>Mean</span>
             </div>
             <ul className="divide-y divide-[var(--border)]">
-              {data.applicants.map((r) => {
+              {visible.length === 0 && (
+                <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
+                  {queueMode === "mine" ? "Nothing assigned to you yet." : "No applicants."}
+                </li>
+              )}
+              {visible.map((r) => {
                 const flag = r.reviewCount < 2 && !["rejected", "withdrawn"].includes(r.applicant.stage);
                 const disagree = (r.spread ?? 0) >= 1.5;
                 return (

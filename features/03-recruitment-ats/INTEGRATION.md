@@ -73,11 +73,22 @@ git add features/03-recruitment-ats \
 git commit -m "feat: recruitment ATS — intake + reviewer console + analytics (#3)"
 ```
 
-## Phase 2 (scoped in SPEC.md)
+## Reviewer assignment + import (built)
 
-Interview scheduling (`interview_slots`/`interviews` tables are already in the schema),
-templated decision emails (reuse the bot's Gmail/service-account send), reviewer assignment
-to balance load, and migrating the Join Us CTA to `/apply`.
+- **Random reviewer assignment** — exec hits "Assign reviewers" → `POST /api/recruitment/assign`
+  randomly + evenly assigns `k` (default 2) reviewers to every active applicant (no self-review,
+  balanced load, top-up-aware). The reviewer pool = members with a reviewer role
+  (`exec`, `project_manager`, `senior_consultant`, `returning_member`) from the `members` table.
+  Reviewers then use the **My queue** toggle to see only their assigned applicants + progress.
+- **Google Sheet import** — exec pastes a responses sheet URL → `POST /api/recruitment/import`
+  reads it (fuzzy header mapping: name/email/year/major/college; other columns → `responses`),
+  deduped by email. Or set `RECRUITMENT_IMPORT_SHEET_ID` and call with no body. Needs
+  `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_API_KEY` (same as the pipeline reader).
+
+## Phase 2 (still scoped in SPEC.md)
+
+Interview scheduling (`interview_slots`/`interviews` tables already exist), templated decision
+emails (reuse the bot's Gmail/service-account send), and migrating the Join Us CTA to `/apply`.
 
 ## Remove cleanly
 

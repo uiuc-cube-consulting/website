@@ -125,3 +125,63 @@ export function funnel(applicants: Applicant[]): Funnel {
     return { stage, count, reached };
   });
 }
+
+// ── Reviewer assignment ────────────────────────────────────────────────────
+export type Assignment = { applicant_id: string; reviewer_email: string };
+
+function shuffle<T>(arr: T[], rng: () => number): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Randomly + evenly assign each applicant to `k` reviewers. Pure and re-runnable:
+ *   - respects `existing` assignments (only tops each applicant up to k)
+ *   - never assigns a reviewer to themselves (email match) or twice to one applicant
+ *   - balances load: picks the least-loaded eligible reviewers, random tie-break
+ * Returns ONLY the NEW assignments to insert. `rng` is injectable for deterministic tests.
+ *
+ * This is the fairness core: reviewers don't choose who they review, assignment is
+ * random, and every applicant gets the same number of independent reviewers.
+ */
+export function planAssignments(
+  applicants: { id: string; email: string }[],
+  reviewerEmails: string[],
+  existing: Assignment[],
+  k = 2,
+  rng: () => number = Math.random
+): Assignment[] {
+  const reviewers = [...new Set(reviewerEmails.map((e) => e.toLowerCase()).filter(Boolean))];
+  const load = new Map<string, number>(reviewers.map((r) => [r, 0]));
+  const assignedTo = new Map<string, Set<string>>();
+  for (const a of existing) {
+    const r = a.reviewer_email.toLowerCase();
+    if (load.has(r)) load.set(r, (load.get(r) ?? 0) + 1);
+    if (!assignedTo.has(a.applicant_id)) assignedTo.set(a.applicant_id, new Set());
+    assignedTo.get(a.applicant_id)!.add(r);
+  }
+
+  const out: Assignment[] = [];
+  for (const applicant of shuffle(applicants, rng)) {
+    const already = assignedTo.get(applicant.id) ?? new Set<string>();
+    const need = Math.max(0, k - already.size);
+    if (need === 0) continue;
+    const email = (applicant.email ?? "").toLowerCase();
+    const eligible = reviewers.filter((r) => !already.has(r) && r !== email);
+    // least-loaded first, random tie-break (shuffle then stable sort by load)
+    const picked = shuffle(eligible, rng)
+      .sort((x, y) => (load.get(x) ?? 0) - (load.get(y) ?? 0))
+      .slice(0, need);
+    for (const r of picked) {
+      out.push({ applicant_id: applicant.id, reviewer_email: r });
+      load.set(r, (load.get(r) ?? 0) + 1);
+      already.add(r);
+    }
+    assignedTo.set(applicant.id, already);
+  }
+  return out;
+}
