@@ -4,7 +4,20 @@
 
 import { createServerClient } from "@/lib/supabase/server";
 import { DEMO_APPLICANTS, DEMO_REVIEWS } from "./demo";
-import { weightedTotal, type Applicant, type Review, type Scores, type Stage } from "./types";
+import {
+  planAssignments,
+  weightedTotal,
+  type Applicant,
+  type Assignment,
+  type Review,
+  type Scores,
+  type Stage,
+} from "./types";
+
+// Members who can be assigned as recruitment reviewers (matches proxy.ts).
+const REVIEWER_ROLES = ["exec", "project_manager", "senior_consultant", "returning_member"];
+// Applicant stages that no longer need review.
+const TERMINAL_STAGES = ["rejected", "withdrawn", "accepted"];
 
 // Reuses the shared Supabase client from the strike_system foundation
 // (lib/supabase/server.ts) — we do NOT define our own client. Returns null when
@@ -104,4 +117,116 @@ export async function setDecision(input: {
   );
   if (dErr) return { ok: false, error: dErr.message };
   return { ok: true };
+}
+
+// ── Reviewer pool, assignments, queue ────────────────────────────────────────
+
+export type Reviewer = { email: string; name?: string | null };
+
+/** The reviewer pool = members whose role can review applicants. */
+export async function getReviewerPool(): Promise<Reviewer[]> {
+  const sb = db();
+  if (!sb) {
+    // demo: distinct reviewers seen in the demo reviews
+    const seen = new Map<string, Reviewer>();
+    for (const r of DEMO_REVIEWS) seen.set(r.reviewer_email, { email: r.reviewer_email });
+    return [...seen.values()];
+  }
+  const { data, error } = await sb.from("members").select("email, full_name, role").in("role", REVIEWER_ROLES);
+  if (error) throw error;
+  return (data ?? []).map((m) => ({ email: m.email, name: m.full_name }));
+}
+
+export async function getAssignments(): Promise<Assignment[]> {
+  const sb = db();
+  if (!sb) return [];
+  const { data, error } = await sb.from("assignments").select("applicant_id, reviewer_email");
+  if (error) throw error;
+  return (data ?? []) as Assignment[];
+}
+
+export type AssignResult = {
+  ok: boolean;
+  demo?: boolean;
+  error?: string;
+  assigned?: number; // new assignment rows created
+  applicants?: number; // active applicants considered
+  reviewers?: number; // reviewer pool size
+};
+
+/** Randomly + evenly assign k reviewers to every active applicant (top-up aware). */
+export async function assignReviewers(k = 2): Promise<AssignResult> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+
+  const { data: apps, error: aErr } = await sb.from("applicants").select("id, email, stage");
+  if (aErr) return { ok: false, error: aErr.message };
+  const active = (apps ?? []).filter((a) => !TERMINAL_STAGES.includes(a.stage));
+
+  const pool = await getReviewerPool();
+  const reviewerEmails = pool.map((p) => p.email);
+  if (reviewerEmails.length === 0) {
+    return { ok: false, error: "No reviewers found. Seed members with a reviewer role first." };
+  }
+
+  const existing = await getAssignments();
+  const plan = planAssignments(
+    active.map((a) => ({ id: a.id, email: a.email })),
+    reviewerEmails,
+    existing,
+    k
+  );
+
+  if (plan.length) {
+    const { error } = await sb.from("assignments").upsert(plan, { onConflict: "applicant_id,reviewer_email" });
+    if (error) return { ok: false, error: error.message };
+  }
+  return { ok: true, assigned: plan.length, applicants: active.length, reviewers: reviewerEmails.length };
+}
+
+// ── Bulk import (from a Google Sheet of form responses) ──────────────────────
+
+export type ImportRow = {
+  name: string;
+  email: string;
+  year?: string;
+  major?: string;
+  college?: string;
+  responses?: Record<string, string>;
+};
+
+export type ImportResult = { ok: boolean; demo?: boolean; error?: string; inserted?: number; skipped?: number };
+
+/** Insert applicants, deduped by email (existing + within the batch). */
+export async function importApplicants(rows: ImportRow[]): Promise<ImportResult> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+
+  const { data: existing, error: eErr } = await sb.from("applicants").select("email");
+  if (eErr) return { ok: false, error: eErr.message };
+  const have = new Set((existing ?? []).map((e) => String(e.email).toLowerCase()));
+
+  const seen = new Set<string>();
+  const toInsert = rows
+    .filter((r) => r.email && /.+@.+\..+/.test(r.email))
+    .filter((r) => {
+      const key = r.email.toLowerCase();
+      if (have.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((r) => ({
+      name: r.name || r.email,
+      email: r.email,
+      year: r.year ?? null,
+      major: r.major ?? null,
+      college: r.college ?? null,
+      responses: r.responses ?? {},
+    }));
+
+  if (toInsert.length) {
+    const { error } = await sb.from("applicants").insert(toInsert);
+    if (error) return { ok: false, error: error.message };
+  }
+  return { ok: true, inserted: toInsert.length, skipped: rows.length - toInsert.length };
 }
