@@ -42,6 +42,8 @@ export default async function PortalLayout({
             <Link href="/portal" className="nav-link">Dashboard</Link>
             <Link href="/portal/case-studies" className="nav-link">Case Studies</Link>
             <Link href="/portal/brain" className="nav-link">CUBE Brain</Link>
+            {/* Any member can file a strike; only exec see the review dashboard. */}
+            {!isExec && <Link href="/portal/strikes/new" className="nav-link">File a Strike</Link>}
 
             {/* Leadership tools — grouped, shown only to the roles that can use them. */}
             {isLeadership && <span aria-hidden className="h-4 w-px bg-white/20" />}

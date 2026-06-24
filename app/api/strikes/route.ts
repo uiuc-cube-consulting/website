@@ -11,8 +11,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const STRIKE_ROLES = ["exec", "project_manager", "senior_consultant"];
-
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.memberId) {
@@ -98,9 +96,8 @@ export async function POST(req: NextRequest) {
 
   const { memberId, role, name: filerName, email: filerEmail } = session.user;
 
-  if (!STRIKE_ROLES.includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // Any signed-in member may FILE a strike. Non-exec strikes are created as
+  // "pending" (below) and only the exec board can review/approve them.
 
   const body = await req.json();
   const { target_member_id, strike_type, reason, email_subject, email_body } = body;
