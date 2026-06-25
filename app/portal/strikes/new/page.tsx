@@ -6,26 +6,21 @@ import { ChevronLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_ROLES = ["exec", "project_manager", "senior_consultant"];
-
 export default async function NewStrikePage() {
   const session = await auth();
   if (!session?.user?.memberId) redirect("/portal/sign-in");
 
-  if (!ALLOWED_ROLES.includes(session.user.role)) {
-    redirect("/portal/strikes");
-  }
-
+  // Any signed-in member can file a strike; the exec board reviews it.
   const isExec = session.user.role === "exec";
 
   return (
     <div className="container-x py-10 md:py-14 max-w-2xl">
       <Link
-        href="/portal/strikes"
+        href={isExec ? "/portal/strikes" : "/portal"}
         className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--bg-dark)] mb-8 transition-colors"
       >
         <ChevronLeft size={16} />
-        Back to strikes
+        {isExec ? "Back to strikes" : "Back to portal"}
       </Link>
 
       <div className="mb-8">
