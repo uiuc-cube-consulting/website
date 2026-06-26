@@ -1,0 +1,98 @@
+[
+  {
+    "semester": "SP25",
+    "client": "AeroXplorer",
+    "keywords": ["Website", "Software Development", "Machine Learning", "AI", "Monetization", "AWS"],
+    "deliverables": "Migrated the AeroXplorer website to WordPress and researched monetization strategies for its photography database, refining the approach with the client across a series of meetings. Supported the photo-database migration to AWS S3 as needed, and reviewed the AI image-classification codebase to research and implement model improvements."
+  },
+  {
+    "semester": "SP25",
+    "client": "Atomic Wings",
+    "keywords": ["Social Media", "Marketing", "Content", "Influencer Marketing", "Engagement Metrics"],
+    "deliverables": "Audited Atomic Wings' social presence and defined brand messaging and style guidelines, then launched a consistent Instagram/TikTok posting schedule targeting students with gameday specials and club collaborations. Tracked weekly engagement, pivoted to a broader Champaign-Urbana strategy with local influencer partnerships, and delivered a final report correlating social analytics with revenue."
+  },
+  {
+    "semester": "SP25",
+    "client": "Banato",
+    "keywords": ["Business Strategy", "Pitch Deck", "Fundraising", "Investor Research", "Financial Modeling"],
+    "deliverables": "Developed a business plan covering company performance, growth strategies, and a forward-looking outlook, including paths to capital (investors, bank loans) and national customer growth. Produced a branded pitch deck for pitch competitions and for investor and partner conversations."
+  },
+  {
+    "semester": "SP25",
+    "client": "CU Aerospace",
+    "keywords": ["Software Development", "Coding", "Simulation", "Library Development"],
+    "deliverables": "Error-checked and developed components for the Thermosys block library ahead of its next release, and built a new model sample system to help users understand how to apply the developed blocks in other systems."
+  },
+  {
+    "semester": "SP25",
+    "client": "Inprentus",
+    "keywords": ["Market Research", "Market Analysis", "Competitive Analysis", "Venture Funding"],
+    "deliverables": "Tracked venture-funding trends among larger satellite companies using PitchBook and Crunchbase, and analyzed current and future market trends to compile companies that use or could benefit from the diffraction-grating applications Inprentus provides."
+  },
+  {
+    "semester": "SP25",
+    "client": "Jamtown",
+    "keywords": ["SEO", "Website", "Marketing", "Social Media"],
+    "deliverables": "Provided SEO recommendations to grow website traffic, audited the current site and implemented approved improvements, then researched ways to expand Jamtown's presence in the Chicagoland area through sponsorships and cold outreach."
+  },
+  {
+    "semester": "SP25",
+    "client": "M3HD",
+    "keywords": ["Market Research", "Competitive Analysis", "Sales Strategy", "Social Media", "Marketing", "Outreach"],
+    "deliverables": "Set up and optimized LinkedIn with a content plan and website recommendations; ran market analysis (demand, trends, competitors) to position the company; developed a direct sales approach and U.S. distributor outreach plan for research institutions and radiopharmacies; and created a product brochure and ad campaigns to support sales."
+  },
+  {
+    "semester": "SP25",
+    "client": "Minara",
+    "keywords": ["Market Research", "Competitive Analysis", "Business Model", "Monetization", "Revenue Streams", "User Research"],
+    "deliverables": "Ran market and competitive analysis to define the platform's unique value proposition, explored monetization and business-model options (subscription, advertising, partnerships) for financial sustainability, and conducted user research (surveys, interviews, data analysis) to inform segmentation, onboarding, and retention."
+  },
+  {
+    "semester": "FA25",
+    "client": "AeroXplorer",
+    "keywords": ["Website", "Web Development", "3D Simulation", "Front End", "Software Development", "Data Visualization"],
+    "deliverables": "Built interactive features for the AeroXplorer website magazine: a user-facing 3-D aircraft simulation with sliders to follow flight paths (altitude, position, heading speed) and a crash-simulation module visualizing historical crash flight paths, with full technical documentation delivered to the client."
+  },
+  {
+    "semester": "FA25",
+    "client": "Banato",
+    "keywords": ["Market Analysis", "Pricing", "Supply Chain", "Distribution Strategy", "Sales Strategy"],
+    "deliverables": "Conducted a market analysis of competitive pricing, profit margins, and positioning across grocery, university, and gym markets; compiled a sales-contact list and outreach materials; assessed production capacity and distribution models with potential distributor partnerships; and delivered an action plan for immediate sales outreach and long-term scaling."
+  },
+  {
+    "semester": "FA25",
+    "client": "Bellman AI",
+    "keywords": ["Machine Learning", "AI", "Reinforcement Learning", "Software Development", "API"],
+    "deliverables": "Designed, built, and packaged reinforcement-learning environments for finance, insurance, and medicine — including expert outreach to define tasks, tools, and evaluation rubrics, integration of open-source and custom tools, and MCP server setup for tool invocation and verification."
+  },
+  {
+    "semester": "FA25",
+    "client": "Elite",
+    "keywords": ["Website", "Web Development", "Marketing", "Web Analytics", "Data Analysis"],
+    "deliverables": "Researched and recommended a website platform, planned and built a client-approved site, then launched it and tracked web analytics to implement improvements. Began expanding Elite's marketing strategy with a time-bound plan."
+  },
+  {
+    "semester": "FA25",
+    "client": "Jamtown",
+    "keywords": ["Database", "Back End", "Front End", "UI/UX", "SEO", "Social Media", "AI", "Machine Learning"],
+    "deliverables": "Built out the backend database and populated existing data, continued the frontend UI/UX with a musician form-submission system linked to the database, ran SEO and social-media marketing and nonprofit outreach, and built an AI chatbot to search the backend database from the frontend."
+  },
+  {
+    "semester": "FA25",
+    "client": "Naya",
+    "keywords": ["Digital Marketing", "Social Media", "Marketing", "Market Research", "Customer Outreach"],
+    "deliverables": "Analyzed Naya's social media strategy and identified new engagement tactics and posters; built a catering program with a target list of student-run and local RSOs plus an outreach strategy; researched lunch-menu promotions and a loyalty program via surveys; and audited/updated the Google listing with a review campaign."
+  },
+  {
+    "semester": "FA25",
+    "client": "Omnipher",
+    "keywords": ["Product Design", "Market Research", "Feasibility Analysis", "Product Development"],
+    "deliverables": "Recommended three unique product ideas meeting Omnipher's criteria for useful, well-designed items for marketers and buyers, each accompanied by a market and feasibility analysis, delivered in a polished final slide deck for client and supplier review."
+  },
+  {
+    "semester": "FA25",
+    "client": "Zentora",
+    "keywords": ["AI", "Machine Learning", "Video Platform", "Software Development", "Front End"],
+    "deliverables": "Researched the best real-time video stack and AI models, developed a video platform embedded in the Zentora website and codebase with model fine-tuning, tested and integrated it with the AI tutoring assistant, and built a post-session AI tool that monitors session activity to drive insights."
+  }
+]
