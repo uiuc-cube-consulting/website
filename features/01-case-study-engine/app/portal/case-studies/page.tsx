@@ -10,6 +10,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// Recent semesters whose full deliverables live in Drive (members-only). Older
+// semesters are parsed into the searchable library below.
+const RECENT_SEMESTERS = [
+  { label: "Spring 2026", href: "https://drive.google.com/drive/folders/1vAT_Vp2WulVT6COfvuwILob-He2vqMws" },
+  { label: "Fall 2025", href: "https://drive.google.com/drive/folders/1HlWIUr73wALpOrYYcQyq_TreGxothHmK" },
+  { label: "Spring 2025", href: "https://drive.google.com/drive/folders/1OvTbCPgz3xvE3BXSVHoh-9ZugqXE37f5" },
+];
+
 export default async function CaseStudiesPage() {
   // Defense-in-depth: proxy.ts already gates /portal/*, but every portal page
   // re-checks the session (matches the dashboard + points patterns).
@@ -47,8 +55,30 @@ export default async function CaseStudiesPage() {
         </p>
       </div>
 
+      {/* Recent semesters — full deliverables live in Drive (members-only). */}
       <div className="mt-8">
-        <CaseStudyLibrary studies={studies} facets={facets} />
+        <p className="eyebrow">Recent semesters</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          {RECENT_SEMESTERS.map((s) => (
+            <a
+              key={s.label}
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-2xl border border-[var(--border)] bg-white p-5 transition-all hover:border-[var(--gold)] hover:shadow-md"
+            >
+              <p className="font-display text-lg font-bold text-[var(--bg-dark)]">{s.label}</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">Deliverables folder ↗</p>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-10">
+        <p className="eyebrow">Full archive</p>
+        <div className="mt-3">
+          <CaseStudyLibrary studies={studies} facets={facets} />
+        </div>
       </div>
     </div>
   );

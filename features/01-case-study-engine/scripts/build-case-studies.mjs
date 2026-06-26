@@ -31,6 +31,8 @@ const FEATURE_DIR = resolve(__dirname, "..");
 const REPO_ROOT = resolve(FEATURE_DIR, "..", "..");
 
 const SRC = resolve(REPO_ROOT, "project-acquisition", "data", "past_projects.json");
+// Recent semesters added by hand (the outreach bot only parses through SP24).
+const RECENT = resolve(FEATURE_DIR, "data", "recent_projects.json");
 const ANON_CFG = resolve(FEATURE_DIR, "data", "anonymization.json");
 const OUT = resolve(FEATURE_DIR, "data", "case_studies.json");
 
@@ -156,8 +158,16 @@ function slugify(text) {
     .slice(0, 48);
 }
 
+function readRecent() {
+  try {
+    return JSON.parse(readFileSync(RECENT, "utf8"));
+  } catch {
+    return []; // optional supplemental file
+  }
+}
+
 function main() {
-  const projects = JSON.parse(readFileSync(SRC, "utf8"));
+  const projects = [...JSON.parse(readFileSync(SRC, "utf8")), ...readRecent()];
   const anon = JSON.parse(readFileSync(ANON_CFG, "utf8"));
   const hideSet = new Set((anon.anonymizeClients || []).map((s) => String(s).trim().toLowerCase()));
   const aliasTemplate = anon.aliasTemplate || "Confidential {practice} Client";
