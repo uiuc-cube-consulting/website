@@ -128,7 +128,7 @@ export async function POST(
       );
 
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const from = "CUBE Consulting <noreply@cubeconsulting.org>";
+      const from = process.env.RESEND_FROM || "CUBE Consulting <noreply@cubeconsulting.org>";
       const targetEmail = strike.member.email as string;
       const targetName = strike.member.full_name as string;
       const filerEmail = strike.filer?.email as string | undefined;

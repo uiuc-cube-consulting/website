@@ -35,8 +35,15 @@ the browser Supabase client needs the `NEXT_PUBLIC_*` values at build time):
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (browser client) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (server only — secret) |
 | `RESEND_API_KEY` | Resend key for strike notification emails |
+| `RESEND_FROM` | Optional sender, e.g. `CUBE Consulting <hr@yourdomain.com>` (default uses cubeconsulting.org) |
 | `AUTH_SECRET` | `openssl rand -base64 32` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth client |
+
+> **Strike emails not arriving?** Resend only delivers from a **verified domain**. In Resend:
+> add + verify your sending domain (DNS records), then set `RESEND_FROM` to an address on it.
+> Without a verified domain, sends are rejected (filing still works — the email is best-effort
+> and the failure is logged in the Vercel function logs, not shown to the user). Also confirm
+> `RESEND_API_KEY` is set in the **Production** environment and that you redeployed.
 | `GOOGLE_API_KEY`, `POINTS_SHEET_ID`, `POINTS_SHEET_RANGE` | Points tracker (existing) |
 | `NEXT_PUBLIC_CALENDAR_EMBED_SRC`, `NEXT_PUBLIC_FORMSPREE_ID` | Calendar embed / contact form (existing) |
 
