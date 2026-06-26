@@ -3,11 +3,7 @@ import { auth } from "@/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
 import { computeStrikeTotal } from "@/lib/strikes";
-import {
-  approvalTemplate,
-  requesterApprovalTemplate,
-  execAlertTemplate,
-} from "@/lib/email/strikes";
+import { approvalTemplate, execAlertTemplate } from "@/lib/email/strikes";
 
 export const dynamic = "force-dynamic";
 
@@ -94,13 +90,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { memberId, role, name: filerName, email: filerEmail } = session.user;
+  const { memberId, role } = session.user;
 
   // Any signed-in member may FILE a strike. Non-exec strikes are created as
   // "pending" (below) and only the exec board can review/approve them.
 
   const body = await req.json();
-  const { target_member_id, strike_type, reason, email_subject, email_body } = body;
+  const { target_member_id, strike_type, reason } = body;
 
   if (!target_member_id || !strike_type || !reason) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -144,42 +140,42 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Send emails for exec-filed (immediately approved) strikes
-  if (isExec && email_subject && email_body) {
-    const { data: allStrikes } = await supabase
-      .from("strikes")
-      .select("effective_type, status")
-      .eq("member_id", target_member_id);
+  // Best-effort notification for exec-filed (auto-approved) strikes. The email is
+  // generated server-side from a template (no HTML comes from the client), and email
+  // failure NEVER fails the strike — so a missing RESEND_API_KEY can't break filing.
+  if (isExec && process.env.RESEND_API_KEY) {
+    try {
+      const { data: allStrikes } = await supabase
+        .from("strikes")
+        .select("effective_type, status")
+        .eq("member_id", target_member_id);
+      const newTotal = computeStrikeTotal(allStrikes ?? []);
 
-    const newTotal = computeStrikeTotal(allStrikes ?? []);
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const fromAddress = "CUBE Consulting <hr@cubeconsulting.org>";
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const fromAddress = "CUBE Consulting <hr@cubeconsulting.org>";
+      const tmpl = approvalTemplate(targetMember.full_name, reason, newTotal);
+      await resend.emails.send({
+        from: fromAddress,
+        to: targetMember.email,
+        subject: tmpl.subject,
+        html: tmpl.html,
+      });
 
-    // Email to struck member (exec-edited content)
-    await resend.emails.send({
-      from: fromAddress,
-      to: targetMember.email,
-      subject: email_subject,
-      html: email_body,
-    });
-
-    // 3-strike exec alert
-    if (newTotal >= 3) {
-      const { data: execMembers } = await supabase
-        .from("members")
-        .select("email")
-        .eq("role", "exec");
-
-      if (execMembers && execMembers.length > 0) {
-        const alert = execAlertTemplate(targetMember.full_name);
-        await resend.emails.send({
-          from: fromAddress,
-          to: execMembers.map((m) => m.email),
-          subject: alert.subject,
-          html: alert.html,
-        });
+      if (newTotal >= 3) {
+        const { data: execMembers } = await supabase.from("members").select("email").eq("role", "exec");
+        if (execMembers && execMembers.length > 0) {
+          const alert = execAlertTemplate(targetMember.full_name);
+          await resend.emails.send({
+            from: fromAddress,
+            to: execMembers.map((m) => m.email),
+            subject: alert.subject,
+            html: alert.html,
+          });
+        }
       }
+    } catch (e) {
+      console.error("Strike notification email failed (non-fatal):", e);
     }
   }
 
