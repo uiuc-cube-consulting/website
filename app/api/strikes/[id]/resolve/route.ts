@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
-import { computeStrikeTotal } from "@/lib/strikes";
+import { computeStrikeTotal, weightLabel } from "@/lib/strikes";
 import {
+  approvalTemplate,
   voidTemplate,
   downgradeTemplate,
   upgradeTemplate,
+  requesterApprovalTemplate,
   requesterDenialTemplate,
   requesterVoidTemplate,
   requesterDowngradeTemplate,
@@ -32,19 +34,7 @@ export async function POST(
 
   const { id } = await params;
   const body = await req.json();
-  const {
-    action,
-    email_subject,
-    email_body,
-    requester_email_subject,
-    requester_email_body,
-  }: {
-    action: Action;
-    email_subject?: string;
-    email_body?: string;
-    requester_email_subject?: string;
-    requester_email_body?: string;
-  } = body;
+  const { action }: { action: Action } = body;
 
   if (!["approve", "deny", "void", "downgrade", "upgrade"].includes(action)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -121,97 +111,60 @@ export async function POST(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  // Send emails
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = "CUBE Consulting <noreply@cubeconsulting.org>";
-  const targetEmail = strike.member.email;
-  const targetName = strike.member.full_name;
-  const filerEmail = strike.filer.email;
-  const filerName = strike.filer.full_name;
-  const samePersonAsResolver = strike.filed_by === resolverMemberId;
-
-  // Fetch updated totals for struck-member emails
-  const { data: allStrikes } = await supabase
-    .from("strikes")
-    .select("effective_type, status")
-    .eq("member_id", strike.member_id);
-
-  // Apply the local update so computeStrikeTotal reflects the just-made change
-  const updatedRows = (allStrikes ?? []).map(
-    (r: { effective_type: string | null; status: string }) => r
-  ) as { effective_type: "half" | "full" | "voided" | null; status: "pending" | "approved" | "denied" }[];
-  const newTotal = computeStrikeTotal(updatedRows);
-
-  const emailPromises: Promise<unknown>[] = [];
-
-  if (action === "approve") {
-    // Struck member — exec-edited subject/body
-    if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
+  // Best-effort notifications, generated server-side from templates. Guarded by
+  // RESEND_API_KEY + try/catch so an email failure never fails the resolve action —
+  // the strike has already been updated above.
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const { data: allStrikes } = await supabase
+        .from("strikes")
+        .select("effective_type, status")
+        .eq("member_id", strike.member_id);
+      const newTotal = computeStrikeTotal(
+        (allStrikes ?? []) as {
+          effective_type: "half" | "full" | "voided" | null;
+          status: "pending" | "approved" | "denied";
+        }[]
       );
-    }
-    // Requester
-    if (requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
-    }
-    // 3-strike alert
-    if (newTotal >= 3) {
-      const { data: execMembers } = await supabase
-        .from("members")
-        .select("email")
-        .eq("role", "exec");
-      if (execMembers?.length) {
-        const alert = execAlertTemplate(targetName);
-        emailPromises.push(
-          resend.emails.send({ from, to: execMembers.map((m: { email: string }) => m.email), subject: alert.subject, html: alert.html })
-        );
+
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const from = "CUBE Consulting <noreply@cubeconsulting.org>";
+      const targetEmail = strike.member.email as string;
+      const targetName = strike.member.full_name as string;
+      const filerEmail = strike.filer?.email as string | undefined;
+      const filerName = (strike.filer?.full_name as string | undefined) ?? "there";
+      const notifyFiler = strike.filed_by !== resolverMemberId && Boolean(filerEmail);
+      const weight = weightLabel(strike.strike_type as "half" | "full");
+
+      const sends: Promise<unknown>[] = [];
+      const send = (to: string | string[], t: { subject: string; html: string }) =>
+        sends.push(resend.emails.send({ from, to, subject: t.subject, html: t.html }));
+
+      if (action === "approve") {
+        send(targetEmail, approvalTemplate(targetName, strike.reason, newTotal));
+        if (notifyFiler) send(filerEmail!, requesterApprovalTemplate(filerName, targetName, weight));
+        if (newTotal >= 3) {
+          const { data: execMembers } = await supabase.from("members").select("email").eq("role", "exec");
+          if (execMembers?.length) send(execMembers.map((m: { email: string }) => m.email), execAlertTemplate(targetName));
+        }
+      } else if (action === "deny") {
+        if (notifyFiler) send(filerEmail!, requesterDenialTemplate(filerName, targetName, weight));
+      } else if (action === "void") {
+        send(targetEmail, voidTemplate(targetName, newTotal));
+        if (notifyFiler) send(filerEmail!, requesterVoidTemplate(filerName, targetName));
+      } else if (action === "downgrade") {
+        send(targetEmail, downgradeTemplate(targetName, newTotal));
+        if (notifyFiler) send(filerEmail!, requesterDowngradeTemplate(filerName, targetName));
+      } else if (action === "upgrade") {
+        send(targetEmail, upgradeTemplate(targetName, newTotal));
+        if (notifyFiler) send(filerEmail!, requesterUpgradeTemplate(filerName, targetName));
       }
-    }
-  } else if (action === "deny") {
-    if (requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
-    }
-  } else if (action === "void") {
-    if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
-    }
-    if (!samePersonAsResolver && requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
-    }
-  } else if (action === "downgrade") {
-    if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
-    }
-    if (!samePersonAsResolver && requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
-    }
-  } else if (action === "upgrade") {
-    if (email_subject && email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: targetEmail, subject: email_subject, html: email_body })
-      );
-    }
-    if (!samePersonAsResolver && requester_email_subject && requester_email_body) {
-      emailPromises.push(
-        resend.emails.send({ from, to: filerEmail, subject: requester_email_subject, html: requester_email_body })
-      );
+
+      await Promise.allSettled(sends);
+    } catch (e) {
+      console.error("Strike resolve email failed (non-fatal):", e);
     }
   }
-
-  await Promise.allSettled(emailPromises);
 
   return NextResponse.json({ strike: updated });
 }
