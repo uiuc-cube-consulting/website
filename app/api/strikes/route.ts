@@ -92,8 +92,11 @@ export async function POST(req: NextRequest) {
 
   const { memberId, role } = session.user;
 
-  // Any signed-in member may FILE a strike. Non-exec strikes are created as
-  // "pending" (below) and only the exec board can review/approve them.
+  // Only PMs and exec may FILE a strike. PM-filed strikes are created "pending"
+  // (below); only the exec board can review/approve them.
+  if (role !== "exec" && role !== "project_manager") {
+    return NextResponse.json({ error: "Only PMs and exec can file strikes." }, { status: 403 });
+  }
 
   const body = await req.json();
   const { target_member_id, strike_type, reason } = body;
@@ -152,7 +155,7 @@ export async function POST(req: NextRequest) {
       const newTotal = computeStrikeTotal(allStrikes ?? []);
 
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const fromAddress = "CUBE Consulting <hr@cubeconsulting.org>";
+      const fromAddress = process.env.RESEND_FROM || "CUBE Consulting <hr@cubeconsulting.org>";
 
       const tmpl = approvalTemplate(targetMember.full_name, reason, newTotal);
       await resend.emails.send({

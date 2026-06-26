@@ -14,13 +14,13 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/portal/sign-in", req.url));
   }
 
-  // Exec-only routes. The strike REVIEW dashboard (/portal/strikes, /portal/strikes/[id])
-  // is exec-only, but any member may FILE at /portal/strikes/new.
+  // Strike REVIEW dashboard (/portal/strikes, /portal/strikes/[id]) is exec-only.
   const strikeReview = pathname.startsWith("/portal/strikes") && pathname !== "/portal/strikes/new";
-  if (
-    (pathname.startsWith("/portal/admin") || strikeReview) &&
-    session.user.role !== "exec"
-  ) {
+  if ((pathname.startsWith("/portal/admin") || strikeReview) && session.user.role !== "exec") {
+    return NextResponse.redirect(new URL("/portal", req.url));
+  }
+  // Filing a strike (/portal/strikes/new) is limited to PMs + exec.
+  if (pathname === "/portal/strikes/new" && !["exec", "project_manager"].includes(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 

@@ -10,8 +10,10 @@ export default async function NewStrikePage() {
   const session = await auth();
   if (!session?.user?.memberId) redirect("/portal/sign-in");
 
-  // Any signed-in member can file a strike; the exec board reviews it.
-  const isExec = session.user.role === "exec";
+  // Only PMs and exec can file strikes; the exec board reviews them.
+  const role = session.user.role;
+  if (role !== "exec" && role !== "project_manager") redirect("/portal");
+  const isExec = role === "exec";
 
   return (
     <div className="container-x py-10 md:py-14 max-w-2xl">
