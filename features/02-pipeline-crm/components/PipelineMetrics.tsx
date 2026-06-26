@@ -64,6 +64,17 @@ export function PipelineMetrics({ metrics }: { metrics: Metrics }) {
               </div>
             ))}
           </div>
+          {/* Terminal outcomes — counted separately from the funnel above. */}
+          <div className="mt-4 space-y-1 border-t border-[var(--border)] pt-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">Not pursuing</span>
+              <span className="font-semibold text-[var(--bg-dark)]">{metrics.outcomes.not_pursuing}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">Could not find</span>
+              <span className="font-semibold text-[var(--bg-dark)]">{metrics.outcomes.could_not_find}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

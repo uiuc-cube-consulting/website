@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { STAGES, type Lead, type PipelineMetrics as Metrics, type StageKey } from "@/features/02-pipeline-crm/lib/pipeline";
+import { BOARD_STAGES, type Lead, type PipelineMetrics as Metrics, type StageKey } from "@/features/02-pipeline-crm/lib/pipeline";
 import { LeadCard } from "./LeadCard";
 import { PipelineMetrics } from "./PipelineMetrics";
 import { PipelineCardModal } from "./PipelineCardModal";
@@ -169,7 +169,7 @@ export function PipelineBoard() {
 
       {/* Kanban */}
       <div className="-mx-1 flex gap-4 overflow-x-auto pb-4">
-        {STAGES.map((stage) => {
+        {BOARD_STAGES.map((stage) => {
           const leads = filtered.filter((l) => l.stage === stage.key);
           return (
             <section

@@ -3,7 +3,7 @@
 // this module is safe to import from client components. The Google Sheets reader
 // (which needs `googleapis`) lives in ./source.ts.
 
-/** Ordered pipeline stages (prospect → … → testimonial). Order drives the funnel. */
+/** Ordered FUNNEL stages (prospect → … → testimonial). Order drives the metrics. */
 export const STAGES = [
   { key: "prospect", label: "Prospect", hint: "Sourced, not yet contacted" },
   { key: "contacted", label: "Contacted", hint: "Cold email sent" },
@@ -15,10 +15,26 @@ export const STAGES = [
   { key: "testimonial", label: "Testimonial", hint: "Closed the loop" },
 ] as const;
 
-export type StageKey = (typeof STAGES)[number]["key"];
+/** Terminal OUTCOME buckets — sit outside the funnel, excluded from conversion metrics. */
+export const OUTCOME_STAGES = [
+  { key: "not_pursuing", label: "Not pursuing", hint: "Decided not to pursue" },
+  { key: "could_not_find", label: "Could not find", hint: "No contact info found" },
+] as const;
+
+/** Every column shown on the board (funnel + outcomes). */
+export const BOARD_STAGES = [...STAGES, ...OUTCOME_STAGES];
+
+export type StageKey =
+  | (typeof STAGES)[number]["key"]
+  | (typeof OUTCOME_STAGES)[number]["key"];
+
+/** Funnel stage keys — drive the ordered metrics. */
 export const STAGE_KEYS = STAGES.map((s) => s.key) as StageKey[];
-export const STAGE_INDEX: Record<StageKey, number> = Object.fromEntries(
-  STAGE_KEYS.map((k, i) => [k, i])
+/** All stage keys incl. the two outcomes — used for normalization/board. */
+export const ALL_STAGE_KEYS = BOARD_STAGES.map((s) => s.key) as StageKey[];
+/** Index within the funnel. Outcome stages are intentionally absent (not in the funnel). */
+export const STAGE_INDEX = Object.fromEntries(
+  STAGES.map((s, i) => [s.key, i])
 ) as Record<StageKey, number>;
 
 export type Lead = {
@@ -57,11 +73,16 @@ const STAGE_ALIASES: Record<string, StageKey> = {
   active: "active", "in progress": "active", working: "active",
   shipped: "shipped", delivered: "shipped", complete: "shipped", completed: "shipped", done: "shipped",
   testimonial: "testimonial", referral: "testimonial", "closed won": "testimonial",
+  // Terminal outcomes
+  not_pursuing: "not_pursuing", "not pursuing": "not_pursuing", "not-pursuing": "not_pursuing",
+  pass: "not_pursuing", declined: "not_pursuing", "not interested": "not_pursuing", lost: "not_pursuing", "closed lost": "not_pursuing",
+  could_not_find: "could_not_find", "could not find": "could_not_find", "could-not-find": "could_not_find",
+  "not found": "could_not_find", "no contact": "could_not_find", "no email": "could_not_find", unreachable: "could_not_find",
 };
 
 export function normalizeStage(raw: string): StageKey {
   const k = (raw || "").trim().toLowerCase();
-  return STAGE_ALIASES[k] ?? (STAGE_KEYS.includes(k as StageKey) ? (k as StageKey) : "prospect");
+  return STAGE_ALIASES[k] ?? (ALL_STAGE_KEYS.includes(k as StageKey) ? (k as StageKey) : "prospect");
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -101,6 +122,7 @@ export type PipelineMetrics = {
   winRate: number; // reached "active"+ / total
   avgDaysToLOI: number | null;
   bySource: { source: string; total: number; won: number; winRate: number }[];
+  outcomes: { not_pursuing: number; could_not_find: number };
 };
 
 function daysBetween(a?: string, b?: string): number | null {
@@ -112,11 +134,15 @@ function daysBetween(a?: string, b?: string): number | null {
 }
 
 export function computeMetrics(leads: Lead[]): PipelineMetrics {
-  const total = leads.length;
-  const reachedCount = (idx: number) => leads.filter((l) => STAGE_INDEX[l.stage] >= idx).length;
+  // Metrics are computed over FUNNEL leads only — the two outcome buckets
+  // (not pursuing / could not find) are terminal and don't belong in conversion math.
+  const funnel = new Set<StageKey>(STAGE_KEYS);
+  const funnelLeads = leads.filter((l) => funnel.has(l.stage));
+  const total = funnelLeads.length;
+  const reachedCount = (idx: number) => funnelLeads.filter((l) => STAGE_INDEX[l.stage] >= idx).length;
 
   const stages: StageStat[] = STAGES.map((s, i) => {
-    const count = leads.filter((l) => l.stage === s.key).length;
+    const count = funnelLeads.filter((l) => l.stage === s.key).length;
     const reached = reachedCount(i);
     const prevReached = i === 0 ? null : reachedCount(i - 1);
     const conversionFromPrev =
@@ -130,7 +156,7 @@ export function computeMetrics(leads: Lead[]): PipelineMetrics {
   const replyRate = reachedContacted ? Math.round((reachedReplied / reachedContacted) * 100) : 0;
   const winRate = total ? Math.round((reachedActive / total) * 100) : 0;
 
-  const loiDurations = leads
+  const loiDurations = funnelLeads
     .map((l) => daysBetween(l.contactedAt, l.loiAt))
     .filter((d): d is number => d !== null && d >= 0);
   const avgDaysToLOI = loiDurations.length
@@ -138,7 +164,7 @@ export function computeMetrics(leads: Lead[]): PipelineMetrics {
     : null;
 
   const sourceMap = new Map<string, { total: number; won: number }>();
-  for (const l of leads) {
+  for (const l of funnelLeads) {
     const key = l.source || "unknown";
     const entry = sourceMap.get(key) ?? { total: 0, won: 0 };
     entry.total += 1;
@@ -149,7 +175,12 @@ export function computeMetrics(leads: Lead[]): PipelineMetrics {
     .map(([source, { total: t, won }]) => ({ source, total: t, won, winRate: t ? Math.round((won / t) * 100) : 0 }))
     .sort((a, b) => b.total - a.total);
 
-  return { total, stages, replyRate, winRate, avgDaysToLOI, bySource };
+  const outcomes = {
+    not_pursuing: leads.filter((l) => l.stage === "not_pursuing").length,
+    could_not_find: leads.filter((l) => l.stage === "could_not_find").length,
+  };
+
+  return { total, stages, replyRate, winRate, avgDaysToLOI, bySource, outcomes };
 }
 
 // Access control: the pipeline is exec-board-only, enforced in
@@ -166,6 +197,8 @@ export const DEMO_PIPELINE: Lead[] = [
   { id: "atlas-3", name: "Dana Whitfield", company: "Atlas Logistics", industry: "Logistics", source: "prospects", stage: "contacted", owner: "Outreach bot", lastContacted: "2026-06-16", contactedAt: "2026-06-16" },
   { id: "verde-4", name: "Sofia Ramirez", company: "Verde Foods", industry: "CPG", source: "alumni", stage: "replied", owner: "Director", lastContacted: "2026-06-12", contactedAt: "2026-06-09", repliedAt: "2026-06-12" },
   { id: "cobalt-5", name: "Tom Nguyen", company: "Cobalt Energy", industry: "Energy", source: "apollo", stage: "replied", owner: "Director", lastContacted: "2026-06-14", contactedAt: "2026-06-10", repliedAt: "2026-06-14" },
+  { id: "harborfoods-x", name: "Eli Park", company: "Harbor Foods", industry: "CPG", source: "apollo", stage: "not_pursuing", owner: "Director", notes: "Out of budget this cycle — revisit next term." },
+  { id: "driftlabs-x", name: "—", company: "Drift Labs", industry: "SaaS", source: "prospects", stage: "could_not_find", owner: "Outreach bot", notes: "No valid contact email found." },
   { id: "harbor-6", name: "Aisha Khan", company: "Harbor Fintech", industry: "Fintech", source: "inbound", stage: "call", owner: "Director", lastContacted: "2026-06-11", contactedAt: "2026-06-05", repliedAt: "2026-06-08", callAt: "2026-06-11" },
   { id: "pinecone-7", name: "Greg Olsen", company: "Pinecone Labs", industry: "Biotech", source: "alumni", stage: "loi", owner: "Director", contactedAt: "2026-05-20", repliedAt: "2026-05-23", callAt: "2026-05-28", loiAt: "2026-06-04" },
   { id: "meridian-8", name: "Lauren Park", company: "Meridian SaaS", industry: "SaaS", source: "inbound", stage: "active", owner: "PM: Sujan", contactedAt: "2026-05-01", repliedAt: "2026-05-03", callAt: "2026-05-08", loiAt: "2026-05-15", activeAt: "2026-05-20" },
