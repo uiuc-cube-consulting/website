@@ -5,7 +5,7 @@ in CUBE's past engagements, with citations. v1 seeds its corpus from the 102 pas
 
 **Tiered by config, useful at every tier:**
 - **No keys:** TF-IDF keyword retrieval + an extractive answer (top matching projects). Works offline.
-- **`ANTHROPIC_API_KEY` set:** Claude synthesizes a grounded answer with inline citations.
+- **`GEMINI_API_KEY` set:** Gemini synthesizes a grounded answer with inline citations.
 - **Later:** swap keyword retrieval for semantic (Supabase pgvector) — the `retrieve()` interface
   is isolated so callers don't change. See SPEC.md.
 
@@ -16,7 +16,7 @@ in CUBE's past engagements, with citations. v1 seeds its corpus from the 102 pas
   scripts/build-corpus.mjs    rebuilds corpus.json from past_projects.json
   scripts/eval.mjs            retrieval sanity gate (run before trusting answers)
   lib/corpus.ts               TF-IDF retrieval (swap-in point for pgvector)
-  lib/generate.ts             SERVER-ONLY: Claude (REST) or extractive fallback
+  lib/generate.ts             SERVER-ONLY: Gemini (REST) or extractive fallback
   components/BrainChat.tsx     chat UI with citations
   app/portal/brain/page.tsx    members-only page
   app/api/brain/route.ts       auth-gated retrieve + answer

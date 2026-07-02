@@ -35,7 +35,7 @@ compounding membership play, then the high-ceiling AI bet.
 | 1 | `01-case-study-engine` | Members-only, searchable/filterable library of the 102 past projects in the portal (`/portal/case-studies`). Internal knowledge base so members can pull relevant prior work by topic/keyword/practice area; NDA-safe behind auth. Data already exists. | Low | member reuse / onboarding ramp | **Built** |
 | 2 | `02-pipeline-crm` | **Exec-board-only** pipeline board over the Sheets the bot writes to (`prospect → … → testimonial`), with funnel/conversion/time-to-LOI metrics. Connects the two assets; gives the board a command center. Read path built (demo data until the Sheet is wired). | Medium | pipeline conversion rate, time-to-LOI | **Built** (read path) |
 | 3 | `03-recruitment-ats` | Public intake + multi-reviewer scoring on a calibrated rubric + funnel/calibration analytics, **on Supabase**. Replaces forms.gle + manual review. Scheduling/decision-emails are phase 2. | Medium-High | applicant volume, reviewer throughput, yield | **Built** (core) |
-| 4 | `04-cube-brain-rag` | Members-only assistant grounded in past projects ("how did we approach market sizing for Inprentus?"). Keyword retrieval + Claude/extractive answers with citations; pgvector + full-deliverable ingestion are phase 2. | High | onboarding ramp time, deliverable consistency | **Built** (v1) |
+| 4 | `04-cube-brain-rag` | Members-only assistant grounded in past projects ("how did we approach market sizing for Inprentus?"). Keyword retrieval + Gemini/extractive answers with citations; pgvector + full-deliverable ingestion are phase 2. | High | onboarding ramp time, deliverable consistency | **Built** (v1) |
 
 ## Built on the `strike_system` PR (Supabase + members + auth)
 

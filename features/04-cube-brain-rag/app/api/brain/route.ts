@@ -4,7 +4,7 @@ import { corpusSize, retrieve } from "@/features/04-cube-brain-rag/lib/corpus";
 import { generateAnswer } from "@/features/04-cube-brain-rag/lib/generate";
 
 // Members-only RAG endpoint: retrieve relevant past-project chunks, then answer
-// (Claude when keyed, extractive otherwise). The corpus is internal data, and the
+// (Gemini when keyed, extractive otherwise). The corpus is internal data, and the
 // route is auth-gated, so client-confidential material never leaves the member boundary.
 
 export const dynamic = "force-dynamic";
