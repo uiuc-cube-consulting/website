@@ -300,7 +300,7 @@ export const FALL_RECRUITMENT = {
     { date: "Sep 2-4", event: "First Round Interviews (Grainger)" },
     { date: "Sep 5", event: "Invite-only Social Round"},
     { date: "Sep 8-10", event: "Second Round Interviews"},
-    { date: "Sep 10", event: "Final decisions announced" },
+    { date: "Sep 11", event: "Final decisions announced" },
   ],
 } as const;
 
