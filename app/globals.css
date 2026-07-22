@@ -195,3 +195,37 @@ h1, h2, h3, h4 {
   }
 }
 
+/* ── Tiptap / ProseMirror editor ─────────────────────────────────────────── */
+.ProseMirror {
+  outline: none;
+  min-height: 220px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--fg);
+}
+.ProseMirror > * + * { margin-top: 0.6em; }
+.ProseMirror p { margin: 0; }
+.ProseMirror h1 { font-size: 1.2rem; font-weight: 800; color: var(--bg-dark); margin: 0; }
+.ProseMirror h2 { font-size: 1rem; font-weight: 700; color: var(--bg-dark); margin: 0; }
+.ProseMirror blockquote {
+  background: #f5f4f0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  border: none;
+  margin: 0;
+}
+.ProseMirror blockquote > * + * { margin-top: 0.3em; }
+.ProseMirror ul, .ProseMirror ol { padding-left: 1.4rem; margin: 0; }
+.ProseMirror li { margin: 2px 0; }
+.ProseMirror strong { font-weight: 700; }
+.ProseMirror em { font-style: italic; }
+.ProseMirror u { text-decoration: underline; }
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
