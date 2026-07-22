@@ -43,6 +43,15 @@ export function wrapInShell(subject: string, innerHtml: string): string {
   return base(subject, innerHtml);
 }
 
+// ── Meeting notice (2nd/3rd strike) ────────────────────────────────────────────
+
+function meetingNotice(newTotal: number): string {
+  if (newTotal === 2 || newTotal === 3) {
+    return `<p>A member of the executive board will reach out to schedule a meeting to discuss this strike.</p>`;
+  }
+  return "";
+}
+
 // ── Struck member: approval ──────────────────────────────────────────────────
 
 export function approvalTemplate(
@@ -59,6 +68,7 @@ export function approvalTemplate(
 <p><strong>Strike level:</strong> ${label}</p>
 <p><strong>Reason:</strong> ${reason}</p>
 </blockquote>
+${meetingNotice(newTotal)}
 <p>If you have any questions or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
@@ -113,6 +123,7 @@ export function upgradeTemplate(
 <blockquote>
 <p><strong>Updated strike total:</strong> ${label}</p>
 </blockquote>
+${meetingNotice(newTotal)}
 <p>If you have any questions or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
