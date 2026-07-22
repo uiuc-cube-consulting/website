@@ -59,7 +59,7 @@ export function approvalTemplate(
 <p><strong>Strike level:</strong> ${label}</p>
 <p><strong>Reason:</strong> ${reason}</p>
 </blockquote>
-<p>If you have questions or would like to appeal, please reach out to the executive board.</p>`;
+<p>If you have any questions or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -77,7 +77,7 @@ export function voidTemplate(
 <blockquote>
 <p><strong>Updated strike total:</strong> ${label}</p>
 </blockquote>
-<p>If you have any questions, please contact the executive board.</p>`;
+<p>If you have any questions or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -95,7 +95,7 @@ export function downgradeTemplate(
 <blockquote>
 <p><strong>Updated strike total:</strong> ${label}</p>
 </blockquote>
-<p>If you have any questions, please contact the executive board.</p>`;
+<p>If you have any questions or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -113,7 +113,7 @@ export function upgradeTemplate(
 <blockquote>
 <p><strong>Updated strike total:</strong> ${label}</p>
 </blockquote>
-<p>If you have any questions, please contact the executive board.</p>`;
+<p>If you have any questions or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -150,7 +150,7 @@ export function requesterDenialTemplate(
 <p><strong>Member:</strong> ${targetName}</p>
 <p><strong>Requested weight:</strong> ${weight}</p>
 </blockquote>
-<p>If you believe this decision is incorrect, please reach out to the executive board directly.</p>`;
+<p>If you believe this decision is incorrect or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -164,7 +164,7 @@ export function requesterVoidTemplate(
   const innerHtml = `<h1>Strike Voided</h1>
 <p>Hi ${requesterName},</p>
 <p>A strike you previously filed against ${targetName} has been voided by the executive board.</p>
-<p>If you have questions about this decision, please contact the executive board.</p>`;
+<p>If you have questions about this decision or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -178,7 +178,7 @@ export function requesterDowngradeTemplate(
   const innerHtml = `<h1>Strike Downgraded</h1>
 <p>Hi ${requesterName},</p>
 <p>A full strike you previously filed against ${targetName} has been downgraded to a half strike by the executive board.</p>
-<p>If you have questions about this decision, please contact the executive board.</p>`;
+<p>If you have questions about this decision or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
@@ -192,7 +192,7 @@ export function requesterUpgradeTemplate(
   const innerHtml = `<h1>Strike Upgraded</h1>
 <p>Hi ${requesterName},</p>
 <p>A half strike you previously filed against ${targetName} has been upgraded to a full strike by the executive board.</p>
-<p>If you have questions about this decision, please contact the executive board.</p>`;
+<p>If you have questions about this decision or would like to appeal, please contact the executive board in Slack.</p>`;
   return { subject, innerHtml };
 }
 
