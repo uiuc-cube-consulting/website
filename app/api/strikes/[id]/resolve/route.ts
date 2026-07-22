@@ -4,9 +4,12 @@ import { createServerClient } from "@/lib/supabase/server";
 import { computeStrikeTotal } from "@/lib/strikes";
 import {
   execAlertTemplate,
+  hrNoticeTemplate,
   wrapInShell,
 } from "@/lib/email/strikes";
 import { sendEmail } from "@/lib/email/send";
+
+const HR_EMAIL = "hr@cubeconsulting.org";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +177,27 @@ export async function POST(
       emailPromises.push(sendEmail({ to: filerEmail, subject: requester_email_subject, html: wrapInShell(requester_email_subject, requester_email_body) }));
     }
   }
+
+  const actionPastTense = {
+    approve: "approved",
+    deny: "denied",
+    void: "voided",
+    downgrade: "downgraded",
+    upgrade: "upgraded",
+  } as const;
+
+  const hrNotice = hrNoticeTemplate(
+    actionPastTense[action],
+    targetName,
+    `Strike ${actionPastTense[action]} by ${session.user.name} (${session.user.email}).`
+  );
+  emailPromises.push(
+    sendEmail({
+      to: HR_EMAIL,
+      subject: hrNotice.subject,
+      html: wrapInShell(hrNotice.subject, hrNotice.innerHtml),
+    })
+  );
 
   await Promise.allSettled(emailPromises);
 

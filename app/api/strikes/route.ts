@@ -4,9 +4,12 @@ import { createServerClient } from "@/lib/supabase/server";
 import { computeStrikeTotal } from "@/lib/strikes";
 import {
   execAlertTemplate,
+  hrNoticeTemplate,
   wrapInShell,
 } from "@/lib/email/strikes";
 import { sendEmail } from "@/lib/email/send";
+
+const HR_EMAIL = "hr@cubeconsulting.org";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +148,17 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const hrNotice = hrNoticeTemplate(
+    "filed",
+    targetMember.full_name,
+    `A ${strike_type} strike was filed by ${filerName} (${filerEmail}). Reason: ${reason}. Status: ${insertData.status}.`
+  );
+  await sendEmail({
+    to: HR_EMAIL,
+    subject: hrNotice.subject,
+    html: wrapInShell(hrNotice.subject, hrNotice.innerHtml),
+  });
 
   if (isExec && (!email_subject || !email_body)) {
     return NextResponse.json({ error: "Missing email content" }, { status: 400 });

@@ -217,3 +217,20 @@ export function execAlertTemplate(targetName: string): EmailTemplate {
 <p>Please review their record in the member portal and take appropriate action. Account locking must be performed manually by an exec member.</p>`;
   return { subject, innerHtml };
 }
+
+// ── HR notice: strike filed or actioned ──────────────────────────────────────
+
+export function hrNoticeTemplate(
+  action: "filed" | "approved" | "denied" | "voided" | "downgraded" | "upgraded",
+  targetName: string,
+  detail: string
+): EmailTemplate {
+  const label =
+    action === "filed" ? "Strike Filed" : `Strike ${action[0].toUpperCase()}${action.slice(1)}`;
+  const subject = `[CUBE] ${label} — ${targetName}`;
+  const innerHtml = `<h1>${label}</h1>
+<p>This is an automated notice.</p>
+<p><strong>Member:</strong> ${targetName}</p>
+<p>${detail}</p>`;
+  return { subject, innerHtml };
+}
