@@ -149,16 +149,21 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const hrNotice = hrNoticeTemplate(
-    "filed",
-    targetMember.full_name,
-    `A ${strike_type} strike was filed by ${filerName} (${filerEmail}). Reason: ${reason}. Status: ${insertData.status}.`
-  );
-  await sendEmail({
-    to: HR_EMAIL,
-    subject: hrNotice.subject,
-    html: wrapInShell(hrNotice.subject, hrNotice.innerHtml),
-  });
+  // Best-effort HR notice for every filing. Email failure never fails the strike.
+  try {
+    const hrNotice = hrNoticeTemplate(
+      "filed",
+      targetMember.full_name,
+      `A ${strike_type} strike was filed by ${filerName} (${filerEmail}). Reason: ${reason}. Status: ${insertData.status}.`
+    );
+    await sendEmail({
+      to: HR_EMAIL,
+      subject: hrNotice.subject,
+      html: wrapInShell(hrNotice.subject, hrNotice.innerHtml),
+    });
+  } catch (e) {
+    console.error("Strike filing HR notice failed (non-fatal):", e);
+  }
 
   if (isExec && (!email_subject || !email_body)) {
     return NextResponse.json({ error: "Missing email content" }, { status: 400 });
@@ -166,34 +171,38 @@ export async function POST(req: NextRequest) {
 
   // Send emails for exec-filed (immediately approved) strikes
   if (isExec && email_subject && email_body) {
-    const { data: allStrikes } = await supabase
-      .from("strikes")
-      .select("effective_type, status")
-      .eq("member_id", target_member_id);
+    try {
+      const { data: allStrikes } = await supabase
+        .from("strikes")
+        .select("effective_type, status")
+        .eq("member_id", target_member_id);
 
-    const newTotal = computeStrikeTotal(allStrikes ?? []);
+      const newTotal = computeStrikeTotal(allStrikes ?? []);
 
-    await sendEmail({
-      to: targetMember.email,
-      subject: email_subject,
-      html: wrapInShell(email_subject, email_body),
-    });
+      await sendEmail({
+        to: targetMember.email,
+        subject: email_subject,
+        html: wrapInShell(email_subject, email_body),
+      });
 
-    // 3-strike exec alert
-    if (newTotal >= 3) {
-      const { data: execMembers } = await supabase
-        .from("members")
-        .select("email")
-        .eq("role", "exec");
+      // 3-strike exec alert
+      if (newTotal >= 3) {
+        const { data: execMembers } = await supabase
+          .from("members")
+          .select("email")
+          .eq("role", "exec");
 
-      if (execMembers && execMembers.length > 0) {
-        const alert = execAlertTemplate(targetMember.full_name);
-        await sendEmail({
-          to: execMembers.map((m) => m.email),
-          subject: alert.subject,
-          html: wrapInShell(alert.subject, alert.innerHtml),
-        });
+        if (execMembers && execMembers.length > 0) {
+          const alert = execAlertTemplate(targetMember.full_name);
+          await sendEmail({
+            to: execMembers.map((m) => m.email),
+            subject: alert.subject,
+            html: wrapInShell(alert.subject, alert.innerHtml),
+          });
+        }
       }
+    } catch (e) {
+      console.error("Strike notification email failed (non-fatal):", e);
     }
   }
 

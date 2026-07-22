@@ -11,10 +11,8 @@ import { NextRequest } from "next/server";
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockSendEmail = jest.fn().mockResolvedValue({ id: "email-id" });
-jest.mock("resend", () => ({
-  Resend: jest.fn().mockImplementation(() => ({
-    emails: { send: mockSendEmail },
-  })),
+jest.mock("@/lib/email/send", () => ({
+  sendEmail: (...args: unknown[]) => mockSendEmail(...args),
 }));
 
 let mockSession: Record<string, unknown> | null = null;
@@ -159,8 +157,10 @@ describe("POST /api/strikes — email delivery on submission", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(mockSendEmail).toHaveBeenCalledTimes(1);
-    expect(mockSendEmail).toHaveBeenCalledWith(
+    // Call 1: HR notice. Call 2: notice to the struck member.
+    expect(mockSendEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendEmail).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         to: TARGET_MEMBER.email,
         subject: "[CUBE] Strike Notice",
@@ -169,7 +169,7 @@ describe("POST /api/strikes — email delivery on submission", () => {
     );
   });
 
-  it("sends from the correct sender address", async () => {
+  it("notifies HR whenever a strike is filed", async () => {
     mockSession = execSession();
     mockSupabaseData["members"] = [TARGET_MEMBER];
     mockSupabaseData["strikes"] = [];
@@ -185,16 +185,15 @@ describe("POST /api/strikes — email delivery on submission", () => {
       })
     );
 
-    expect(mockSendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        from: "CUBE Consulting <hr@cubeconsulting.org>",
-      })
+    expect(mockSendEmail).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ to: "hr@cubeconsulting.org" })
     );
   });
 
   // ── Exec-filed: 400 when email content omitted ──────────────────────────────
 
-  it("returns 400 and sends no email when exec omits email_subject/email_body", async () => {
+  it("returns 400 (but still notifies HR) when exec omits email_subject/email_body", async () => {
     mockSession = execSession();
     mockSupabaseData["members"] = [TARGET_MEMBER];
     mockSupabaseData["strikes"] = [];
@@ -210,12 +209,16 @@ describe("POST /api/strikes — email delivery on submission", () => {
     );
 
     expect(res.status).toBe(400);
-    expect(mockSendEmail).not.toHaveBeenCalled();
+    // The strike row is already inserted at this point, so HR still gets notified.
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr@cubeconsulting.org" })
+    );
   });
 
-  // ── Non-exec-filed: no email sent ───────────────────────────────────────────
+  // ── Non-exec-filed: pending, only HR is notified ────────────────────────────
 
-  it("does NOT send an email when a project manager submits (strike is pending)", async () => {
+  it("only notifies HR (no member email) when a project manager submits (strike is pending)", async () => {
     mockSession = execSession({ role: "project_manager" });
     mockSupabaseData["members"] = [TARGET_MEMBER];
     mockSupabaseData["strikes"] = [];
@@ -232,10 +235,13 @@ describe("POST /api/strikes — email delivery on submission", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr@cubeconsulting.org" })
+    );
   });
 
-  it("does NOT send an email when a senior consultant submits", async () => {
+  it("allows a senior consultant to file a strike, notifying only HR", async () => {
     mockSession = execSession({ role: "senior_consultant" });
     mockSupabaseData["members"] = [TARGET_MEMBER];
     mockSupabaseData["strikes"] = [];
@@ -252,7 +258,10 @@ describe("POST /api/strikes — email delivery on submission", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hr@cubeconsulting.org" })
+    );
   });
 
   // ── 3-strike exec alert ─────────────────────────────────────────────────────
@@ -289,22 +298,21 @@ describe("POST /api/strikes — email delivery on submission", () => {
 
     expect(res.status).toBe(201);
 
-    // First call: email to struck member
+    // Call 1: HR notice. Call 2: email to struck member. Call 3: exec alert.
     expect(mockSendEmail).toHaveBeenNthCalledWith(
-      1,
+      2,
       expect.objectContaining({ to: TARGET_MEMBER.email })
     );
 
-    // Second call: exec alert to all exec members
     expect(mockSendEmail).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.objectContaining({
         to: expect.arrayContaining(EXEC_MEMBERS.map((e) => e.email)),
         subject: expect.stringContaining("3-Strike"),
       })
     );
 
-    expect(mockSendEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendEmail).toHaveBeenCalledTimes(3);
   });
 
   it("does NOT send an exec alert when the struck member has fewer than 3 strikes", async () => {
@@ -324,8 +332,8 @@ describe("POST /api/strikes — email delivery on submission", () => {
       })
     );
 
-    // Only 1 email (to struck member), no exec alert
-    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    // HR notice + member email, no exec alert
+    expect(mockSendEmail).toHaveBeenCalledTimes(2);
     expect(mockSendEmail).not.toHaveBeenCalledWith(
       expect.objectContaining({ subject: expect.stringContaining("3-Strike") })
     );

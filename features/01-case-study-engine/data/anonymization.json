@@ -1,0 +1,6 @@
+{
+  "_comment": "Controls how client names appear on the PUBLIC case-study library. Default behavior matches the site's existing practice of showing real client names (AWS, Panasonic, etc. are already public). To hide a specific client behind an alias (e.g. an NDA engagement), add their EXACT client name (as it appears in project-acquisition/data/past_projects.json) to anonymizeClients. The build script will replace the name with an alias derived from the project's primary practice area, and will NOT ship the real name to the browser.",
+  "mode": "show",
+  "anonymizeClients": [],
+  "aliasTemplate": "Confidential {practice} Client"
+}
