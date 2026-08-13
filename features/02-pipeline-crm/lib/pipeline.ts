@@ -28,6 +28,18 @@ export type StageKey =
   | (typeof STAGES)[number]["key"]
   | (typeof OUTCOME_STAGES)[number]["key"];
 
+/** Outcome buckets render apart from the funnel and are excluded from conversion math. */
+export const OUTCOME_KEYS = OUTCOME_STAGES.map((s) => s.key) as StageKey[];
+
+export function isOutcomeStage(key: StageKey): boolean {
+  return OUTCOME_KEYS.includes(key);
+}
+
+/** stage key -> human label, for badges and the move menu. */
+export const STAGE_LABEL = Object.fromEntries(
+  BOARD_STAGES.map((s) => [s.key, s.label])
+) as Record<StageKey, string>;
+
 /** Funnel stage keys — drive the ordered metrics. */
 export const STAGE_KEYS = STAGES.map((s) => s.key) as StageKey[];
 /** All stage keys incl. the two outcomes — used for normalization/board. */
