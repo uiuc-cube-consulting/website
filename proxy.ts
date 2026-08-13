@@ -24,9 +24,13 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 
-  // Recruitment: exec, PM, SC, returning members only
+  // Recruitment: exec, PM, SC, returning members only.
+  // The routes are /portal/recruiting and /portal/interview — the previous
+  // "/portal/recruitment" prefix matched neither, so this gate never fired.
   const recruitmentRoles = ["exec", "project_manager", "senior_consultant", "returning_member"];
-  if (pathname.startsWith("/portal/recruitment") && !recruitmentRoles.includes(session.user.role)) {
+  const recruitmentRoute =
+    pathname.startsWith("/portal/recruiting") || pathname.startsWith("/portal/interview");
+  if (recruitmentRoute && !recruitmentRoles.includes(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 

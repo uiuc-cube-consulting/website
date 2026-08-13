@@ -85,10 +85,72 @@ git commit -m "feat: recruitment ATS — intake + reviewer console + analytics (
   deduped by email. Or set `RECRUITMENT_IMPORT_SHEET_ID` and call with no body. Needs
   `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_API_KEY` (same as the pipeline reader).
 
+## Interview console (built)
+
+`/portal/interview` — an interviewer searches a candidate's name and gets their **resume, case
+rubric, and behavioral rubric on one screen**. Replaces hunting for a resume, copying it into a
+per-candidate Drive folder, and duplicating two grading docs by hand.
+
+### Setup
+
+1. Run **`db/interview.sql`** in the Supabase SQL editor (after `db/schema.sql`). It adds the
+   resume columns on `applicants`, a `kind` + `recommendation` on `reviews` — widening the
+   uniqueness key to `(applicant_id, reviewer_email, kind)` — and the `interview_panel` table.
+2. Put this cycle's resumes in **one Drive folder** and share it with the service account's
+   `client_email` as Viewer. Set `RECRUITING_RESUME_FOLDER_ID` (or paste the URL in the UI).
+   `GOOGLE_SERVICE_ACCOUNT_JSON` is required — an API key can only read world-readable files.
+3. Exec hits **Sync resumes**, then assigns an **interview panel** per candidate.
+
+### How resumes get sorted automatically
+
+`lib/resume-match.ts` (pure, no I/O) matches filenames to applicants in four tiers, taking the
+first that resolves to exactly one person: an **email/netid** in the filename → the **exact
+name** → the **same tokens in any order** (`Doe_Jane`) → a **fuzzy** token-overlap match that
+must clear 0.6 *and* beat the runner-up by 0.2. Noise (`resume`, `CV`, `final`, `v2`, years,
+`(1)`) is stripped first. Ties are reported, never guessed — two `Emily`s and one
+`Emily Resume.pdf` lands in the unmatched list rather than on the wrong candidate. When one
+person has several files, the strongest match wins and the newest breaks ties.
+
+Cost is one hash-indexing pass plus one pass over files; the fuzzy tier pulls candidates from
+an inverted token index rather than scanning all pairs. 2,000 files × 2,000 applicants matches
+in ~8ms, so a sync is dominated by the Drive call, not the matching.
+
+Re-running is safe and only tops up. The result reports what was linked, what matched only
+fuzzily (worth a spot-check), which files matched nothing, and which candidates still have no
+resume — rename in Drive and re-run.
+
+### Who can edit what
+
+- The **rubric templates live in code** (`lib/interview.ts`) — no endpoint can change them.
+- An interviewer fills in **their own instance** of a rubric for a candidate: a separate row per
+  `(candidate, interviewer, kind)`, so two panelists never overwrite each other.
+- Writes are gated on **`interview_panel` membership**, enforced in the route *and* in the store.
+  You can read any candidate; you can only score the ones you're interviewing. Exec can correct
+  any rubric.
+- Resumes stream through `GET /api/recruitment/resume/[applicantId]` under the portal session.
+  The Drive file id never reaches the browser and the folder is never shared to individuals.
+- `aggregate()` in `lib/types.ts` now filters to `kind = 'screen'`, so interview scores can't
+  silently distort the application-screen means on `/portal/recruiting`.
+
+### Files outside this folder (interview console)
+
+| File | Change | Why |
+|---|---|---|
+| `app/portal/interview/page.tsx` | **new** — shim | The console route. |
+| `app/api/recruitment/interview/route.ts` | **new** — shim (GET) | Board feed. |
+| `app/api/recruitment/interview/rubric/route.ts` | **new** — shim (POST) | Save a rubric. |
+| `app/api/recruitment/interview/panel/route.ts` | **new** — shim (POST) | Exec sets a panel. |
+| `app/api/recruitment/resumes/sync/route.ts` | **new** — shim (POST) | Exec syncs from Drive. |
+| `app/api/recruitment/resume/[id]/route.ts` | **new** — shim (GET) | Streams one resume. |
+| `app/portal/layout.tsx` | **+2 lines** | "Interviews" nav link for interviewer roles. |
+| `proxy.ts` | **gate fixed + extended** | It matched `/portal/recruitment`, which is not a real route — so the recruiting role gate never fired. Now covers `/portal/recruiting` and `/portal/interview`. |
+| `.env.example` | **+ resume folder section** | `RECRUITING_RESUME_FOLDER_ID`. |
+
 ## Phase 2 (still scoped in SPEC.md)
 
-Interview scheduling (`interview_slots`/`interviews` tables already exist), templated decision
-emails (reuse the bot's Gmail/service-account send), and migrating the Join Us CTA to `/apply`.
+Interview *scheduling* (`interview_slots`/`interviews` tables already exist — the console covers
+grading, not booking), templated decision emails (reuse the bot's Gmail/service-account send),
+and migrating the Join Us CTA to `/apply`.
 
 ## Remove cleanly
 
