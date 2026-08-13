@@ -47,6 +47,10 @@ export const RUBRIC = [
 export type RubricKey = (typeof RUBRIC)[number]["key"];
 export type Scores = Record<RubricKey, number>; // each 1–5
 
+/** Shape shared by every rubric — the screen rubric above and the interview
+ *  rubrics in `interview.ts`, so scoring helpers work across all of them. */
+export type RubricCriterion = { key: string; label: string; weight: number; anchor: string };
+
 export type Applicant = {
   id: string;
   created_at: string;
@@ -67,13 +71,25 @@ export type Review = {
   scores: Scores;
   weighted_total: number;
   notes?: string;
+  /** Which rubric this row is an instance of. Absent on rows written before the
+   *  interview console existed, which are all application screens. */
+  kind?: "screen" | "case" | "behavioral";
+  recommendation?: string | null;
 };
 
-/** Weighted average of a single review's criterion scores, on the 1–5 scale. */
-export function weightedTotal(scores: Scores): number {
-  const totalWeight = RUBRIC.reduce((a, r) => a + r.weight, 0);
-  const sum = RUBRIC.reduce((a, r) => a + (Number(scores[r.key]) || 0) * r.weight, 0);
+/** Weighted average of any rubric's criterion scores, on the 1–5 scale. */
+export function weightedTotalFor(
+  rubric: readonly RubricCriterion[],
+  scores: Record<string, number>
+): number {
+  const totalWeight = rubric.reduce((a, r) => a + r.weight, 0);
+  const sum = rubric.reduce((a, r) => a + (Number(scores[r.key]) || 0) * r.weight, 0);
   return totalWeight ? Math.round((sum / totalWeight) * 100) / 100 : 0;
+}
+
+/** Weighted average of a single application-screen review, on the 1–5 scale. */
+export function weightedTotal(scores: Scores): number {
+  return weightedTotalFor(RUBRIC, scores);
 }
 
 export type ApplicantAggregate = {
@@ -85,9 +101,19 @@ export type ApplicantAggregate = {
   reviewers: string[];
 };
 
-/** Aggregate a set of reviews for one applicant: mean, spread, per-criterion means. */
+/** True for application-screen reviews. Rows written before the interview console
+ *  have no `kind`, so an absent kind counts as a screen. */
+export function isScreenReview(r: Review): boolean {
+  return !r.kind || r.kind === "screen";
+}
+
+/**
+ * Aggregate one applicant's APPLICATION-SCREEN reviews: mean, spread, per-criterion
+ * means. Interview rubrics (case/behavioral) score different criteria on a different
+ * rubric, so they are excluded here — mixing them would silently corrupt these means.
+ */
 export function aggregate(applicant: Applicant, reviews: Review[]): ApplicantAggregate {
-  const rs = reviews.filter((r) => r.applicant_id === applicant.id);
+  const rs = reviews.filter((r) => r.applicant_id === applicant.id && isScreenReview(r));
   const totals = rs.map((r) => r.weighted_total);
   const mean = totals.length ? Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 100) / 100 : null;
   const spread = totals.length ? Math.round((Math.max(...totals) - Math.min(...totals)) * 100) / 100 : null;

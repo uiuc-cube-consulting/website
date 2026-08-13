@@ -23,6 +23,8 @@ export default async function PortalLayout({
   const role = session?.user?.role;
   const isExec = role === "exec";
   const isLeadership = isExec || role === "project_manager" || role === "senior_consultant";
+  // Interviewing also includes returning members — matches canInterview() in the ATS.
+  const isInterviewer = isLeadership || role === "returning_member";
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-cream)]/40">
@@ -46,10 +48,11 @@ export default async function PortalLayout({
             {role === "project_manager" && <Link href="/portal/strikes/new" className="nav-link">File a Strike</Link>}
 
             {/* Leadership tools — grouped, shown only to the roles that can use them. */}
-            {isLeadership && <span aria-hidden className="h-4 w-px bg-white/20" />}
+            {isInterviewer && <span aria-hidden className="h-4 w-px bg-white/20" />}
             {isExec && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
             {isExec && <Link href="/portal/strikes" className="nav-link">Strikes</Link>}
             {isLeadership && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
+            {isInterviewer && <Link href="/portal/interview" className="nav-link">Interviews</Link>}
 
             <span aria-hidden className="h-4 w-px bg-white/20" />
             <Link href="/" className="nav-link">Public Site</Link>
