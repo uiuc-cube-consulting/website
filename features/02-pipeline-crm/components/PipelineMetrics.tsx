@@ -1,4 +1,7 @@
-import { Clock, Target, TrendingUp, Trophy } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Clock, Target, TrendingUp, Trophy } from "lucide-react";
 import type { PipelineMetrics as Metrics } from "@/features/02-pipeline-crm/lib/pipeline";
 
 function Tile({ icon: Icon, value, label }: { icon: typeof Clock; value: string; label: string }) {
@@ -15,9 +18,12 @@ function Tile({ icon: Icon, value, label }: { icon: typeof Clock; value: string;
 
 export function PipelineMetrics({ metrics }: { metrics: Metrics }) {
   const maxReached = Math.max(1, ...metrics.stages.map((s) => s.reached));
+  // The charts are reference material; the board is the working surface. Keep the
+  // four headline tiles always visible and let the rest fold away.
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile icon={Target} value={String(metrics.total)} label="In pipeline" />
         <Tile icon={TrendingUp} value={`${metrics.replyRate}%`} label="Reply rate" />
@@ -25,7 +31,16 @@ export function PipelineMetrics({ metrics }: { metrics: Metrics }) {
         <Tile icon={Clock} value={metrics.avgDaysToLOI === null ? "—" : `${metrics.avgDaysToLOI}d`} label="Avg to LOI" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 text-sm font-semibold text-[var(--muted)] transition-colors hover:text-[var(--bg-dark)]"
+      >
+        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        <span>{open ? "Hide" : "Show"} funnel &amp; source breakdown</span>
+      </button>
+
+      <div className={`grid gap-6 lg:grid-cols-3 ${open ? "" : "hidden"}`}>
         {/* Funnel: how many leads reached each stage + conversion from the prior stage */}
         <div className="rounded-2xl border border-[var(--border)] bg-white p-5 lg:col-span-2">
           <p className="eyebrow">Funnel</p>

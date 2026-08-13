@@ -1,17 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
-import { BOARD_STAGES, type Lead, type PipelineMetrics as Metrics, type StageKey } from "@/features/02-pipeline-crm/lib/pipeline";
-import { LeadCard } from "./LeadCard";
+import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
+import {
+  BOARD_STAGES,
+  OUTCOME_STAGES,
+  STAGES,
+  STAGE_LABEL,
+  type Lead,
+  type PipelineMetrics as Metrics,
+  type StageKey,
+} from "@/features/02-pipeline-crm/lib/pipeline";
+import { PipelineColumn } from "./PipelineColumn";
 import { PipelineMetrics } from "./PipelineMetrics";
 import { PipelineCardModal } from "./PipelineCardModal";
+import { MoveMenu } from "./MoveMenu";
 
 type ApiData = { leads: Lead[]; metrics: Metrics; source: "sheet" | "supabase" | "demo" };
 type LoadError = { status: number; message: string };
+type MenuTarget = { lead: Lead; anchor: DOMRect };
 
 const selectClass =
   "rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--bg-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--gold)]";
+
+const COLLAPSE_KEY = "cube.pipeline.collapsed";
 
 export function PipelineBoard() {
   const [data, setData] = useState<ApiData | null>(null);
@@ -21,8 +33,31 @@ export function PipelineBoard() {
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [dragId, setDragId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Lead | null>(null);
+  const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Which columns are folded is a per-user viewing preference, so it lives in
+  // localStorage rather than the shared board record. Read lazily on first render:
+  // the initial paint is the loading skeleton, which doesn't read this state, so
+  // there's nothing for the server and client markup to disagree about.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem(COLLAPSE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {}; // malformed or blocked storage
+    }
+  });
+
+  const persistCollapsed = useCallback((next: Record<string, boolean>) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     try {
@@ -53,24 +88,46 @@ export function PipelineBoard() {
     return data.leads.filter((l) => {
       if (sourceFilter !== "all" && (l.source || "unknown") !== sourceFilter) return false;
       if (ownerFilter !== "all" && (l.owner || "Unassigned") !== ownerFilter) return false;
-      if (q && !`${l.company} ${l.name} ${l.industry ?? ""}`.toLowerCase().includes(q)) return false;
+      if (q && !`${l.company} ${l.name} ${l.industry ?? ""} ${l.owner ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [data, query, sourceFilter, ownerFilter]);
 
-  // Drag a card to a new stage column → optimistic move, persist, then reconcile.
-  async function moveLead(id: string, stage: StageKey) {
-    setData((prev) => (prev ? { ...prev, leads: prev.leads.map((l) => (l.id === id ? { ...l, stage } : l)) } : prev));
-    try {
-      await fetch("/api/pipeline/lead", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, patch: { stage } }),
-      });
-    } finally {
-      await reload(); // refresh metrics + reconcile (reverts if the write failed)
+  const byStage = useMemo(() => {
+    const m = new Map<StageKey, Lead[]>();
+    for (const l of filtered) {
+      const arr = m.get(l.stage);
+      if (arr) arr.push(l);
+      else m.set(l.stage, [l]);
     }
-  }
+    return m;
+  }, [filtered]);
+
+  /** Optimistic restage, then persist, then reconcile against the server. */
+  const moveLead = useCallback(
+    async (id: string, stage: StageKey) => {
+      const label = STAGE_LABEL[stage];
+      const lead = data?.leads.find((l) => l.id === id);
+      setData((prev) => (prev ? { ...prev, leads: prev.leads.map((l) => (l.id === id ? { ...l, stage } : l)) } : prev));
+      setNotice(`Moved ${lead?.company ?? "lead"} to ${label}.`);
+      try {
+        const r = await fetch("/api/pipeline/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, patch: { stage } }),
+        });
+        const j = await r.json().catch(() => ({}));
+        // Demo mode accepts nothing — say so, otherwise the reload below silently
+        // snaps the card back and the board looks broken.
+        if (!j.ok) setNotice(j.message || j.error || "Move not saved.");
+      } catch {
+        setNotice("Network error — move not saved.");
+      } finally {
+        await reload();
+      }
+    },
+    [data, reload]
+  );
 
   function onDropTo(stage: StageKey) {
     const id = dragId;
@@ -93,6 +150,20 @@ export function PipelineBoard() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Auto-dismiss transient feedback so it doesn't pile up in the toolbar.
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  // Covers the outcome trays too, and writes an explicit `false` on expand — the
+  // trays default to collapsed, so clearing the map would leave them shut.
+  const allCollapsed = BOARD_STAGES.every((s) => collapsed[s.key]);
+  function toggleAll() {
+    persistCollapsed(Object.fromEntries(BOARD_STAGES.map((s) => [s.key, !allCollapsed])));
   }
 
   if (error) {
@@ -121,6 +192,14 @@ export function PipelineBoard() {
     );
   }
 
+  const cardHandlers = {
+    onOpen: (l: Lead) => setEditing(l),
+    onMove: (lead: Lead, anchor: DOMRect) => setMenu({ lead, anchor }),
+    dragId,
+    onDragStart: (id: string) => setDragId(id),
+    onDragEnd: () => setDragId(null),
+  };
+
   return (
     <div className="space-y-6">
       {/* Source note + sync */}
@@ -128,13 +207,16 @@ export function PipelineBoard() {
         {data.source === "demo" ? (
           <div className="flex-1 rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-5 py-3 text-sm text-[var(--bg-dark)]">
             <span className="font-semibold">Demo data.</span> Configure Supabase + set{" "}
-            <code className="text-[var(--gold-deep)]">PIPELINE_SHEET_ID</code> (+ credentials), then Sync. See INTEGRATION.md.
+            <code className="text-[var(--gold-deep)]">PIPELINE_SHEET_ID</code> (+ credentials), then Sync. Edits won’t save
+            until then. See INTEGRATION.md.
           </div>
         ) : (
-          <p className="text-sm text-[var(--muted)]">Drag a card between columns to change its stage. Click a card to edit it.</p>
+          <p className="text-sm text-[var(--muted)]">
+            Click a card to edit it, or hit <span className="font-semibold text-[var(--bg-dark)]">Move</span> (or right-click)
+            to send it straight to any stage. Dragging still works.
+          </p>
         )}
         <div className="ml-auto flex items-center gap-3">
-          {notice && <span className="text-sm text-[var(--gold-deep)]">{notice}</span>}
           <button onClick={sync} disabled={busy} className="btn btn-gold-outline text-xs px-4 py-2 disabled:opacity-50">
             {busy ? "Syncing…" : "Sync from outreach sheet"}
           </button>
@@ -143,15 +225,15 @@ export function PipelineBoard() {
 
       <PipelineMetrics metrics={data.metrics} />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-white/70 p-4">
+      {/* Toolbar */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-white/95 p-4 backdrop-blur">
         <div className="relative min-w-[220px] flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search company, contact, industry…"
+            placeholder="Search company, contact, industry, owner…"
             aria-label="Search leads"
             className="w-full rounded-full border border-[var(--border)] bg-white py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
           />
@@ -164,56 +246,84 @@ export function PipelineBoard() {
           <option value="all">All owners</option>
           {owners.map((o) => (<option key={o} value={o}>{o}</option>))}
         </select>
-        <span className="ml-auto text-sm text-[var(--muted)]">{filtered.length} leads</span>
+        <button
+          onClick={toggleAll}
+          className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--bg-dark)] hover:border-[var(--gold)]"
+        >
+          {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
+        <span className="text-sm tabular-nums text-[var(--muted)]">{filtered.length} shown</span>
+        {notice && (
+          <span className="w-full text-sm text-[var(--gold-deep)] sm:w-auto" role="status">
+            {notice}
+          </span>
+        )}
       </div>
 
-      {/* Kanban */}
-      <div className="-mx-1 flex gap-4 overflow-x-auto pb-4">
-        {BOARD_STAGES.map((stage) => {
-          const leads = filtered.filter((l) => l.stage === stage.key);
-          return (
-            <section
+      {/* Funnel */}
+      <div>
+        <p className="eyebrow mb-2">Funnel</p>
+        {/* items-start: each lane hugs its own content instead of stretching to match
+            the tallest one, which left acres of empty cream next to "Contacted". */}
+        <div className="-mx-1 flex items-start gap-4 overflow-x-auto px-1 pb-4">
+          {STAGES.map((stage) => (
+            <PipelineColumn
               key={stage.key}
-              onDragOver={(e) => e.preventDefault()}
+              label={stage.label}
+              hint={stage.hint}
+              leads={byStage.get(stage.key) ?? []}
+              collapsed={Boolean(collapsed[stage.key])}
+              onToggle={() => persistCollapsed({ ...collapsed, [stage.key]: !collapsed[stage.key] })}
               onDrop={() => onDropTo(stage.key)}
-              className="flex w-72 shrink-0 flex-col rounded-2xl bg-[var(--bg-cream)]/60 p-3"
-            >
-              <header className="flex items-center justify-between px-1 pb-2">
-                <div>
-                  <h3 className="font-display text-sm font-bold text-[var(--bg-dark)]">{stage.label}</h3>
-                  <p className="text-[11px] text-[var(--muted)]">{stage.hint}</p>
-                </div>
-                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-[var(--bg-dark)]">{leads.length}</span>
-              </header>
-              <div className="flex min-h-[40px] flex-col gap-2.5">
-                {leads.map((l) => (
-                  <div
-                    key={l.id}
-                    draggable
-                    onDragStart={() => setDragId(l.id)}
-                    onDragEnd={() => setDragId(null)}
-                    onClick={() => setEditing(l)}
-                    title="Drag to move · click to edit"
-                    className={`cursor-grab active:cursor-grabbing ${dragId === l.id ? "opacity-50" : ""}`}
-                  >
-                    <LeadCard lead={l} />
-                  </div>
-                ))}
-                {leads.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--muted)]">
-                    Drop here
-                  </p>
-                )}
-              </div>
-            </section>
-          );
-        })}
+              {...cardHandlers}
+            />
+          ))}
+        </div>
       </div>
+
+      {/* Terminal outcomes — pulled out of the horizontal scroller so they're always
+          reachable in one click instead of living past the right edge of the funnel. */}
+      <div>
+        <p className="eyebrow mb-2">Closed out</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {OUTCOME_STAGES.map((stage) => (
+            <PipelineColumn
+              key={stage.key}
+              variant="tray"
+              label={stage.label}
+              hint={stage.hint}
+              leads={byStage.get(stage.key) ?? []}
+              // Archives default to folded — this is where the board used to sprawl.
+              collapsed={collapsed[stage.key] ?? true}
+              onToggle={() => persistCollapsed({ ...collapsed, [stage.key]: !(collapsed[stage.key] ?? true) })}
+              onDrop={() => onDropTo(stage.key)}
+              {...cardHandlers}
+            />
+          ))}
+        </div>
+      </div>
+
+      {menu && (
+        <MoveMenu
+          anchor={menu.anchor}
+          current={menu.lead.stage}
+          onClose={() => setMenu(null)}
+          onPick={(stage) => {
+            setMenu(null);
+            if (stage !== menu.lead.stage) moveLead(menu.lead.id, stage);
+          }}
+        />
+      )}
 
       {editing && (
         <PipelineCardModal
           lead={editing}
           onClose={() => setEditing(null)}
+          onMoveStage={(stage) => {
+            setEditing((prev) => (prev ? { ...prev, stage } : prev));
+            moveLead(editing.id, stage);
+          }}
           onSaved={async () => {
             setEditing(null);
             await reload();

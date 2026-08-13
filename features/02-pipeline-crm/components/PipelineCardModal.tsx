@@ -1,16 +1,51 @@
 "use client";
 
 import { useState } from "react";
-import type { Lead } from "@/features/02-pipeline-crm/lib/pipeline";
+import { OUTCOME_STAGES, STAGES, type Lead, type StageKey } from "@/features/02-pipeline-crm/lib/pipeline";
 
-type Props = { lead: Lead; onClose: () => void; onSaved: () => void };
+type Props = {
+  lead: Lead;
+  onClose: () => void;
+  onSaved: () => void;
+  /** Restage immediately — stage is a one-click action, not part of the Save form. */
+  onMoveStage: (stage: StageKey) => void;
+};
 
 const FIELD =
   "w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--bg-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--gold)]";
 
 type KV = { key: string; value: string };
 
-export function PipelineCardModal({ lead, onClose, onSaved }: Props) {
+function StageChip({
+  label,
+  active,
+  muted,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  muted?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={active}
+      aria-pressed={active}
+      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+        active
+          ? "cursor-default bg-[var(--gold)] text-[var(--bg-dark)]"
+          : muted
+            ? "border border-[var(--border)] bg-white text-[var(--muted)] hover:border-[var(--gold)] hover:text-[var(--bg-dark)]"
+            : "border border-[var(--border)] bg-white text-[var(--bg-dark)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function PipelineCardModal({ lead, onClose, onSaved, onMoveStage }: Props) {
   const [name, setName] = useState(lead.name ?? "");
   const [company, setCompany] = useState(lead.company ?? "");
   const [owner, setOwner] = useState(lead.owner ?? "");
@@ -62,6 +97,22 @@ export function PipelineCardModal({ lead, onClose, onSaved }: Props) {
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg font-extrabold text-[var(--bg-dark)]">Edit card</h3>
           <button onClick={onClose} aria-label="Close" className="text-[var(--muted)] hover:text-[var(--bg-dark)]">✕</button>
+        </div>
+
+        {/* Stage first, and it applies on click — moving a card shouldn't require a
+            drag across the board or a trip through the Save button. */}
+        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/50 p-3">
+          <p className="text-xs font-medium text-[var(--muted)]">Stage</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {STAGES.map((s) => (
+              <StageChip key={s.key} label={s.label} active={lead.stage === s.key} onClick={() => onMoveStage(s.key)} />
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[var(--border)] pt-2">
+            {OUTCOME_STAGES.map((s) => (
+              <StageChip key={s.key} label={s.label} muted active={lead.stage === s.key} onClick={() => onMoveStage(s.key)} />
+            ))}
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
