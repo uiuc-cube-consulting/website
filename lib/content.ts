@@ -10,7 +10,7 @@ export const SITE = {
   instagram: "https://www.instagram.com/cubeconsulting_",
   linkedin: "https://www.linkedin.com/company/je-cube-consulting/",
   linktree: "https://linktr.ee/cubeconsulting",
-  applyForm: "https://forms.gle/Jb4gFisrQe7AfK7e7",
+  applyForm: "https://forms.gle/9fTPQAnueTmmc5km6",
   mailingListForm: "https://forms.gle/BWdrC9vJka7QwDeC8",
   copyrightYear: 2026,
 } as const;
@@ -290,17 +290,19 @@ export const ALUMNI_PLACEMENTS: Brand[] = [
 
 export const FALL_RECRUITMENT = {
   semester: "Fall 2026",
-  appsOpen: "09/04/26",
+  appsDue: "08/28/26",
+  appsDueTime: "11:59 PM",
   timeline: [
-    { date: "Aug 23", event: "Quad Day/Tabling"},
-    { date: "Aug 25", event: "Informational Night (6:30pm-8:00pm, Business Casual, Networking Portion After)"},
-    { date: "Aug 26", event: "Networking Night + Case Workshop (4:00pm-6:00pm Networking, 7:00PM-9:00PM Case Workshop, Business Casual)"},
-    { date: "Aug 28", event: "First Round Applications Are Due!"},
-    { date: "Sep 1", event: "Invite-only Case Training (7:00PM-8:00PM)" },
-    { date: "Sep 2-4", event: "First Round Interviews (Grainger)" },
-    { date: "Sep 5", event: "Invite-only Social Round"},
-    { date: "Sep 8-10", event: "Second Round Interviews"},
-    { date: "Sep 11", event: "Final decisions announced" },
+    { date: "Aug 23", event: "Quad Day — 12:00-4:00 PM @ UIUC Main Quad" },
+    { date: "Aug 25", event: "Informational Night — 6:30-8:30 PM @ Noyes, Room 100 (Business Casual)" },
+    { date: "Aug 26", event: "Networking Night — 4:00-6:00 PM @ BrewLab Coffee" },
+    { date: "Aug 26", event: "Case Workshop — 7:00-9:00 PM @ Everitt, Room 2310 (Business Casual)" },
+    { date: "Aug 28", event: "First Round Applications Due — 11:59 PM" },
+    { date: "Sep 1", event: "Invite-only Case Training — 7:00-8:00 PM @ Everitt, Room 1302" },
+    { date: "Sep 2-4", event: "First Round Interviews" },
+    { date: "Sep 5", event: "Invite-only Social Round — 6:00-8:00 PM @ HERE Game Room" },
+    { date: "Sep 8-10", event: "Second Round Interviews" },
+    { date: "Sep 10", event: "Final Decisions" },
   ],
 } as const;
 

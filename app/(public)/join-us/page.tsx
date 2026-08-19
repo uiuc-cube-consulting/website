@@ -80,7 +80,7 @@ export default function JoinUsPage() {
         </div>
         <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/8 border border-white/12 px-4 py-1.5 text-[12px] tracking-[0.18em] uppercase font-semibold text-[var(--gold)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse" aria-hidden />
-          Applications open {FALL_RECRUITMENT.appsOpen}
+          Applications due {FALL_RECRUITMENT.appsDue} at {FALL_RECRUITMENT.appsDueTime}
         </p>
       </PageHero>
 
@@ -201,7 +201,7 @@ export default function JoinUsPage() {
             <ol className="rounded-2xl border border-[var(--border)] bg-[var(--bg-cream)]/40 p-6 md:p-8">
               {FALL_RECRUITMENT.timeline.map((t, i, arr) => (
                 <TimelineEvent
-                  key={t.date}
+                  key={`${t.date}-${t.event}`}
                   date={t.date}
                   event={t.event}
                   last={i === arr.length - 1}
