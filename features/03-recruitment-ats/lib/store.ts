@@ -193,6 +193,9 @@ export type ImportRow = {
   major?: string;
   college?: string;
   responses?: Record<string, string>;
+  /** Raw contents of the Form's file-upload column, when the sheet has one.
+   *  Parsed into a Drive file id by lib/form-resume.ts during provisioning. */
+  resumeLink?: string;
 };
 
 export type ImportResult = { ok: boolean; demo?: boolean; error?: string; inserted?: number; skipped?: number };

@@ -130,11 +130,24 @@ function ResumePane({ candidate }: { candidate: Candidate }) {
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow">Resume</p>
-        {resume && (
-          <a href={src} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--gold-deep)] hover:underline">
-            Open in a new tab ↗
-          </a>
-        )}
+        <div className="flex items-center gap-3">
+          {/* The provisioned Drive folder, for interviewers who'd rather grade in Docs. */}
+          {candidate.driveFolderUrl && (
+            <a
+              href={candidate.driveFolderUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-[var(--gold-deep)] hover:underline"
+            >
+              Drive folder ↗
+            </a>
+          )}
+          {resume && (
+            <a href={src} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--gold-deep)] hover:underline">
+              Open in a new tab ↗
+            </a>
+          )}
+        </div>
       </div>
 
       {!resume ? (

@@ -31,9 +31,15 @@ function sheetsClient() {
   return null;
 }
 
-// First header (case-insensitive) that contains any of the needles.
+// First header (case-insensitive, accent-insensitive) that contains any needle.
+// Stripping diacritics means a "Résumé" column matches the plain "resume" needle
+// whether the sheet stores it precomposed or as a combining accent.
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function findCol(headers: string[], needles: string[]): number {
-  const lower = headers.map((h) => h.toLowerCase());
+  const lower = headers.map(normalizeHeader);
   for (let i = 0; i < lower.length; i++) {
     if (needles.some((n) => lower[i].includes(n))) return i;
   }
@@ -46,8 +52,9 @@ export type ImportReadResult =
 
 /**
  * Read `range` (default first sheet, A1:Z) and map rows to ImportRow. Row 1 is the
- * header. Recognized columns: name, email, year, major, college; everything else is
- * stored under `responses` keyed by its header so no answer is lost.
+ * header. Recognized columns: name, email, year, major, college, and the Form's
+ * resume-upload column; everything else is stored under `responses` keyed by its
+ * header so no answer is lost.
  */
 export async function readApplicantsFromSheet(sheetIdRaw: string, range = "A1:Z"): Promise<ImportReadResult> {
   const client = sheetsClient();
@@ -69,7 +76,10 @@ export async function readApplicantsFromSheet(sheetIdRaw: string, range = "A1:Z"
   const iYear = findCol(headers, ["year", "grade", "class"]);
   const iMajor = findCol(headers, ["major"]);
   const iCollege = findCol(headers, ["college", "school"]);
-  const core = new Set([iName, iEmail, iYear, iMajor, iCollege].filter((x) => x >= 0));
+  // The Form's file-upload question. Its header is whatever the form author typed
+  // ("Upload your resume", "Resume (PDF)", "CV"), so match on any of those words.
+  const iResume = findCol(headers, ["resume", "cv", "upload"]);
+  const core = new Set([iName, iEmail, iYear, iMajor, iCollege, iResume].filter((x) => x >= 0));
 
   const rows: ImportRow[] = [];
   for (const r of values.slice(1)) {
@@ -89,6 +99,7 @@ export async function readApplicantsFromSheet(sheetIdRaw: string, range = "A1:Z"
       year: cell(iYear) || undefined,
       major: cell(iMajor) || undefined,
       college: cell(iCollege) || undefined,
+      resumeLink: cell(iResume) || undefined,
       responses,
     });
   }

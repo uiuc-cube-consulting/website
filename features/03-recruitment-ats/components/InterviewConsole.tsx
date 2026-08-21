@@ -112,6 +112,7 @@ export function InterviewConsole() {
         </div>
       )}
 
+      {data.canManage && <FolderProvisionBar onProvisioned={reload} />}
       {data.canManage && <ResumeSyncBar onSynced={reload} />}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -199,6 +200,119 @@ export function InterviewConsole() {
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+// ── Drive folder provisioning (exec) ─────────────────────────────────────────
+// Reads the Google Form response sheet and gives every candidate a Drive folder
+// holding their resume, both rubrics, and a notes doc. Distinct from the resume
+// sync below: this one WRITES to Drive, and its resume mapping comes straight
+// from the Form rather than from filename matching.
+
+type ProvisionResponse = {
+  ok: boolean;
+  message?: string;
+  error?: string;
+  cycle?: string;
+  candidates?: number;
+  foldersCreated?: number;
+  assetsCreated?: number;
+  unchanged?: number;
+  noResume?: { name: string; email: string }[];
+  failed?: { name: string; email: string; error: string }[];
+};
+
+function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<void> | void }) {
+  const [busy, setBusy] = useState(false);
+  const [repair, setRepair] = useState(false);
+  const [result, setResult] = useState<ProvisionResponse | null>(null);
+
+  async function provision() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await fetch("/api/recruitment/folders/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repair }),
+      });
+      const res: ProvisionResponse = await r.json();
+      setResult(res);
+      if (res.ok) await onProvisioned();
+    } catch {
+      setResult({ ok: false, error: "Provisioning failed." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={provision} disabled={busy} className="btn btn-gold text-xs px-4 py-2 disabled:opacity-50">
+          {busy ? "Provisioning…" : "Provision candidate folders"}
+        </button>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={repair}
+            onChange={(e) => setRepair(e.target.checked)}
+            className="accent-[var(--gold)]"
+          />
+          Repair mode
+        </label>
+        <span className="text-xs text-[var(--muted)]">
+          Creates a Drive folder per candidate with their resume, both rubrics, and a notes doc.
+          Safe to re-run — only what&rsquo;s missing is created.
+        </span>
+      </div>
+
+      {result && (
+        <div className="mt-3 text-sm">
+          {result.ok ? (
+            <>
+              <p className="text-[var(--bg-dark)]">
+                <span className="font-semibold">{result.cycle}</span> ·{" "}
+                <span className="font-semibold">{result.candidates}</span> candidate(s) ·{" "}
+                <span className="font-semibold">{result.foldersCreated}</span> folder(s) created ·{" "}
+                <span className="font-semibold">{result.assetsCreated}</span> file(s) created
+                {result.unchanged ? <> · {result.unchanged} already complete</> : null}
+              </p>
+              {result.noResume && result.noResume.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
+                    {result.noResume.length} candidate(s) haven&rsquo;t uploaded a resume
+                  </summary>
+                  <ul className="mt-1.5 space-y-0.5 text-xs text-[var(--muted)]">
+                    {result.noResume.map((m) => (
+                      <li key={m.email}>
+                        {m.name} <span className="opacity-70">({m.email})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {result.failed && result.failed.length > 0 && (
+                <details className="mt-2" open>
+                  <summary className="cursor-pointer text-xs font-semibold text-amber-700">
+                    {result.failed.length} candidate(s) had errors — re-run to retry
+                  </summary>
+                  <ul className="mt-1.5 space-y-0.5 text-xs text-[var(--muted)]">
+                    {result.failed.map((f) => (
+                      <li key={f.email}>
+                        {f.name} <span className="opacity-70">— {f.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
+          ) : (
+            <p className="text-amber-700">{result.message || result.error || "Provisioning failed."}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

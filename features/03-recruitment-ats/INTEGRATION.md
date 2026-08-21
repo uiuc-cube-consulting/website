@@ -88,8 +88,13 @@ git commit -m "feat: recruitment ATS — intake + reviewer console + analytics (
 ## Interview console (built)
 
 `/portal/interview` — an interviewer searches a candidate's name and gets their **resume, case
-rubric, and behavioral rubric on one screen**. Replaces hunting for a resume, copying it into a
-per-candidate Drive folder, and duplicating two grading docs by hand.
+rubric, and behavioral rubric on one screen**, without hunting for a resume or duplicating two
+grading docs by hand.
+
+Per-candidate Drive folders are back alongside it (see *Candidate Drive folders* below) for
+interviewers who prefer grading in Docs. The portal stays the system of record for scores,
+stages and panels; Drive is a parallel working surface, and the two are joined by
+`applicants.drive_folder_id`.
 
 ### Setup
 
@@ -132,6 +137,75 @@ resume — rename in Drive and re-run.
 - `aggregate()` in `lib/types.ts` now filters to `kind = 'screen'`, so interview scores can't
   silently distort the application-screen means on `/portal/recruiting`.
 
+## Candidate Drive folders (built)
+
+Recruiting intake runs through a Google Form whose responses land in a sheet, with each
+resume arriving as a **Drive link**. Exec hits **Provision candidate folders** on
+`/portal/interview` and every respondent gets:
+
+```
+CUBE Recruiting/                     ← RECRUITING_DRIVE_ROOT_FOLDER_ID, made by hand once
+└── Fall 2026/                       ← RECRUITING_CYCLE_LABEL
+    └── Jane Doe — jdoe2@illinois.edu/
+        ├── Resume — Jane Doe.pdf        copy of the Form upload
+        ├── Case Rubric — Jane Doe       generated Google Doc
+        ├── Behavioral Rubric — Jane Doe generated Google Doc
+        └── Interview Notes — Jane Doe   blank, for the panel to type into live
+```
+
+### Why the Form changes the resume story
+
+The Form gives an **authoritative candidate → resume-file mapping**. `lib/resume-match.ts`
+and its four fuzzy filename tiers exist only because resumes used to arrive as a flat folder
+of arbitrarily named files; nothing on this path guesses. Resumes linked this way are tagged
+`resume_match = 'form'`, distinct from the inferred `email|name|token|fuzzy` and from a
+human's `manual` fix-up. The old sync still works for legacy/bulk folders.
+
+`applicants.resume_file_id` is pointed at **the copy**, not the Form original — the copy lives
+under `CUBE Recruiting`, which is the folder shared with the service account that streams
+resumes to interviewers.
+
+### Why writes use OAuth, not the service account
+
+A Google **service account has no Drive storage quota and cannot own files**. Creating a
+folder or copying a resume as `cube-outreach-bot@…` fails with `storageQuotaExceeded` no
+matter what it has been shared on. The escapes are a Shared Drive (Workspace only) or acting
+as a real user. CUBE is on a personal Gmail account, so the portal holds one refresh token for
+the recruiting officer who already owns the Form, the responses and the folders.
+Reads still use the service account; only writes use the token.
+
+Two setup details that will bite if missed — both spelled out in `scripts/drive-consent.mjs`:
+
+- Create the OAuth client in **cube-project-496921**, *not* the project behind
+  `AUTH_GOOGLE_ID`. Restricted scopes attach to a project's consent screen, so adding `drive`
+  there would show an "unverified app" warning to every member signing into the portal.
+- Set the consent screen to **In production**. Apps left in "Testing" expire refresh tokens
+  after 7 days, which would break the button weekly.
+
+### Idempotency
+
+Re-running is safe and only tops up — two independent mechanisms guarantee it:
+
+1. `candidate_drive_assets` (PK `(applicant_id, kind)`) is checked before any Drive write.
+2. Folder names are stable and collision-free (`lib/folder-naming.ts` appends the email, so
+   two people named Jane Doe never share a folder), and `ensureFolder` looks up before
+   creating — so even a lost ledger row cannot produce a duplicate folder.
+
+A candidate whose provisioning fails halfway is reported individually and picked up on the
+next run; the rest of the cohort still provisions. **Repair mode** additionally verifies each
+recorded file still exists in Drive and recreates what a human deleted — one extra API call
+per asset, so it is opt-in rather than the default.
+
+### Setup
+
+1. Run **`db/drive-folders.sql`** in the Supabase SQL editor (after `schema.sql` and
+   `interview.sql`).
+2. Share the Form response sheet with the service account's `client_email` as **Viewer**.
+3. Create the `CUBE Recruiting` folder by hand; put its id in `RECRUITING_DRIVE_ROOT_FOLDER_ID`.
+   Share it with the interviewer group — access is granted on the parent, not per candidate —
+   and **not** link-public: these folders hold applicant PII.
+4. `node scripts/drive-consent.mjs`, paste the refresh token into `.env`.
+
 ### Files outside this folder (interview console)
 
 | File | Change | Why |
@@ -144,7 +218,9 @@ resume — rename in Drive and re-run.
 | `app/api/recruitment/resume/[id]/route.ts` | **new** — shim (GET) | Streams one resume. |
 | `app/portal/layout.tsx` | **+2 lines** | "Interviews" nav link for interviewer roles. |
 | `proxy.ts` | **gate fixed + extended** | It matched `/portal/recruitment`, which is not a real route — so the recruiting role gate never fired. Now covers `/portal/recruiting` and `/portal/interview`. |
-| `.env.example` | **+ resume folder section** | `RECRUITING_RESUME_FOLDER_ID`. |
+| `app/api/recruitment/folders/provision/route.ts` | **new** — shim (POST) | Exec provisions candidate Drive folders. |
+| `scripts/drive-consent.mjs` | **new** | One-time OAuth flow to mint the Drive refresh token. |
+| `.env.example` | **+ resume folder section**, **+ Drive folder section** | `RECRUITING_RESUME_FOLDER_ID`; the `RECRUITING_FORM_*` / `RECRUITING_DRIVE_*` vars. |
 
 ## Phase 2 (still scoped in SPEC.md)
 

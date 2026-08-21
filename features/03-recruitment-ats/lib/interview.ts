@@ -146,6 +146,9 @@ export type Candidate = {
   college?: string;
   stage: Stage;
   resume: ResumeInfo | null;
+  /** Provisioned Drive folder (resume + rubric docs + notes), when one exists.
+   *  A URL only — the folder id stays server-side, same posture as `resume`. */
+  driveFolderUrl?: string | null;
   /** Interviewers assigned to this candidate (lowercased emails). */
   panel: string[];
   assignedToMe: boolean;
