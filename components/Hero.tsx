@@ -71,14 +71,6 @@ export function Hero() {
           >
             Apply Now
           </a>
-          <a
-            href={SITE.mailingListForm}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="btn btn-gold-outline"
-          >
-            Mailing List
-          </a>
         </motion.div>
 
         <motion.a

@@ -13,7 +13,7 @@ export default function ProjectsPage() {
   return (
     <>
       <PageHero
-        eyebrow="Spring 2026"
+        eyebrow="Fall 2026"
         title="Our Projects."
         blurb="Every semester our teams partner with founders, operators, and engineering leaders to ship deliverables that move their business forward. Here&rsquo;s a snapshot of what we&rsquo;re building this term."
       />
@@ -26,7 +26,7 @@ export default function ProjectsPage() {
               Engagements in flight.
             </h2>
             <p className="mt-5 text-[var(--muted)] text-[17px] leading-relaxed">
-              Eight teams, eight clients. Each project runs the full UIUC semester from kickoff to final delivery.
+              Seven teams, seven clients. Each project runs the full UIUC semester from kickoff to final delivery.
             </p>
           </div>
           <div className="mt-12 grid md:grid-cols-2 gap-6 md:gap-8">

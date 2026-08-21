@@ -153,83 +153,39 @@ export type Project = {
   logo?: string;
   /** Path under /public to the team composite photo. */
   teamImage?: string;
-  bullets: string[];
+  /** Omit until the team writes up the semester's deliverables. */
+  bullets?: string[];
 };
 
 export const PROJECTS: Project[] = [
   {
-    name: "AllPeople Marketplace",
-    logo: "/clients/allpeople.webp",
-    teamImage: "/projects/team-allpeople.png",
-    bullets: [
-      "Conducting primary market research and investor discovery to assess demand.",
-      "Developing unit economics and financial models to evaluate margins, costs, and impact.",
-    ],
+    name: "Deloitte",
+    // logo: "/clients/deloitte.png",
   },
   {
-    name: "AWS",
-    logo: "/clients/aws.png",
-    teamImage: "/projects/team-aws.png",
-    bullets: [
-      "Identifying high-impact opportunities for AI-driven efficiency and automation.",
-      "Designing and testing light-weight AI-enabled solutions using the CRAFT framework.",
-    ],
+    name: "Replit",
+    // logo: "/clients/replit.png",
   },
   {
-    name: "Panasonic",
-    logo: "/clients/panasonic2.png",
-    teamImage: "/projects/team-panasonic.png",
-    bullets: [
-      "Researching smart-manufacturing trends and adoption across the industry.",
-      "Synthesizing insights on AI and automation within Panasonic's platform.",
-    ],
+    name: "VoiceOS",
+    // logo: "/clients/voiceos.png",
+  },
+  {
+    name: "Mando",
+    // logo: "/clients/mando.png",
   },
   {
     name: "Wrike",
     logo: "/clients/wrike2.png",
-    teamImage: "/projects/team-wrike.png",
-    bullets: [
-      "Building a member intelligence system to centralize data and automate intake.",
-      "Implementing automated engagement workflows fired from a unified data layer.",
-    ],
   },
   {
-    name: "Squint",
-    logo: "/clients/squint2.png",
-    teamImage: "/projects/team-squint.png",
-    bullets: [
-      "Prototyping Workshop Mode to support live in-session collaboration.",
-      "Research, workflow design, and feature scoping for the workshop experience.",
-    ],
+    name: "SolutionExec",
+    // logo: "/clients/solutionexec.png",
   },
   {
-    name: "Nucurrent",
-    logo: "/clients/nucurrent2.png",
-    teamImage: "/projects/team-nucurrent.png",
-    bullets: [
-      "Centralized inventory management with audit trails and consistent documentation.",
-      "Automated reorder workflows triggered by inventory thresholds.",
-    ],
+    name: "VerityXR",
+    // logo: "/clients/verityxr.png",
   },
-  {
-    name: "GTMshift",
-    logo: "/clients/gtmshift2.png",
-    teamImage: "/projects/team-gtmshift.png",
-    bullets: [
-      "Diagnosing inefficiencies across go-to-market workflows.",
-      "Designing targeted AI-driven solutions and piloting them with stakeholders.",
-    ],
-  },
-  {
-    name: "Optura",
-    logo: "/clients/optura2.png",
-    teamImage: "/projects/team-optura.png",
-    bullets: [
-      "Prototyping Optura's Workshop Mode to support collaboration and decision-making.",
-      "Leading research, workflow design, and core feature development for a scalable end-to-end workshop experience.",
-    ],
-  },
-
 ];
 
 // Brand directory used by LogoStrip / ClientCarousel / AlumniGrid.
@@ -252,6 +208,13 @@ export const CLIENT_LOGOS: Brand[] = [
   { name: "Nucurrent",        logo: "/clients/nucurrent.png" },
   { name: "GTMshift",         logo: "/clients/gtmshift.jpeg" },
   { name: "Optura",           logo: "/clients/optura.jpeg"},
+  // Fall 2026 cohort. Drop logo files in /public/clients and uncomment.
+  { name: "Deloitte"      /* logo: "/clients/deloitte.png"     */ },
+  { name: "Replit"        /* logo: "/clients/replit.png"       */ },
+  { name: "VoiceOS"       /* logo: "/clients/voiceos.png"      */ },
+  { name: "Mando"         /* logo: "/clients/mando.png"        */ },
+  { name: "SolutionExec"  /* logo: "/clients/solutionexec.png" */ },
+  { name: "VerityXR"      /* logo: "/clients/verityxr.png"     */ },
 ];
 
 export const PARTNER_LOGOS: Brand[] = [

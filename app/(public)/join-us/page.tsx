@@ -65,23 +65,15 @@ export default function JoinUsPage() {
         title="Join the team."
         blurb="We hire passionate students from every major. Apply if you love solving problems, designing creative solutions, and giving back to your community."
       >
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <a href={SITE.applyForm} target="_blank" rel="noreferrer noopener" className="btn btn-gold">
             Apply Now
           </a>
-          <a
-            href={SITE.mailingListForm}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="btn btn-gold-outline"
-          >
-            Join the Mailing List
-          </a>
+          <p className="inline-flex items-center gap-2 rounded-full bg-white/8 border border-white/12 px-4 py-1.5 text-[12px] tracking-[0.18em] uppercase font-semibold text-[var(--gold)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse" aria-hidden />
+            Applications due {FALL_RECRUITMENT.appsDue} at {FALL_RECRUITMENT.appsDueTime}
+          </p>
         </div>
-        <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/8 border border-white/12 px-4 py-1.5 text-[12px] tracking-[0.18em] uppercase font-semibold text-[var(--gold)]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--gold)] animate-pulse" aria-hidden />
-          Applications due {FALL_RECRUITMENT.appsDue} at {FALL_RECRUITMENT.appsDueTime}
-        </p>
       </PageHero>
 
       <section className="section-y bg-white">
@@ -256,14 +248,6 @@ export default function JoinUsPage() {
           className="btn btn-gold"
         >
           Apply Now
-        </a>
-        <a
-          href={SITE.mailingListForm}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="btn btn-gold-outline"
-        >
-          Mailing List
         </a>
       </CTABand>
     </>
