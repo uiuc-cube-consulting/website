@@ -160,19 +160,19 @@ export type Project = {
 export const PROJECTS: Project[] = [
   {
     name: "Deloitte",
-    // logo: "/clients/deloitte.png",
+    logo: "/clients/deloitte.png",
   },
   {
     name: "Replit",
-    // logo: "/clients/replit.png",
+    logo: "/clients/replit.png",
   },
   {
     name: "VoiceOS",
-    // logo: "/clients/voiceos.png",
+    logo: "/clients/voiceos.png",
   },
   {
     name: "Mando",
-    // logo: "/clients/mando.png",
+    logo: "/clients/mando.png",
   },
   {
     name: "Wrike",
@@ -180,11 +180,11 @@ export const PROJECTS: Project[] = [
   },
   {
     name: "SolutionExec",
-    // logo: "/clients/solutionexec.png",
+    logo: "/clients/solutionexec.png",
   },
   {
     name: "VerityXR",
-    // logo: "/clients/verityxr.png",
+    logo: "/clients/verityxr.png",
   },
 ];
 
@@ -208,13 +208,13 @@ export const CLIENT_LOGOS: Brand[] = [
   { name: "Nucurrent",        logo: "/clients/nucurrent.png" },
   { name: "GTMshift",         logo: "/clients/gtmshift.jpeg" },
   { name: "Optura",           logo: "/clients/optura.jpeg"},
-  // Fall 2026 cohort. Drop logo files in /public/clients and uncomment.
-  { name: "Deloitte"      /* logo: "/clients/deloitte.png"     */ },
-  { name: "Replit"        /* logo: "/clients/replit.png"       */ },
-  { name: "VoiceOS"       /* logo: "/clients/voiceos.png"      */ },
-  { name: "Mando"         /* logo: "/clients/mando.png"        */ },
-  { name: "SolutionExec"  /* logo: "/clients/solutionexec.png" */ },
-  { name: "VerityXR"      /* logo: "/clients/verityxr.png"     */ },
+  // Fall 2026 cohort.
+  { name: "Deloitte",         logo: "/clients/deloitte.png" },
+  { name: "Replit",           logo: "/clients/replit.png" },
+  { name: "VoiceOS",          logo: "/clients/voiceos.png" },
+  { name: "Mando",            logo: "/clients/mando.png" },
+  { name: "SolutionExec",     logo: "/clients/solutionexec.png" },
+  { name: "VerityXR",         logo: "/clients/verityxr.png" },
 ];
 
 export const PARTNER_LOGOS: Brand[] = [
