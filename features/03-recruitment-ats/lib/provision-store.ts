@@ -62,6 +62,14 @@ export type ProvisionOptions = {
    * and offered as an explicit "repair" run.
    */
   repair?: boolean;
+  /**
+   * Provision at most this many candidates in one call, returning `remaining` so
+   * the caller can continue. Exists because a cohort does not fit in a serverless
+   * request: ~8s of Drive/Docs work per candidate means 100 candidates is several
+   * minutes, well past Vercel's 60s (Hobby) or 300s (Pro) ceiling. The ledger
+   * already makes resumption free, so the work is simply chunked.
+   */
+  limit?: number;
 };
 
 export type CandidateOutcome = {
@@ -84,6 +92,8 @@ export type ProvisionResult =
       foldersCreated: number;
       assetsCreated: number;
       unchanged: number;
+      /** Candidates still needing work after this call. Zero means done. */
+      remaining: number;
       noResume: { name: string; email: string }[];
       failed: { name: string; email: string; error: string }[];
       outcomes: CandidateOutcome[];
@@ -140,15 +150,20 @@ export async function provisionCandidateFolders(
     return {
       ok: false,
       error:
-        "Drive writing is not configured. Set RECRUITING_DRIVE_CLIENT_ID, " +
-        "RECRUITING_DRIVE_CLIENT_SECRET and RECRUITING_DRIVE_REFRESH_TOKEN " +
-        "(mint the token with `node scripts/drive-consent.mjs`).",
+        "Drive writing is not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON, and add that " +
+        "service account to the recruiting shared drive as Content Manager.",
     };
   }
 
   const rootFolderId = (opts.rootFolderId || process.env.RECRUITING_DRIVE_ROOT_FOLDER_ID || "").trim();
   if (!rootFolderId) {
-    return { ok: false, error: "No root folder. Set RECRUITING_DRIVE_ROOT_FOLDER_ID to the 'CUBE Recruiting' folder id." };
+    return {
+      ok: false,
+      error:
+        "No root folder. Set RECRUITING_DRIVE_ROOT_FOLDER_ID to the recruiting SHARED DRIVE " +
+        "(or a folder inside it). A My Drive folder will not work — a service account cannot " +
+        "own files.",
+    };
   }
   const sheetId = (opts.sheetId || process.env.RECRUITING_FORM_SHEET_ID || "").trim();
   if (!sheetId) {
@@ -163,7 +178,7 @@ export async function provisionCandidateFolders(
   if (!sheet.rows.length) {
     return {
       ok: true, cycle, candidates: 0, foldersCreated: 0, assetsCreated: 0,
-      unchanged: 0, noResume: [], failed: [], outcomes: [],
+      unchanged: 0, remaining: 0, noResume: [], failed: [], outcomes: [],
     };
   }
 
@@ -221,7 +236,32 @@ export async function provisionCandidateFolders(
   const newLedger: { applicant_id: string; kind: AssetKind; file_id: string; web_link: string | null }[] = [];
   const applicantPatches: Record<string, unknown>[] = [];
 
-  const outcomes = await pool(candidates, 4, async (c): Promise<CandidateOutcome> => {
+  /**
+   * Already fully provisioned according to the ledger, so this call can skip them
+   * without a single Drive round trip. A candidate who never uploaded a resume is
+   * still "complete" — otherwise they would sit in the pending set forever and
+   * `remaining` would never reach zero.
+   */
+  const isComplete = (c: Candidate): boolean => {
+    const have = ledger.get(c.id);
+    if (!have) return false;
+    for (const k of ["folder", "case_rubric", "behavioral_rubric", "notes"] as const) {
+      if (!have.has(k)) return false;
+    }
+    if (parseResumeId(c.resumeLink) && !have.has("resume")) return false;
+    return true;
+  };
+
+  // In repair mode nothing can be trusted without checking Drive, so everyone is
+  // pending and the per-asset `existing()` check below does the verification.
+  const pending = opts.repair ? candidates : candidates.filter((c) => !isComplete(c));
+  const alreadyDone = candidates.length - pending.length;
+
+  const limit = Math.max(1, opts.limit ?? (Number(process.env.RECRUITING_PROVISION_BATCH) || 10));
+  const batch = pending.slice(0, limit);
+  const remaining = pending.length - batch.length;
+
+  const outcomes = await pool(batch, 4, async (c): Promise<CandidateOutcome> => {
     const out: CandidateOutcome = { name: c.name, email: c.email, created: [], skipped: [], errors: [] };
     const have = ledger.get(c.id) ?? new Map<string, LedgerRow>();
 
@@ -389,7 +429,8 @@ export async function provisionCandidateFolders(
     candidates: candidates.length,
     foldersCreated: outcomes.filter((o) => o.created.includes("folder")).length,
     assetsCreated: outcomes.reduce((n, o) => n + o.created.length, 0),
-    unchanged: outcomes.filter((o) => o.created.length === 0 && o.errors.length === 0).length,
+    unchanged: alreadyDone + outcomes.filter((o) => o.created.length === 0 && o.errors.length === 0).length,
+    remaining,
     noResume,
     failed,
     outcomes,

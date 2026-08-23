@@ -219,6 +219,7 @@ type ProvisionResponse = {
   foldersCreated?: number;
   assetsCreated?: number;
   unchanged?: number;
+  remaining?: number;
   noResume?: { name: string; email: string }[];
   failed?: { name: string; email: string; error: string }[];
 };
@@ -226,24 +227,50 @@ type ProvisionResponse = {
 function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<void> | void }) {
   const [busy, setBusy] = useState(false);
   const [repair, setRepair] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<ProvisionResponse | null>(null);
 
+  /**
+   * One click, however big the cohort. The server provisions a bounded batch per
+   * request (a serverless function cannot hold ~8s x 100 candidates), so we keep
+   * calling while it reports work left. Each call is idempotent, so a failure
+   * part-way just means the next click resumes rather than repeats.
+   */
   async function provision() {
     setBusy(true);
     setResult(null);
+    setProgress(null);
+
+    const total = { folders: 0, assets: 0 };
     try {
-      const r = await fetch("/api/recruitment/folders/provision", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repair }),
-      });
-      const res: ProvisionResponse = await r.json();
-      setResult(res);
-      if (res.ok) await onProvisioned();
+      for (let pass = 0; pass < 50; pass++) {
+        const r = await fetch("/api/recruitment/folders/provision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repair }),
+        });
+        const res: ProvisionResponse = await r.json();
+        if (!res.ok) {
+          setResult(res);
+          return;
+        }
+        total.folders += res.foldersCreated ?? 0;
+        total.assets += res.assetsCreated ?? 0;
+
+        if (!res.remaining) {
+          setResult({ ...res, foldersCreated: total.folders, assetsCreated: total.assets });
+          await onProvisioned();
+          return;
+        }
+        setProgress(`${total.folders} folder(s) done · ${res.remaining} candidate(s) to go…`);
+      }
+      // 50 batches is far more than any real cycle; treat it as a runaway.
+      setResult({ ok: false, error: "Stopped after 50 batches. Re-run to continue." });
     } catch {
-      setResult({ ok: false, error: "Provisioning failed." });
+      setResult({ ok: false, error: "Provisioning failed — re-run to resume where it stopped." });
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -263,8 +290,7 @@ function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<vo
           Repair mode
         </label>
         <span className="text-xs text-[var(--muted)]">
-          Creates a Drive folder per candidate with their resume, both rubrics, and a notes doc.
-          Safe to re-run — only what&rsquo;s missing is created.
+          {progress ?? "Creates a Drive folder per candidate with their resume, both rubrics, and a notes doc. Safe to re-run — only what's missing is created."}
         </span>
       </div>
 

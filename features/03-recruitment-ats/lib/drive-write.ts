@@ -1,22 +1,21 @@
 // Server-only Google Drive/Docs WRITES. Imports `googleapis` — never import from
 // client code.
 //
-// This is deliberately a separate module from ./drive.ts, which reads resumes
-// with the service account. The two cannot share a client, because of a hard
-// Google constraint worth stating where the code lives:
+// Separate module from ./drive.ts (which only reads resumes) because writing has
+// a constraint reading does not, and it is worth stating where the code lives:
 //
-//   A service account has NO Drive storage quota and cannot own files. Creating
-//   a folder or copying a resume as `cube-outreach-bot@...` fails with
-//   `storageQuotaExceeded`, no matter what it has been shared on. The only ways
-//   to write are a Shared Drive (Workspace only) or acting as a real user via
-//   OAuth. CUBE is on a personal Gmail account, so: OAuth, acting as the
-//   recruiting officer who already owns the Form, the responses and the folders.
+//   A service account has NO Drive storage quota and cannot own files. Creating a
+//   folder or copying a resume into someone's My Drive fails with
+//   `storageQuotaExceeded` no matter what it has been shared on.
 //
-// The refresh token is minted once by `scripts/drive-consent.mjs`. Its OAuth
-// client must live in the cube-project-496921 GCP project, NOT the project
-// behind AUTH_GOOGLE_ID — restricted scopes attach to a project's consent
-// screen, and adding `drive` there would show an unverified-app warning to every
-// member signing into the portal.
+// The escape is a SHARED DRIVE. A shared drive owns its own contents, so files
+// created there have no individual owner and the service account never needs
+// quota. It also means the recruiting tree belongs to the org rather than to
+// whichever officer happened to authorize it — nothing to transfer at graduation.
+//
+// Setup: create a shared drive, add the service account's `client_email` as
+// **Content Manager** (Viewer/Commenter/Contributor cannot create folders), and
+// set RECRUITING_DRIVE_ROOT_FOLDER_ID to the drive (or a folder inside it).
 
 import { google } from "googleapis";
 import type { drive_v3, docs_v1 } from "googleapis";
@@ -24,10 +23,9 @@ import { driveFileUrl, driveFolderUrl } from "./form-resume";
 import type { DocsRequest } from "./rubric-doc";
 
 /**
- * Full `drive` rather than the friendlier `drive.file`. Not a shortcut: the
- * resume was created by the Google Form, not by this app, and `drive.file` only
- * ever grants access to files the app itself created. Copying someone else's
- * file requires the broad scope. `documents` covers writing the rubric bodies.
+ * Full `drive` rather than `drive.file`: the resume was created by the Google
+ * Form, not by this app, and `drive.file` only ever grants access to an app's
+ * own files. `documents` covers writing the rubric bodies.
  */
 const WRITE_SCOPES = [
   "https://www.googleapis.com/auth/drive",
@@ -37,25 +35,33 @@ const WRITE_SCOPES = [
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const DOC_MIME = "application/vnd.google-apps.document";
 
+/**
+ * Every call carries these. `supportsAllDrives` is required on any create/copy/get
+ * that touches a shared drive — omit it and the API pretends the shared drive does
+ * not exist, returning a confusing 404 rather than a permission error.
+ */
+const SHARED = { supportsAllDrives: true } as const;
+
 export type Clients = { drive: drive_v3.Drive; docs: docs_v1.Docs };
 
-/**
- * OAuth2 client from the stored refresh token, or null when unconfigured.
- * googleapis refreshes the access token on demand, so nothing here is cached
- * across requests — a serverless invocation makes one token call then proceeds.
- */
+/** Drive + Docs clients from the shared service account, or null when unconfigured. */
 export function driveWriteClients(): Clients | null {
-  const clientId = process.env.RECRUITING_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.RECRUITING_DRIVE_CLIENT_SECRET;
-  const refreshToken = process.env.RECRUITING_DRIVE_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) return null;
-
-  const auth = new google.auth.OAuth2({ clientId, clientSecret });
-  auth.setCredentials({ refresh_token: refreshToken, scope: WRITE_SCOPES.join(" ") });
-  return {
-    drive: google.drive({ version: "v3", auth }),
-    docs: google.docs({ version: "v1", auth }),
-  };
+  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!saJson) return null;
+  try {
+    const creds = JSON.parse(saJson);
+    const auth = new google.auth.JWT({
+      email: creds.client_email,
+      key: creds.private_key,
+      scopes: WRITE_SCOPES,
+    });
+    return {
+      drive: google.drive({ version: "v3", auth }),
+      docs: google.docs({ version: "v1", auth }),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export type DriveError = { ok: false; error: string };
@@ -64,9 +70,26 @@ export type DriveResult<T> = Created<T> | DriveError;
 
 export type DriveFile = { id: string; name: string; url: string };
 
+/**
+ * Turn a Drive API error into something an exec reading the report can act on.
+ * The two failure modes that actually happen in this flow are both permission
+ * problems that Google reports obscurely, so name them explicitly.
+ */
 function fail(e: unknown, what: string): DriveError {
   const msg = e instanceof Error ? e.message : String(e);
-  return { ok: false, error: `${what}: ${msg}` };
+  let hint = "";
+  if (/storageQuotaExceeded|storage quota/i.test(msg)) {
+    hint =
+      " — the target is not a shared drive. A service account cannot own files in My Drive; " +
+      "point RECRUITING_DRIVE_ROOT_FOLDER_ID at a shared drive.";
+  } else if (/File not found|notFound|404/i.test(msg)) {
+    hint =
+      " — not found or not shared. Add the service account's client_email to the shared drive " +
+      "as Content Manager.";
+  } else if (/insufficientFilePermissions|forbidden|403/i.test(msg)) {
+    hint = " — the service account needs Content Manager on the shared drive, not Viewer.";
+  }
+  return { ok: false, error: `${what}: ${msg}${hint}` };
 }
 
 /** Drive treats a name as free text in a query; a stray quote breaks the filter. */
@@ -78,10 +101,10 @@ function escapeQuery(s: string): string {
  * The folder named `name` under `parentId`, creating it only if absent.
  *
  * Look-up-then-create rather than create-blindly: Drive happily allows two
- * folders with the same name in the same parent, so a re-run of provisioning
- * would otherwise silently fan out duplicates. Combined with the stable names
- * from folder-naming.ts, this is what makes the whole operation idempotent even
- * for candidates whose ledger row was lost.
+ * folders with the same name in the same parent, so a re-run would otherwise
+ * silently fan out duplicates. Combined with the stable names from
+ * folder-naming.ts, this is what makes provisioning idempotent even for a
+ * candidate whose ledger row was lost.
  */
 export async function ensureFolder(
   clients: Clients,
@@ -100,8 +123,8 @@ export async function ensureFolder(
       q,
       fields: "files(id, name)",
       pageSize: 1,
-      supportsAllDrives: true,
       includeItemsFromAllDrives: true,
+      ...SHARED,
     });
     const hit = found.data.files?.[0];
     if (hit?.id) {
@@ -111,7 +134,7 @@ export async function ensureFolder(
     const made = await clients.drive.files.create({
       requestBody: { name, mimeType: FOLDER_MIME, parents: [parentId] },
       fields: "id, name",
-      supportsAllDrives: true,
+      ...SHARED,
     });
     const id = made.data.id;
     if (!id) return { ok: false, error: `Drive returned no id when creating folder "${name}"` };
@@ -130,7 +153,7 @@ export async function fileMeta(
     const res = await clients.drive.files.get({
       fileId,
       fields: "name, mimeType",
-      supportsAllDrives: true,
+      ...SHARED,
     });
     return { ok: true, value: { name: res.data.name ?? "", mimeType: res.data.mimeType ?? null } };
   } catch (e) {
@@ -140,9 +163,10 @@ export async function fileMeta(
 
 /**
  * Copy the Form's uploaded resume into the candidate's folder under a consistent
- * name. A copy, not a move: the original stays where the Form put it, so the
- * response sheet's link keeps working and nothing about the submission record is
- * disturbed.
+ * name. A copy, not a move: the original stays in the Form's "(File responses)"
+ * folder, so the response sheet's link keeps working and the submission record is
+ * left undisturbed. Because the destination is a shared drive, the copy is owned
+ * by the drive and costs the service account no quota.
  */
 export async function copyResume(
   clients: Clients,
@@ -155,7 +179,7 @@ export async function copyResume(
       fileId: sourceFileId,
       requestBody: { name: newName, parents: [destFolderId] },
       fields: "id, name",
-      supportsAllDrives: true,
+      ...SHARED,
     });
     const id = res.data.id;
     if (!id) return { ok: false, error: "Drive returned no id when copying the resume" };
@@ -168,10 +192,10 @@ export async function copyResume(
 /**
  * Create a Google Doc in `parentId` and fill it with `requests`.
  *
- * Two calls, not one: the Docs API creates an empty document with no way to set
- * a parent, so the file is created through Drive first (which does take a
- * parent) and the body is written second. Doing it the other way round would
- * leave a stray untitled doc in the account root if the move failed.
+ * Two calls, not one: the Docs API creates an empty document with no way to set a
+ * parent, so the file is created through Drive first (which does take a parent)
+ * and the body is written second. The other order would strand an untitled doc in
+ * the drive root if the move failed.
  */
 export async function createDoc(
   clients: Clients,
@@ -184,7 +208,7 @@ export async function createDoc(
     const made = await clients.drive.files.create({
       requestBody: { name: title, mimeType: DOC_MIME, parents: [parentId] },
       fields: "id",
-      supportsAllDrives: true,
+      ...SHARED,
     });
     if (!made.data.id) return { ok: false, error: `Drive returned no id when creating "${title}"` };
     id = made.data.id;
@@ -209,15 +233,11 @@ export async function createDoc(
 
 /**
  * Whether a previously provisioned file still exists and is not trashed.
- * Lets a re-run repair the tree after someone deletes a rubric doc by hand.
+ * Lets a repair run rebuild the tree after someone deletes a rubric doc by hand.
  */
 export async function stillExists(clients: Clients, fileId: string): Promise<boolean> {
   try {
-    const res = await clients.drive.files.get({
-      fileId,
-      fields: "trashed",
-      supportsAllDrives: true,
-    });
+    const res = await clients.drive.files.get({ fileId, fields: "trashed", ...SHARED });
     return res.data.trashed !== true;
   } catch {
     return false;

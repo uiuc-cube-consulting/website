@@ -165,22 +165,23 @@ human's `manual` fix-up. The old sync still works for legacy/bulk folders.
 under `CUBE Recruiting`, which is the folder shared with the service account that streams
 resumes to interviewers.
 
-### Why writes use OAuth, not the service account
+### Why the destination must be a shared drive
 
-A Google **service account has no Drive storage quota and cannot own files**. Creating a
-folder or copying a resume as `cube-outreach-bot@…` fails with `storageQuotaExceeded` no
-matter what it has been shared on. The escapes are a Shared Drive (Workspace only) or acting
-as a real user. CUBE is on a personal Gmail account, so the portal holds one refresh token for
-the recruiting officer who already owns the Form, the responses and the folders.
-Reads still use the service account; only writes use the token.
+A Google **service account has no Drive storage quota and cannot own files**. Creating a folder
+or copying a resume into a person's My Drive fails with `storageQuotaExceeded` no matter what
+the account has been shared on.
 
-Two setup details that will bite if missed — both spelled out in `scripts/drive-consent.mjs`:
+A **shared drive** owns its own contents, so files created there have no individual owner and
+the service account never needs quota. That also makes the recruiting tree org-owned rather
+than tied to whichever officer set it up — nothing to transfer when they graduate.
 
-- Create the OAuth client in **cube-project-496921**, *not* the project behind
-  `AUTH_GOOGLE_ID`. Restricted scopes attach to a project's consent screen, so adding `drive`
-  there would show an "unverified app" warning to every member signing into the portal.
-- Set the consent screen to **In production**. Apps left in "Testing" expire refresh tokens
-  after 7 days, which would break the button weekly.
+Add the service account's `client_email` to the shared drive as **Content Manager**.
+Viewer/Commenter/Contributor cannot create folders. Every Drive call in `lib/drive-write.ts`
+passes `supportsAllDrives` — omit it and the API reports a shared-drive file as a bare 404
+rather than a permission error, which is a genuinely confusing way to fail.
+
+Reads and writes both use `GOOGLE_SERVICE_ACCOUNT_JSON`; there is no second credential and no
+user token to keep alive.
 
 ### Idempotency
 
@@ -200,11 +201,23 @@ per asset, so it is opt-in rather than the default.
 
 1. Run **`db/drive-folders.sql`** in the Supabase SQL editor (after `schema.sql` and
    `interview.sql`).
-2. Share the Form response sheet with the service account's `client_email` as **Viewer**.
-3. Create the `CUBE Recruiting` folder by hand; put its id in `RECRUITING_DRIVE_ROOT_FOLDER_ID`.
-   Share it with the interviewer group — access is granted on the parent, not per candidate —
-   and **not** link-public: these folders hold applicant PII.
-4. `node scripts/drive-consent.mjs`, paste the refresh token into `.env`.
+2. Create a **shared drive** named `CUBE Recruiting` and put its id in
+   `RECRUITING_DRIVE_ROOT_FOLDER_ID`. Add two members, and no more:
+   - the service account's `client_email` as **Content Manager** — it needs create rights, and
+     it is also what streams resumes back to the portal, since `applicants.resume_file_id`
+     points at the *copy* inside this drive;
+   - the interviewer group as **Viewer** or **Commenter** — access is granted on the drive, not
+     per candidate.
+
+   Do **not** share it link-public: these folders hold applicant PII.
+3. Share the Form's **response sheet** with the same `client_email` as **Viewer**.
+4. Share the Form's **`… (File responses)` folder** with the same `client_email` as **Viewer**.
+
+Step 4 is required, not optional: the service account performs the copy itself, so it needs
+read access to the source. (Under a user-token design the officer would already own both sides
+and this step would not exist — it is a direct consequence of using the service account.) That
+folder is only ever read; resumes are copied out of it, never moved, so the response sheet's
+links keep working and the Form's own records are untouched.
 
 ### Files outside this folder (interview console)
 
@@ -219,7 +232,6 @@ per asset, so it is opt-in rather than the default.
 | `app/portal/layout.tsx` | **+2 lines** | "Interviews" nav link for interviewer roles. |
 | `proxy.ts` | **gate fixed + extended** | It matched `/portal/recruitment`, which is not a real route — so the recruiting role gate never fired. Now covers `/portal/recruiting` and `/portal/interview`. |
 | `app/api/recruitment/folders/provision/route.ts` | **new** — shim (POST) | Exec provisions candidate Drive folders. |
-| `scripts/drive-consent.mjs` | **new** | One-time OAuth flow to mint the Drive refresh token. |
 | `.env.example` | **+ resume folder section**, **+ Drive folder section** | `RECRUITING_RESUME_FOLDER_ID`; the `RECRUITING_FORM_*` / `RECRUITING_DRIVE_*` vars. |
 
 ## Phase 2 (still scoped in SPEC.md)

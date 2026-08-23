@@ -10,9 +10,12 @@ import { provisionCandidateFolders } from "@/features/03-recruitment-ats/lib/pro
 // sheet or cycle without a redeploy.
 
 export const dynamic = "force-dynamic";
-// A cohort's worth of Drive writes: ~5 API calls per candidate, four in flight.
-// Well past the default 60s for a large cycle.
-export const maxDuration = 300;
+// 60 rather than 300: Vercel's Hobby plan caps functions at 60s and rejects a
+// higher value outright. A cohort does not fit in one request at any ceiling
+// (~8s of Drive/Docs work per candidate), so the work is chunked instead — each
+// call provisions `limit` candidates and reports `remaining`, and the client
+// keeps calling until it hits zero. The ledger makes that free.
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -25,6 +28,7 @@ export async function POST(req: NextRequest) {
     cycle?: string;
     rootFolderId?: string;
     repair?: boolean;
+    limit?: number;
   } = {};
   try {
     body = await req.json();
@@ -38,6 +42,7 @@ export async function POST(req: NextRequest) {
     cycle: body.cycle,
     rootFolderId: body.rootFolderId,
     repair: Boolean(body.repair),
+    limit: typeof body.limit === "number" ? body.limit : undefined,
   });
 
   if (!result.ok && "demo" in result) {
