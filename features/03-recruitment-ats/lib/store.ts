@@ -3,12 +3,13 @@
 // from client code.
 
 import { createServerClient } from "@/lib/supabase/server";
-import { DEMO_APPLICANTS, DEMO_REVIEWS } from "./demo";
+import { DEMO_APPLICANTS, DEMO_FLAGS, DEMO_REVIEWS } from "./demo";
 import {
   planAssignments,
   weightedTotal,
   type Applicant,
   type Assignment,
+  type Flag,
   type Review,
   type Scores,
   type Stage,
@@ -27,21 +28,25 @@ function db() {
   return createServerClient();
 }
 
-export type Snapshot = { applicants: Applicant[]; reviews: Review[]; demo: boolean };
+export type Snapshot = { applicants: Applicant[]; reviews: Review[]; flags: Flag[]; demo: boolean };
 
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = db();
-  if (!sb) return { applicants: DEMO_APPLICANTS, reviews: DEMO_REVIEWS, demo: true };
+  if (!sb) return { applicants: DEMO_APPLICANTS, reviews: DEMO_REVIEWS, flags: DEMO_FLAGS, demo: true };
 
-  const [{ data: applicants, error: aErr }, { data: reviews, error: rErr }] = await Promise.all([
-    sb.from("applicants").select("*").order("created_at", { ascending: false }),
-    sb.from("reviews").select("*"),
-  ]);
+  const [{ data: applicants, error: aErr }, { data: reviews, error: rErr }, { data: flags, error: fErr }] =
+    await Promise.all([
+      sb.from("applicants").select("*").order("created_at", { ascending: false }),
+      sb.from("reviews").select("*"),
+      sb.from("applicant_flags").select("*").order("created_at", { ascending: false }),
+    ]);
   if (aErr) throw aErr;
   if (rErr) throw rErr;
+  if (fErr) throw fErr;
   return {
     applicants: (applicants ?? []) as Applicant[],
     reviews: (reviews ?? []) as Review[],
+    flags: (flags ?? []) as Flag[],
     demo: false,
   };
 }
@@ -92,6 +97,24 @@ export async function submitReview(input: {
     },
     { onConflict: "applicant_id,reviewer_email" }
   );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function submitFlag(input: {
+  applicant_id: string;
+  submitter_email: string;
+  color: "red" | "green";
+  description: string;
+}): Promise<WriteResult> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+  const { error } = await sb.from("applicant_flags").insert({
+    applicant_id: input.applicant_id,
+    submitter_email: input.submitter_email,
+    color: input.color,
+    description: input.description,
+  });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

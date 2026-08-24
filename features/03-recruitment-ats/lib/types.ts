@@ -155,6 +155,15 @@ export function funnel(applicants: Applicant[]): Funnel {
 // ── Reviewer assignment ────────────────────────────────────────────────────
 export type Assignment = { applicant_id: string; reviewer_email: string };
 
+export type Flag = {
+  id: string;
+  created_at: string;
+  applicant_id: string;
+  submitter_email: string;
+  color: "red" | "green";
+  description: string;
+};
+
 function shuffle<T>(arr: T[], rng: () => number): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

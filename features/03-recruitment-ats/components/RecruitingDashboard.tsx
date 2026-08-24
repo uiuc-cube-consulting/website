@@ -27,6 +27,7 @@ type Row = {
   hasReviewed: boolean;
   assignedToMe: boolean;
   myReview: { scores: Scores; notes: string } | null;
+  flags: { id: string; color: "red" | "green"; description: string; submitter_email: string }[];
 };
 
 type ApiResponse = {
@@ -338,6 +339,9 @@ function ReviewPanel({ row, onChanged }: { row: Row; onChanged: () => Promise<vo
       )}
 
       <hr className="my-4 border-[var(--border)]" />
+      <FlagPanel applicantId={a.id} flags={row.flags} onChanged={onChanged} />
+
+      <hr className="my-4 border-[var(--border)]" />
       <p className="eyebrow">Your rubric (1–5)</p>
       <div className="mt-3 space-y-3">
         {RUBRIC.map((c) => (
@@ -385,6 +389,92 @@ function ReviewPanel({ row, onChanged }: { row: Row; onChanged: () => Promise<vo
         )}
       </div>
       {toast && <p className="mt-3 text-sm text-[var(--gold-deep)]">{toast}</p>}
+    </div>
+  );
+}
+
+// ── Flags ────────────────────────────────────────────────────────────────────
+// Anyone signed in can flag an applicant red (concern) or green (endorsement)
+// with a required note. Append-only: no edit/delete surface.
+
+function FlagPanel({
+  applicantId,
+  flags,
+  onChanged,
+}: {
+  applicantId: string;
+  flags: Row["flags"];
+  onChanged: () => Promise<void> | void;
+}) {
+  const [color, setColor] = useState<"red" | "green">("red");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  async function submit() {
+    if (!description.trim()) return;
+    setBusy(true);
+    setToast(null);
+    try {
+      const r = await fetch("/api/recruitment/flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicant_id: applicantId, color, description: description.trim() }),
+      });
+      const res = await r.json();
+      if (res.ok) {
+        setDescription("");
+        await onChanged();
+      } else setToast(res.message || res.error || "Could not submit flag.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="eyebrow">Flags</p>
+      {flags.length > 0 && (
+        <ul className="mt-2 space-y-2">
+          {flags.map((f) => (
+            <li key={f.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 px-3 py-2 text-sm">
+              <span className={`mr-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${f.color === "red" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                {f.color === "red" ? "Red flag" : "Green flag"}
+              </span>
+              <span className="text-[var(--bg-dark)]">{f.description}</span>
+              <span className="ml-2 text-[11px] text-[var(--muted)]">— {f.submitter_email}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-3 flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setColor("red")}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${color === "red" ? "border-red-300 bg-red-100 text-red-700" : "border-[var(--border)] bg-white text-[var(--bg-dark)]"}`}
+        >
+          Red flag
+        </button>
+        <button
+          type="button"
+          onClick={() => setColor("green")}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${color === "green" ? "border-green-300 bg-green-100 text-green-700" : "border-[var(--border)] bg-white text-[var(--bg-dark)]"}`}
+        >
+          Green flag
+        </button>
+      </div>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={2}
+        placeholder="What happened? (required)"
+        className="mt-2 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
+      />
+      <button onClick={submit} disabled={busy || !description.trim()} className="btn btn-gold-outline mt-2 text-xs px-4 py-2 disabled:opacity-50">
+        {busy ? "Submitting…" : "Submit flag"}
+      </button>
+      {toast && <p className="mt-2 text-sm text-[var(--gold-deep)]">{toast}</p>}
     </div>
   );
 }
