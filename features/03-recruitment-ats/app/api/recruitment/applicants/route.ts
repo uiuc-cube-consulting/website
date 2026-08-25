@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getAssignments, getSnapshot } from "@/features/03-recruitment-ats/lib/store";
 import { aggregate, funnel, type Review } from "@/features/03-recruitment-ats/lib/types";
 import { canAccessRecruiting, isExec } from "@/features/03-recruitment-ats/lib/access";
+import { computeCoverage, summarizeCoverage } from "@/features/03-recruitment-ats/lib/assignment";
 
 // Auth-gated reviewer feed. Returns per-applicant aggregates (mean, spread,
 // per-criterion) plus the CURRENT reviewer's own review — never other reviewers'
@@ -30,8 +31,19 @@ export async function GET() {
       assignments.filter((a) => a.reviewer_email.toLowerCase() === email).map((a) => a.applicant_id)
     );
 
+    // Coverage is folded into the same payload rather than fetched separately:
+    // this route already has all three inputs, and the dashboard needs the gap
+    // shown next to the candidate it belongs to.
+    const coverage = computeCoverage(
+      applicants.map((a) => ({ id: a.id, name: a.name, email: a.email, stage: a.stage })),
+      assignments,
+      reviews
+    );
+    const coverageById = new Map(coverage.map((c) => [c.applicant_id, c]));
+
     const rows = applicants.map((a) => {
       const agg = aggregate(a, reviews);
+      const cov = coverageById.get(a.id);
       const myReview: Review | undefined = reviews.find(
         (r) => r.applicant_id === a.id && r.reviewer_email.toLowerCase() === email
       );
@@ -39,6 +51,11 @@ export async function GET() {
         ...agg,
         hasReviewed: Boolean(myReview),
         assignedToMe: mine.has(a.id),
+        assignedReviewers: cov?.assigned ?? [],
+        reviewedBy: cov?.reviewed ?? [],
+        outstanding: cov?.outstanding ?? [],
+        underAssigned: cov?.underAssigned ?? true,
+        underReviewed: cov?.underReviewed ?? true,
         myReview: myReview ? { scores: myReview.scores, notes: myReview.notes ?? "" } : null,
         flags: flags.filter((f) => f.applicant_id === a.id),
       };
@@ -57,6 +74,7 @@ export async function GET() {
       progress,
       hasAssignments: assignments.length > 0,
       canManage: isExec(role),
+      coverage: summarizeCoverage(coverage.filter((c) => !["rejected", "withdrawn", "accepted"].includes(c.stage))),
     });
   } catch (err) {
     return NextResponse.json(

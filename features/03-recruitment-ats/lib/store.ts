@@ -18,6 +18,13 @@ import {
 // Members who can be assigned as recruitment reviewers (matches proxy.ts).
 // Canonical list lives in ./access.ts so the gate and the pool can never diverge.
 import { RECRUITING_ROLES } from "./access";
+import {
+  computeCoverage,
+  validateReassignment,
+  MIN_REVIEWERS_PER_APPLICANT,
+  type Coverage,
+  type ReassignInput,
+} from "./assignment";
 const REVIEWER_ROLES = [...RECRUITING_ROLES];
 // Applicant stages that no longer need review.
 const TERMINAL_STAGES = ["rejected", "withdrawn", "accepted"];
@@ -266,3 +273,105 @@ export async function importApplicants(rows: ImportRow[]): Promise<ImportResult>
   }
   return { ok: true, inserted: toInsert.length, skipped: rows.length - toInsert.length };
 }
+
+// ── Coverage + manual reassignment (exec) ────────────────────────────────────
+
+export type CoverageResult =
+  | { ok: true; demo?: boolean; rows: Coverage[] }
+  | { ok: false; error: string };
+
+/**
+ * Live reviewer coverage for every ACTIVE applicant. Computed from the tables
+ * rather than inferred from the last assignment run, because the two drift the
+ * moment an applicant arrives late or a reviewer goes quiet.
+ */
+export async function getCoverage(): Promise<CoverageResult> {
+  const sb = db();
+  if (!sb) return { ok: true, demo: true, rows: [] };
+
+  const [appsRes, assignsRes, reviewsRes] = await Promise.all([
+    sb.from("applicants").select("id, name, email, stage"),
+    sb.from("assignments").select("applicant_id, reviewer_email"),
+    sb.from("reviews").select("applicant_id, reviewer_email, kind"),
+  ]);
+  if (appsRes.error) return { ok: false, error: appsRes.error.message };
+  if (assignsRes.error) return { ok: false, error: assignsRes.error.message };
+  if (reviewsRes.error) return { ok: false, error: reviewsRes.error.message };
+
+  const active = (appsRes.data ?? []).filter((a) => !TERMINAL_STAGES.includes(a.stage));
+  return {
+    ok: true,
+    rows: computeCoverage(
+      active as { id: string; name: string; email: string; stage: string }[],
+      (assignsRes.data ?? []) as Assignment[],
+      (reviewsRes.data ?? []) as unknown as Review[]
+    ),
+  };
+}
+
+export type ReassignResult =
+  | { ok: true; assigned: string[] }
+  | { ok: false; demo: true }
+  | { ok: false; error: string };
+
+/**
+ * Exec reroutes a single candidate's reviewers: add, remove, or swap one out for
+ * another. This is the delibs-day escape hatch — someone is absent, and the
+ * candidate needs an eye on them now.
+ *
+ * Validation is shared with the client (lib/assignment.ts) so the UI refuses the
+ * same things the API does, but it is re-run here against freshly read state:
+ * the browser's copy of who is assigned can be minutes stale, and two execs
+ * rerouting at once would otherwise race.
+ */
+export async function reassignReviewer(input: ReassignInput): Promise<ReassignResult> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+
+  const { data: applicant, error: aErr } = await sb
+    .from("applicants")
+    .select("id, email")
+    .eq("id", input.applicant_id)
+    .single();
+  if (aErr || !applicant) return { ok: false, error: "Unknown applicant." };
+
+  const { data: current, error: cErr } = await sb
+    .from("assignments")
+    .select("reviewer_email")
+    .eq("applicant_id", input.applicant_id);
+  if (cErr) return { ok: false, error: cErr.message };
+  const assignees = (current ?? []).map((r) => String(r.reviewer_email));
+
+  const pool = (await getReviewerPool()).map((p) => p.email);
+  const check = validateReassignment(input, applicant as { id: string; email: string }, assignees, pool);
+  if (!check.ok) return { ok: false, error: check.error };
+
+  const to = input.to?.toLowerCase();
+  const from = input.from?.toLowerCase();
+
+  if (input.action === "remove" || input.action === "swap") {
+    const { error } = await sb
+      .from("assignments")
+      .delete()
+      .eq("applicant_id", input.applicant_id)
+      .ilike("reviewer_email", from!);
+    if (error) return { ok: false, error: error.message };
+  }
+  if (input.action === "add" || input.action === "swap") {
+    const { error } = await sb
+      .from("assignments")
+      .upsert(
+        { applicant_id: input.applicant_id, reviewer_email: to! },
+        { onConflict: "applicant_id,reviewer_email" }
+      );
+    if (error) return { ok: false, error: error.message };
+  }
+
+  const { data: after } = await sb
+    .from("assignments")
+    .select("reviewer_email")
+    .eq("applicant_id", input.applicant_id);
+  return { ok: true, assigned: (after ?? []).map((r) => String(r.reviewer_email)).sort() };
+}
+
+export { MIN_REVIEWERS_PER_APPLICANT };

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { RecruitingDashboard } from "@/features/03-recruitment-ats/components/RecruitingDashboard";
+import { RecruitingTabs } from "@/features/03-recruitment-ats/components/RecruitingTabs";
+import { isExec } from "@/features/03-recruitment-ats/lib/access";
 
 export const metadata: Metadata = {
   title: "Recruiting",
@@ -24,8 +26,12 @@ export default async function RecruitingPage() {
           disagree or coverage is thin. Your scores stay yours until you submit.
         </p>
       </div>
+      {/* Exec gets a second surface: the final-decision queue, where both
+          reviewers' verdicts are unblinded. Everyone else sees only the review
+          dashboard, so the screen stays blind. The exec check is repeated in the
+          API — this only decides what is rendered. */}
       <div className="mt-8">
-        <RecruitingDashboard />
+        {isExec(session.user.role) ? <RecruitingTabs /> : <RecruitingDashboard />}
       </div>
     </div>
   );

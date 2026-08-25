@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { assignReviewers } from "@/features/03-recruitment-ats/lib/store";
+import { MIN_REVIEWERS_PER_APPLICANT } from "@/features/03-recruitment-ats/lib/assignment";
 
 // Exec-only: randomly + evenly assign k reviewers to every active applicant.
 
@@ -17,7 +18,10 @@ export async function POST(req: NextRequest) {
   } catch {
     /* default k */
   }
-  const k = Math.max(1, Math.min(5, Number(body.k) || 2));
+  // Floor is MIN_REVIEWERS_PER_APPLICANT, not 1. Every written application gets at
+  // least two independent reads — one reviewer produces a mean with no spread,
+  // which reads as consensus and hides a miscalibrated scorer.
+  const k = Math.max(MIN_REVIEWERS_PER_APPLICANT, Math.min(5, Number(body.k) || MIN_REVIEWERS_PER_APPLICANT));
 
   const result = await assignReviewers(k);
   if (result.demo) {

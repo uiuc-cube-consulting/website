@@ -28,6 +28,19 @@ type Row = {
   assignedToMe: boolean;
   myReview: { scores: Scores; notes: string } | null;
   flags: { id: string; color: "red" | "green"; description: string; submitter_email: string }[];
+  assignedReviewers: string[];
+  reviewedBy: string[];
+  outstanding: string[];
+  underAssigned: boolean;
+  underReviewed: boolean;
+};
+
+type CoverageSummary = {
+  total: number;
+  fullyAssigned: number;
+  fullyReviewed: number;
+  underAssigned: { applicant_id: string; name: string; assigned: string[] }[];
+  underReviewed: { applicant_id: string; name: string; reviewed: string[] }[];
 };
 
 type ApiResponse = {
@@ -38,7 +51,11 @@ type ApiResponse = {
   progress: { assigned: number; reviewed: number; pending: number };
   hasAssignments: boolean;
   canManage: boolean;
+  coverage: CoverageSummary;
 };
+
+/** Kept in step with MIN_REVIEWERS_PER_APPLICANT in lib/assignment.ts. */
+const MIN_REVIEWERS = 2;
 
 const STAGE_LABEL: Record<string, string> = {
   applied: "Applied", screened: "Screened", interview: "Interview",
@@ -167,6 +184,58 @@ export function RecruitingDashboard() {
             </button>
           </div>
           {notice && <span className="text-sm text-[var(--gold-deep)]">{notice}</span>}
+        </div>
+      )}
+
+      {/* Coverage: who is short of the two-reviewer minimum. Shown to every
+          reviewer, not just exec — the fastest way to close a gap is for the
+          people who owe reviews to see that they owe them. */}
+      {data.coverage && (data.coverage.underAssigned.length > 0 || data.coverage.underReviewed.length > 0) && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <p className="text-sm font-semibold text-amber-900">
+            Written applications need {MIN_REVIEWERS} independent reads
+          </p>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {data.coverage.underAssigned.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-amber-800">
+                  {data.coverage.underAssigned.length} short of {MIN_REVIEWERS} reviewers assigned
+                </p>
+                <ul className="mt-1 space-y-0.5 text-xs text-amber-900/80">
+                  {data.coverage.underAssigned.slice(0, 8).map((c) => (
+                    <li key={c.applicant_id}>
+                      {c.name} <span className="opacity-70">({c.assigned.length} assigned)</span>
+                    </li>
+                  ))}
+                  {data.coverage.underAssigned.length > 8 && (
+                    <li className="opacity-70">…and {data.coverage.underAssigned.length - 8} more</li>
+                  )}
+                </ul>
+                {data.canManage && (
+                  <p className="mt-1 text-xs text-amber-800">
+                    Run <span className="font-medium">Assign reviewers</span> to top these up.
+                  </p>
+                )}
+              </div>
+            )}
+            {data.coverage.underReviewed.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-amber-800">
+                  {data.coverage.underReviewed.length} still awaiting {MIN_REVIEWERS} submitted reviews
+                </p>
+                <ul className="mt-1 space-y-0.5 text-xs text-amber-900/80">
+                  {data.coverage.underReviewed.slice(0, 8).map((c) => (
+                    <li key={c.applicant_id}>
+                      {c.name} <span className="opacity-70">({c.reviewed.length} in)</span>
+                    </li>
+                  ))}
+                  {data.coverage.underReviewed.length > 8 && (
+                    <li className="opacity-70">…and {data.coverage.underReviewed.length - 8} more</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -383,6 +452,8 @@ function ReviewPanel({
         {row.hasReviewed ? "Update review" : "Submit review"}
       </button>
 
+      {canManage && <ReroutePanel row={row} onChanged={onChanged} />}
+
       {/* Stage changes are exec-only (see lib/access.ts canDecide). Non-exec
           reviewers score candidates; exec acts on the aggregate. Hiding these
           mirrors the API, which returns 403 for everyone else. */}
@@ -491,6 +562,123 @@ function FlagPanel({
         {busy ? "Submitting…" : "Submit flag"}
       </button>
       {toast && <p className="mt-2 text-sm text-[var(--gold-deep)]">{toast}</p>}
+    </div>
+  );
+}
+
+/**
+ * Exec reroutes one candidate's reviewers.
+ *
+ * The delibs-day case: somebody did not show, and this candidate needs an eye on
+ * them now. Swap replaces a reviewer in one operation, which is why it is offered
+ * as its own action — removing first would trip the two-reviewer minimum for a
+ * change that ends up back where it started.
+ */
+function ReroutePanel({ row, onChanged }: { row: Row; onChanged: () => Promise<void> | void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pool, setPool] = useState<{ email: string; name?: string | null }[]>([]);
+  const [addTo, setAddTo] = useState("");
+  const [swapFrom, setSwapFrom] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/recruitment/reviewers")
+      .then((r) => (r.ok ? r.json() : { reviewers: [] }))
+      .then((j) => { if (alive) setPool(j.reviewers ?? []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  async function send(body: Record<string, unknown>) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/recruitment/assign/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicant_id: row.applicant.id, ...body }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setMsg(`Now assigned: ${j.assigned.join(", ") || "nobody"}`);
+        setAddTo("");
+        setSwapFrom("");
+        await onChanged();
+      } else {
+        setMsg(j.error || j.message || "Could not reroute.");
+      }
+    } catch {
+      setMsg("Could not reroute.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const assigned = row.assignedReviewers ?? [];
+  const done = new Set(row.reviewedBy ?? []);
+  // Never offer someone already on the candidate, or the candidate themselves.
+  const available = pool
+    .map((p) => p.email)
+    .filter((e) => !assigned.includes(e.toLowerCase()) && e.toLowerCase() !== row.applicant.email.toLowerCase());
+
+  return (
+    <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 p-3">
+      <div className="flex items-center justify-between">
+        <p className="eyebrow">Reviewers</p>
+        {row.underAssigned && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+            below {MIN_REVIEWERS}
+          </span>
+        )}
+      </div>
+
+      <ul className="mt-2 space-y-1">
+        {assigned.length === 0 && <li className="text-xs text-[var(--muted)]">Nobody assigned yet.</li>}
+        {assigned.map((email) => (
+          <li key={email} className="flex items-center justify-between gap-2 text-xs">
+            <span className={done.has(email) ? "text-[var(--bg-dark)]" : "text-[var(--muted)]"}>
+              {email} {done.has(email) ? "· reviewed" : "· pending"}
+            </span>
+            <button
+              onClick={() => setSwapFrom(swapFrom === email ? "" : email)}
+              disabled={busy}
+              className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] font-semibold hover:bg-white disabled:opacity-50"
+            >
+              {swapFrom === email ? "cancel" : "replace"}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          value={addTo}
+          onChange={(e) => setAddTo(e.target.value)}
+          className="max-w-full rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs"
+        >
+          <option value="">{swapFrom ? `Replace ${swapFrom} with…` : "Add a reviewer…"}</option>
+          {available.map((e) => <option key={e} value={e}>{e}</option>)}
+        </select>
+        <button
+          onClick={() => send(swapFrom ? { action: "swap", from: swapFrom, to: addTo } : { action: "add", to: addTo })}
+          disabled={busy || !addTo}
+          className="btn btn-gold-outline text-xs px-3 py-1.5 disabled:opacity-50"
+        >
+          {busy ? "Working…" : swapFrom ? "Swap" : "Assign"}
+        </button>
+        {assigned.length > MIN_REVIEWERS && !swapFrom && (
+          <button
+            onClick={() => { const who = assigned[assigned.length - 1]; send({ action: "remove", from: who }); }}
+            disabled={busy}
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] hover:bg-white disabled:opacity-50"
+          >
+            Drop one
+          </button>
+        )}
+      </div>
+
+      {msg && <p className="mt-2 text-xs text-[var(--gold-deep)]">{msg}</p>}
     </div>
   );
 }
