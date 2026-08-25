@@ -265,7 +265,7 @@ export function RecruitingDashboard() {
         <div className="lg:col-span-2">
           {selected ? (
             // key → remounts (and resets local scorer state) when the selection changes.
-            <ReviewPanel key={selected.applicant.id} row={selected} onChanged={reload} />
+            <ReviewPanel key={selected.applicant.id} row={selected} onChanged={reload} canManage={data.canManage} />
           ) : (
             <div className="grid h-full place-items-center rounded-2xl border border-dashed border-[var(--border)] bg-white/60 p-8 text-center text-[var(--muted)]">
               Select an applicant to review.
@@ -277,7 +277,16 @@ export function RecruitingDashboard() {
   );
 }
 
-function ReviewPanel({ row, onChanged }: { row: Row; onChanged: () => Promise<void> | void }) {
+function ReviewPanel({
+  row,
+  onChanged,
+  canManage,
+}: {
+  row: Row;
+  onChanged: () => Promise<void> | void;
+  /** Exec. Gates the stage-decision controls; the API enforces it too. */
+  canManage: boolean;
+}) {
   const a = row.applicant;
   const [scores, setScores] = useState<Partial<Scores>>(row.myReview?.scores ?? {});
   const [notes, setNotes] = useState(row.myReview?.notes ?? "");
@@ -370,20 +379,27 @@ function ReviewPanel({ row, onChanged }: { row: Row; onChanged: () => Promise<vo
         {row.hasReviewed ? "Update review" : "Submit review"}
       </button>
 
-      <hr className="my-4 border-[var(--border)]" />
-      <p className="eyebrow">Decision</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {advance && (
-          <button onClick={() => decide(advance)} disabled={busy} className="btn btn-gold-outline text-xs px-3 py-1.5">
-            Advance → {STAGE_LABEL[advance]}
-          </button>
-        )}
-        {a.stage !== "rejected" && (
-          <button onClick={() => decide("rejected")} disabled={busy} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
-            Reject
-          </button>
-        )}
-      </div>
+      {/* Stage changes are exec-only (see lib/access.ts canDecide). Non-exec
+          reviewers score candidates; exec acts on the aggregate. Hiding these
+          mirrors the API, which returns 403 for everyone else. */}
+      {canManage && (
+        <>
+          <hr className="my-4 border-[var(--border)]" />
+          <p className="eyebrow">Decision</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {advance && (
+              <button onClick={() => decide(advance)} disabled={busy} className="btn btn-gold-outline text-xs px-3 py-1.5">
+                Advance → {STAGE_LABEL[advance]}
+              </button>
+            )}
+            {a.stage !== "rejected" && (
+              <button onClick={() => decide("rejected")} disabled={busy} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
+                Reject
+              </button>
+            )}
+          </div>
+        </>
+      )}
       {toast && <p className="mt-3 text-sm text-[var(--gold-deep)]">{toast}</p>}
     </div>
   );

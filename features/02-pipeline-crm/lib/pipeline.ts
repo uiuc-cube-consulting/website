@@ -107,13 +107,19 @@ export type SessionLike = { user?: { email?: string | null; role?: string } } | 
 export function isExec(session: SessionLike): boolean {
   const role = session?.user?.role;
   if (role) return role === "exec";
+  // No role on the session. This used to fall OPEN ("return true") so the board
+  // was explorable before role-aware auth existed — but role-aware auth landed,
+  // .env.example tells you to leave PIPELINE_EXEC_ALLOWLIST blank, and a session
+  // can legitimately arrive without a role (the jwt callback only loads it on
+  // sign-in, and skips it if the members lookup errors). That combination handed
+  // full pipeline access — client names, contacts, deal stages — to any signed-in
+  // member. Deny instead: an explicit allowlist is the only way in without a role.
   const allow = (process.env.PIPELINE_EXEC_ALLOWLIST || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   const email = session?.user?.email?.toLowerCase();
-  if (allow.length) return Boolean(email && allow.includes(email));
-  return true; // fully unconfigured → open for local dev (board shows demo data)
+  return allow.length > 0 && Boolean(email && allow.includes(email));
 }
 
 // ──────────────────────────────────────────────────────────────────────────

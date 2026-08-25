@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/accountability/remind",
+      "schedule": "0 14 * * 5"
+    }
+  ]
+}

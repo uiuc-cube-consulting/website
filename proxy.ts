@@ -24,6 +24,17 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 
+  // Accountability tracker: exec (all projects) + anyone holding a PM/SC SEAT on
+  // one (their own). Returning members are included because seats drift from
+  // titles — some hold an SC seat without the SC role — and the seat, not the
+  // role, is what actually authorizes every read and write (lib/access.ts,
+  // re-checked in the page and in every route). Someone here without a seat
+  // gets an empty chooser, never anyone's ratings.
+  const accountabilityRoles = ["exec", "project_manager", "senior_consultant", "returning_member"];
+  if (pathname.startsWith("/portal/accountability") && !accountabilityRoles.includes(session.user.role)) {
+    return NextResponse.redirect(new URL("/portal", req.url));
+  }
+
   // Recruitment: exec, PM, SC, returning members only.
   // The routes are /portal/recruiting and /portal/interview — the previous
   // "/portal/recruitment" prefix matched neither, so this gate never fired.

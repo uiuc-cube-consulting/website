@@ -51,6 +51,9 @@ export default async function PortalLayout({
             {isInterviewer && <span aria-hidden className="h-4 w-px bg-white/20" />}
             {isExec && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
             {isExec && <Link href="/portal/strikes" className="nav-link">Strikes</Link>}
+            {/* Accountability follows the project SEAT, not the title — returning members
+                can hold an SC seat, so they get the link too and the page decides. */}
+            {isInterviewer && <Link href="/portal/accountability" className="nav-link">Accountability</Link>}
             {isLeadership && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
             {isInterviewer && <Link href="/portal/interview" className="nav-link">Interviews</Link>}
 

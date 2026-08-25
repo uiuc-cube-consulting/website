@@ -15,7 +15,9 @@ import {
 } from "./types";
 
 // Members who can be assigned as recruitment reviewers (matches proxy.ts).
-const REVIEWER_ROLES = ["exec", "project_manager", "senior_consultant", "returning_member"];
+// Canonical list lives in ./access.ts so the gate and the pool can never diverge.
+import { RECRUITING_ROLES } from "./access";
+const REVIEWER_ROLES = [...RECRUITING_ROLES];
 // Applicant stages that no longer need review.
 const TERMINAL_STAGES = ["rejected", "withdrawn", "accepted"];
 
@@ -82,15 +84,23 @@ export async function submitReview(input: {
 }): Promise<WriteResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
+  // `kind` is part of the conflict target, not decoration. db/interview.sql
+  // DROPPED the original unique (applicant_id, reviewer_email) and replaced it
+  // with (applicant_id, reviewer_email, kind), so a reviewer's case rubric cannot
+  // overwrite their screen. Upserting on the old pair therefore names a
+  // constraint that no longer exists, and Postgres rejects the whole statement
+  // with "no unique or exclusion constraint matching the ON CONFLICT
+  // specification" — which surfaced as every screen review failing to save.
   const { error } = await sb.from("reviews").upsert(
     {
       applicant_id: input.applicant_id,
       reviewer_email: input.reviewer_email,
+      kind: "screen",
       scores: input.scores,
       weighted_total: weightedTotal(input.scores),
       notes: input.notes ?? null,
     },
-    { onConflict: "applicant_id,reviewer_email" }
+    { onConflict: "applicant_id,reviewer_email,kind" }
   );
   if (error) return { ok: false, error: error.message };
   return { ok: true };

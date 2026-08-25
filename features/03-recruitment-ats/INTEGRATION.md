@@ -137,6 +137,44 @@ resume — rename in Drive and re-run.
 - `aggregate()` in `lib/types.ts` now filters to `kind = 'screen'`, so interview scores can't
   silently distort the application-screen means on `/portal/recruiting`.
 
+## Permissions
+
+Authorization lives in **`lib/access.ts`** — one set of predicates, imported by
+every route and by the UI so the interface never offers an action the API refuses.
+
+| Surface | exec | PM | Senior Consultant | returning_member | member |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Read applicant pool (`GET /applicants`) | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Submit screen review (`POST /reviews`) | ✅ | assigned | assigned | assigned | ❌ |
+| Interview board / rubric / resume | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Write case + behavioral rubric | ✅ | on panel | on panel | on panel | ❌ |
+| Change applicant stage (`POST /decisions`) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Import, assign, set panel, sync, provision | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**The rule:** `proxy.ts` gating is a redirect, not a boundary. Anyone can call an
+API route directly, so every route re-checks the role itself. Three routes did not,
+and were fixed:
+
+- `GET /applicants` checked only "is signed in", so a plain `member` — redirected
+  away from `/portal/recruiting` — could still read every candidate's name, email
+  and essay answers straight from the API.
+- `POST /reviews` had the same hole, and `REVIEWER_ROLES` in `store.ts` was used
+  only to *list* the reviewer pool, never to gate a write. It now also enforces
+  **assignment**, so the random even spread from `planAssignments` is a real
+  constraint rather than a suggestion — matching how the interview rubric has
+  always enforced panel membership.
+- `POST /decisions` let any signed-in member advance or reject a candidate. Now
+  exec-only, and the UI buttons are hidden accordingly.
+
+A fourth, in feature 02: `isExec()` in `features/02-pipeline-crm/lib/pipeline.ts`
+ended with `return true` for a session carrying no role. Since `.env.example`
+instructs you to leave `PIPELINE_EXEC_ALLOWLIST` blank, and the `jwt` callback
+loads the role only on sign-in (skipping it if the members lookup errors), that
+handed the whole client pipeline to any signed-in member. It now fails closed.
+
+`__tests__/recruitment/permissions*.test.ts` drives every route once per role and
+asserts both halves — who gets in, and who is refused before any side effect runs.
+
 ## Candidate Drive folders (built)
 
 Recruiting intake runs through a Google Form whose responses land in a sheet, with each

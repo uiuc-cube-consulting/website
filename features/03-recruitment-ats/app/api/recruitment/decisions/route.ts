@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { setDecision } from "@/features/03-recruitment-ats/lib/store";
 import { STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
+import { canDecide } from "@/features/03-recruitment-ats/lib/access";
 
-// Auth-gated: move an applicant to a new stage (advance / reject / etc.).
+// EXEC-ONLY: move an applicant to a new stage (advance / reject / etc.).
+// Narrower than reviewing on purpose — a rejection reaches a real person, so it
+// sits with the same people who control import and reviewer assignment.
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +16,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canDecide(session?.user?.role)) {
+    return NextResponse.json({ ok: false, error: "Exec only" }, { status: 403 });
+  }
 
   let body: { applicant_id?: string; stage?: string; note?: string };
   try {

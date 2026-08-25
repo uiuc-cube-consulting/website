@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAssignments, getSnapshot } from "@/features/03-recruitment-ats/lib/store";
 import { aggregate, funnel, type Review } from "@/features/03-recruitment-ats/lib/types";
+import { canAccessRecruiting, isExec } from "@/features/03-recruitment-ats/lib/access";
 
 // Auth-gated reviewer feed. Returns per-applicant aggregates (mean, spread,
 // per-criterion) plus the CURRENT reviewer's own review — never other reviewers'
@@ -15,6 +16,12 @@ export async function GET() {
   const email = session?.user?.email?.toLowerCase();
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = session?.user?.role;
+  // proxy.ts keeps a plain member off /portal/recruiting, but that is a redirect,
+  // not a boundary — this feed carries applicant names, emails and essay answers,
+  // so the role is re-checked here where it actually matters.
+  if (!canAccessRecruiting(role)) {
+    return NextResponse.json({ error: "Recruiting access required" }, { status: 403 });
+  }
 
   try {
     const { applicants, reviews, demo } = await getSnapshot();
@@ -48,7 +55,7 @@ export async function GET() {
       reviewer: email,
       progress,
       hasAssignments: assignments.length > 0,
-      canManage: role === "exec",
+      canManage: isExec(role),
     });
   } catch (err) {
     return NextResponse.json(
