@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { PipelineBoard } from "@/features/02-pipeline-crm/components/PipelineBoard";
+import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 
 export const metadata: Metadata = {
   title: "Pipeline",
@@ -9,6 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default async function PipelinePage() {
+  // Switched off in features/02-pipeline-crm/lib/enabled.ts. Checked here as well
+  // as in proxy.ts so the page cannot render if the proxy matcher ever changes.
+  if (!PIPELINE_ENABLED) redirect("/portal");
+
   const session = await auth();
   if (!session?.user?.email) redirect("/portal/sign-in");
 

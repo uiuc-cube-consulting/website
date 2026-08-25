@@ -3,6 +3,7 @@
 // request handler — re-export it under the expected name.
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 // export { auth as proxy } from "@/types/auth";
 
 export default auth((req) => {
@@ -32,6 +33,13 @@ export default auth((req) => {
   // gets an empty chooser, never anyone's ratings.
   const accountabilityRoles = ["exec", "project_manager", "senior_consultant", "returning_member"];
   if (pathname.startsWith("/portal/accountability") && !accountabilityRoles.includes(session.user.role)) {
+    return NextResponse.redirect(new URL("/portal", req.url));
+  }
+
+  // Pipeline CRM is switched off (features/02-pipeline-crm/lib/enabled.ts). The
+  // code and its API routes remain; only the portal entry point is closed, so a
+  // stale bookmark lands on the dashboard rather than a 404.
+  if (!PIPELINE_ENABLED && pathname.startsWith("/portal/pipeline")) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 

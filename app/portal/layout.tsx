@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
+import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 
 export const metadata: Metadata = {
   title: "Member Portal",
@@ -49,7 +50,7 @@ export default async function PortalLayout({
 
             {/* Leadership tools — grouped, shown only to the roles that can use them. */}
             {isInterviewer && <span aria-hidden className="h-4 w-px bg-white/20" />}
-            {isExec && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
+            {isExec && PIPELINE_ENABLED && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
             {isExec && <Link href="/portal/strikes" className="nav-link">Strikes</Link>}
             {/* Accountability follows the project SEAT, not the title — returning members
                 can hold an SC seat, so they get the link too and the page decides. */}
