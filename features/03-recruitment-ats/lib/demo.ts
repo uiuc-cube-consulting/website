@@ -1,7 +1,7 @@
 // Demo applicants + reviews, used until Supabase is configured so the console and
 // analytics are explorable. Fictional people. Reviews use the rubric in types.ts.
 
-import { weightedTotal, type Applicant, type Review, type Scores } from "./types";
+import { weightedTotal, type Applicant, type Flag, type Review, type Scores } from "./types";
 
 export const DEMO_APPLICANTS: Applicant[] = [
   { id: "a1", created_at: "2026-09-02T15:00:00Z", name: "Jordan Ellis", email: "jellis@illinois.edu", year: "Sophomore", major: "Industrial Engineering", college: "Grainger", responses: { why: "I want client-facing problem-solving reps.", proud: "Led a 6-person FSAE subteam." }, stage: "interview" },
@@ -40,4 +40,9 @@ export const DEMO_REVIEWS: Review[] = [
   review("a6", "sujan@cubeconsulting.org", { problem_solving: 4, communication: 5, drive: 5, fit: 5 }, "Great energy.", 2),
   review("a7", "isabella@cubeconsulting.org", { problem_solving: 2, communication: 3, drive: 2, fit: 3 }, "Not a fit this cycle.", 1),
   review("a7", "neha@cubeconsulting.org", { problem_solving: 3, communication: 2, drive: 2, fit: 2 }, "Agree, pass.", 2),
+];
+
+export const DEMO_FLAGS: Flag[] = [
+  { id: "f-a1-1", created_at: "2026-09-06T01:00:00Z", applicant_id: "a1", submitter_email: "sujan@cubeconsulting.org", color: "green", description: "Followed up personally with every teammate after the info session." },
+  { id: "f-a3-1", created_at: "2026-09-06T02:00:00Z", applicant_id: "a3", submitter_email: "neha@cubeconsulting.org", color: "red", description: "Showed up 20 minutes late to the coffee chat with no heads-up." },
 ];

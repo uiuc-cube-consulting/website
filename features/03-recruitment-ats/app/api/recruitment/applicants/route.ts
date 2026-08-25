@@ -24,7 +24,7 @@ export async function GET() {
   }
 
   try {
-    const { applicants, reviews, demo } = await getSnapshot();
+    const { applicants, reviews, flags, demo } = await getSnapshot();
     const assignments = await getAssignments();
     const mine = new Set(
       assignments.filter((a) => a.reviewer_email.toLowerCase() === email).map((a) => a.applicant_id)
@@ -40,6 +40,7 @@ export async function GET() {
         hasReviewed: Boolean(myReview),
         assignedToMe: mine.has(a.id),
         myReview: myReview ? { scores: myReview.scores, notes: myReview.notes ?? "" } : null,
+        flags: flags.filter((f) => f.applicant_id === a.id),
       };
     });
 
