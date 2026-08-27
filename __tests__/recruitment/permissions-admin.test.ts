@@ -151,7 +151,9 @@ describe("tier invariants", () => {
     expect(INTERVIEWERS.length).toBeGreaterThan(EXEC_ONLY.length);
   });
 
-  it("a plain member reaches no recruiting surface at all", () => {
+  it("a plain member is excluded from every STAFF surface (assign, decide, review, interview)", () => {
+    // Viewing (applicants pool, coverage, flags) is club-wide and covered
+    // separately below — these two lists are the reviewer/interviewer pool only.
     expect(EXEC_ONLY).not.toContain("member");
     expect(INTERVIEWERS).not.toContain("member");
   });
@@ -167,13 +169,13 @@ describe("exec-only: reviewer pool (reroute picker)", () => {
   });
 });
 
-describe("interviewer tier: GET /api/recruitment/coverage", () => {
+describe("club-wide: GET /api/recruitment/coverage", () => {
   it.each(ROLES)("%s", async (role) => {
     signInAs(role);
     const res = await coverageGET();
-    // Deliberately wider than exec: the quickest way to close a coverage gap is
-    // for the people who owe reviews to see that they owe them.
-    expect(res.status).toBe(INTERVIEWERS.includes(role) ? 200 : 403);
+    // Every member — not just recruiting staff — can see coverage now: viewing
+    // the applicant pool is club-wide, same boundary as canAccessRecruiting.
+    expect(res.status).toBe(200);
   });
 
   it("signed out", async () => {

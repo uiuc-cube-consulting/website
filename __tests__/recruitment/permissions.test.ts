@@ -86,21 +86,30 @@ beforeEach(() => {
 
 /** Roles expected to be ALLOWED, per surface. Everything else must be refused. */
 const EXPECTED: Record<string, Role[]> = {
-  "read the applicant pool": ["exec", "project_manager", "senior_consultant", "returning_member"],
+  // Every member can view the applicant pool, look applicants up, and flag them
+  // — club-wide transparency. Scoring, assignment, and decisions stay narrower.
+  "read the applicant pool": [
+    "exec",
+    "project_manager",
+    "senior_consultant",
+    "returning_member",
+    "member",
+  ],
   "submit a screen review": ["exec", "project_manager", "senior_consultant", "returning_member"],
   "change an applicant's stage": ["exec"],
 };
 
 describe("access predicates", () => {
-  it("recruiting roles are exactly the four non-member roles", () => {
+  it("recruiting STAFF roles (reviewer/interviewer pool) are exactly the four non-member roles", () => {
     expect([...RECRUITING_ROLES]).toEqual([
       "exec",
       "project_manager",
       "senior_consultant",
       "returning_member",
     ]);
-    // A plain member is deliberately excluded — this is the PII boundary.
-    expect(canAccessRecruiting("member")).toBe(false);
+    // Viewing, however, is club-wide: a plain member CAN read the applicant pool
+    // and flag it, just not review, assign, or decide.
+    expect(canAccessRecruiting("member")).toBe(true);
   });
 
   it("isExec is true for exec alone", () => {
