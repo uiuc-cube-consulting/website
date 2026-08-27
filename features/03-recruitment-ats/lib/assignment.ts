@@ -29,6 +29,49 @@ import { isScreenReview } from "./types";
  */
 export const MIN_REVIEWERS_PER_APPLICANT = 2;
 
+/**
+ * Resolve the reviewer pool a run should actually use.
+ *
+ * Pure so the picker in the UI and the route enforce the SAME rule: the warning
+ * exec sees before pressing the button is produced by the function that decides
+ * whether the press is accepted.
+ *
+ * `selected` of null/empty means "not narrowed" → the whole eligible pool.
+ * Anything selected that is not in the pool is reported in `ignored` rather than
+ * assigned: an arbitrary email would otherwise become a live assignment row for
+ * someone who cannot sign in to act on it, producing a review that never
+ * arrives — the exact failure coverage exists to catch.
+ */
+export function resolveReviewerPool(
+  poolEmails: string[],
+  selected: string[] | undefined | null,
+  k: number
+): { emails: string[]; ignored: string[]; error?: string } {
+  const eligible = new Map(poolEmails.map((e) => [e.toLowerCase(), e]));
+
+  if (!selected || selected.length === 0) {
+    return { emails: [...eligible.values()], ignored: [] };
+  }
+
+  const wanted = [...new Set(selected.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  const emails = wanted.filter((e) => eligible.has(e)).map((e) => eligible.get(e)!);
+  const ignored = wanted.filter((e) => !eligible.has(e));
+
+  if (emails.length === 0) {
+    return { emails, ignored, error: "None of the selected people are in the reviewer pool." };
+  }
+  // Fewer reviewers than reads-per-application cannot deliver the two-independent
+  // -reads guarantee; it would quietly produce single-reviewer applicants.
+  if (emails.length < k) {
+    return {
+      emails,
+      ignored,
+      error: `Only ${emails.length} reviewer${emails.length === 1 ? "" : "s"} selected, but each application needs ${k} independent reads. Select at least ${k}.`,
+    };
+  }
+  return { emails, ignored };
+}
+
 export type Coverage = {
   applicant_id: string;
   name: string;

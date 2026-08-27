@@ -8,6 +8,10 @@ import {
   type Scores,
   type Stage,
 } from "@/features/03-recruitment-ats/lib/types";
+import {
+  MIN_REVIEWERS_PER_APPLICANT,
+  resolveReviewerPool,
+} from "@/features/03-recruitment-ats/lib/assignment";
 
 type Row = {
   applicant: {
@@ -54,8 +58,9 @@ type ApiResponse = {
   coverage: CoverageSummary;
 };
 
-/** Kept in step with MIN_REVIEWERS_PER_APPLICANT in lib/assignment.ts. */
-const MIN_REVIEWERS = 2;
+// Imported, not re-declared: this was previously a hand-kept copy of
+// MIN_REVIEWERS_PER_APPLICANT, and lib/assignment.ts is pure and safe here.
+const MIN_REVIEWERS = MIN_REVIEWERS_PER_APPLICANT;
 
 const STAGE_LABEL: Record<string, string> = {
   applied: "Applied", screened: "Screened", interview: "Interview",
@@ -75,6 +80,13 @@ export function RecruitingDashboard() {
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [importUrl, setImportUrl] = useState("");
+  // Reviewer pool picker (exec only). `selectedReviewers === null` means "not
+  // narrowed" → the whole eligible pool, which is the default and the original
+  // behaviour. An empty Set is a real, deliberate state (everyone unticked) and
+  // must stay distinguishable from it.
+  const [pool, setPool] = useState<{ email: string; name?: string | null }[] | null>(null);
+  const [selectedReviewers, setSelectedReviewers] = useState<Set<string> | null>(null);
+  const [poolOpen, setPoolOpen] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -93,19 +105,66 @@ export function RecruitingDashboard() {
     })();
   }, [reload]);
 
+  // The reviewer roster, for the exec-only picker. Endpoint is exec-gated, so
+  // this is only fetched when the exec controls are actually shown.
+  const canManage = data?.canManage ?? false;
+  useEffect(() => {
+    if (!canManage || pool !== null) return;
+    let alive = true;
+    fetch("/api/recruitment/reviewers")
+      .then((r) => (r.ok ? r.json() : { reviewers: [] }))
+      .then((j) => { if (alive) setPool(j.reviewers ?? []); })
+      .catch(() => { if (alive) setPool([]); });
+    return () => { alive = false; };
+  }, [canManage, pool]);
+
+  // One validation for both the warning and the button's disabled state.
+  //
+  // The empty-Set case is called out explicitly: `resolveReviewerPool` treats an
+  // empty list as "not narrowed" (correct on the wire, where the client omits
+  // the field entirely), so submitting a literal [] would assign to the WHOLE
+  // pool — the exact opposite of unticking everyone. It never reaches the
+  // server: the button is disabled and assignReviewers() refuses.
+  const poolError: string | undefined =
+    selectedReviewers === null
+      ? undefined
+      : selectedReviewers.size === 0
+        ? `Nobody is ticked. Select at least ${MIN_REVIEWERS} reviewers, or press All.`
+        : resolveReviewerPool(
+            (pool ?? []).map((p) => p.email),
+            [...selectedReviewers],
+            MIN_REVIEWERS
+          ).error;
+
   // Exec-only: randomly assign reviewers across all active applicants.
   async function assignReviewers() {
+    if (poolError) {
+      setNotice(poolError);
+      return;
+    }
     setManaging(true);
     setNotice(null);
     try {
       const r = await fetch("/api/recruitment/assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ k: 2 }),
+        body: JSON.stringify({
+          k: 2,
+          // Omitted entirely when not narrowed, so the server keeps its
+          // whole-pool default rather than receiving a list that happens to
+          // contain everyone. `.size > 0` matters: an empty Set is truthy, and
+          // sending [] would read as "not narrowed" and assign to everyone.
+          ...(selectedReviewers && selectedReviewers.size > 0
+            ? { reviewer_emails: [...selectedReviewers] }
+            : {}),
+        }),
       });
       const j = await r.json();
       if (j.ok) {
-        setNotice(`Assigned ${j.assigned} review slots across ${j.applicants} applicants (${j.reviewers} reviewers).`);
+        const dropped = j.ignored?.length ? ` ${j.ignored.length} ignored (not in the pool).` : "";
+        setNotice(
+          `Assigned ${j.assigned} review slots across ${j.applicants} applicants (${j.reviewers} reviewers).${dropped}`
+        );
         await reload();
       } else setNotice(j.message || j.error || "Could not assign reviewers.");
     } finally {
@@ -169,8 +228,24 @@ export function RecruitingDashboard() {
       {/* Exec controls: import applicants from a sheet + randomly assign reviewers */}
       {data.canManage && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
-          <button onClick={assignReviewers} disabled={managing} className="btn btn-gold text-xs px-4 py-2 disabled:opacity-50">
-            {managing ? "Working…" : "Assign reviewers (random)"}
+          <button
+            onClick={assignReviewers}
+            disabled={managing || Boolean(poolError)}
+            title={poolError}
+            className="btn btn-gold text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {managing
+              ? "Working…"
+              : selectedReviewers
+                ? `Assign reviewers (${selectedReviewers.size} selected)`
+                : "Assign reviewers (random)"}
+          </button>
+          <button
+            onClick={() => setPoolOpen((o) => !o)}
+            className="btn btn-gold-outline text-xs px-4 py-2"
+            aria-expanded={poolOpen}
+          >
+            {poolOpen ? "Hide reviewers" : "Choose reviewers"}
           </button>
           <div className="flex items-center gap-2">
             <input
@@ -184,6 +259,15 @@ export function RecruitingDashboard() {
             </button>
           </div>
           {notice && <span className="text-sm text-[var(--gold-deep)]">{notice}</span>}
+
+          {poolOpen && (
+            <ReviewerPoolPicker
+              pool={pool}
+              selected={selectedReviewers}
+              onChange={setSelectedReviewers}
+              error={poolError}
+            />
+          )}
         </div>
       )}
 
@@ -679,6 +763,110 @@ function ReroutePanel({ row, onChanged }: { row: Row; onChanged: () => Promise<v
       </div>
 
       {msg && <p className="mt-2 text-xs text-[var(--gold-deep)]">{msg}</p>}
+    </div>
+  );
+}
+
+/**
+ * Exec picks who is actually reviewing this cycle before the random spread runs.
+ *
+ * The eligible pool is everyone with a reviewer role, but in practice a chunk of
+ * them are studying abroad, graduating, or simply not doing this round. Spreading
+ * applications onto those people strands the reads: the applicant looks covered,
+ * two names sit against them, and neither review ever arrives. Unticking them up
+ * front is the difference between a queue that closes and one that has to be
+ * repaired by hand during delibs.
+ *
+ * Default is "not narrowed" (`selected === null`) — the whole pool, unchanged
+ * behaviour — rather than a pre-ticked list, so exec has to make the choice
+ * deliberately and cannot silently inherit last cycle's absentees.
+ */
+function ReviewerPoolPicker({
+  pool,
+  selected,
+  onChange,
+  error,
+}: {
+  pool: { email: string; name?: string | null }[] | null;
+  selected: Set<string> | null;
+  onChange: (next: Set<string> | null) => void;
+  /** Validation from the parent — the same value that disables the run button. */
+  error?: string;
+}) {
+  if (pool === null) {
+    return <p className="w-full text-xs text-[var(--muted)]">Loading reviewers…</p>;
+  }
+  if (pool.length === 0) {
+    return (
+      <p className="w-full text-xs text-[var(--muted)]">
+        No eligible reviewers. Seed members with a reviewer role first.
+      </p>
+    );
+  }
+
+  // `null` renders as all-ticked: it means the run will use everyone.
+  const isOn = (email: string) => (selected === null ? true : selected.has(email));
+  const count = selected === null ? pool.length : selected.size;
+
+
+  function toggle(email: string) {
+    const base = selected === null ? new Set(pool!.map((p) => p.email)) : new Set(selected);
+    if (base.has(email)) base.delete(email);
+    else base.add(email);
+    // Back to the full pool → drop the narrowing entirely, so the request omits
+    // reviewer_emails and the server applies its own default.
+    onChange(base.size === pool!.length ? null : base);
+  }
+
+  return (
+    <div className="w-full mt-1 rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <p className="text-xs font-semibold text-[var(--bg-dark)]">
+          Reviewing this cycle
+          <span className="ml-2 font-normal text-[var(--muted)]">
+            {count} of {pool.length} selected
+          </span>
+        </p>
+        <div className="flex items-center gap-3 text-xs">
+          <button onClick={() => onChange(null)} className="underline text-[var(--muted)] hover:text-[var(--bg-dark)]">
+            All
+          </button>
+          <button
+            onClick={() => onChange(new Set())}
+            className="underline text-[var(--muted)] hover:text-[var(--bg-dark)]"
+          >
+            None
+          </button>
+        </div>
+      </div>
+
+      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 max-h-64 overflow-y-auto">
+        {pool.map((r) => (
+          <li key={r.email}>
+            <label className="flex items-center gap-2 py-1 cursor-pointer text-[13px] text-[var(--bg-dark)]">
+              <input
+                type="checkbox"
+                checked={isOn(r.email)}
+                onChange={() => toggle(r.email)}
+                className="accent-[var(--gold-deep)] w-3.5 h-3.5 shrink-0"
+              />
+              <span className="truncate" title={r.email}>
+                {r.name || r.email}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+
+      {/* Passed down from the parent, which derives it from the same function the
+          route enforces with — so this warning, the disabled button, and the
+          server's refusal can never disagree. */}
+      {error && <p className="mt-2 text-xs text-amber-800">{error}</p>}
+      {selected === null && !error && (
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Everyone is included. Untick anyone who isn&rsquo;t reviewing this cycle.
+        </p>
+      )}
     </div>
   );
 }
