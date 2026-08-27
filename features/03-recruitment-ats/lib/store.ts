@@ -20,6 +20,7 @@ import {
 import { RECRUITING_ROLES } from "./access";
 import {
   computeCoverage,
+  resolveReviewerPool,
   validateReassignment,
   MIN_REVIEWERS_PER_APPLICANT,
   type Coverage,
@@ -191,11 +192,28 @@ export type AssignResult = {
   error?: string;
   assigned?: number; // new assignment rows created
   applicants?: number; // active applicants considered
-  reviewers?: number; // reviewer pool size
+  reviewers?: number; // reviewer pool size actually used
+  /** Submitted emails dropped because they aren't in the reviewer pool. */
+  ignored?: string[];
 };
 
 /** Randomly + evenly assign k reviewers to every active applicant (top-up aware). */
-export async function assignReviewers(k = 2): Promise<AssignResult> {
+/**
+ * Randomly and evenly assign k reviewers to every active applicant.
+ *
+ * `selected` narrows the pool to the people exec actually ticked — for the
+ * common case where several of the eligible roster are away, graduated, or
+ * simply not doing this cycle, and spreading applications onto them would strand
+ * those reads. Omitted (or empty) means the whole eligible pool, which is the
+ * original behaviour.
+ *
+ * The submitted list is INTERSECTED with the real pool rather than trusted. The
+ * route is exec-only, but an arbitrary email would otherwise become a live
+ * assignment row for somebody who cannot sign in to act on it — a review that
+ * silently never arrives, which is exactly the failure coverage exists to catch.
+ * Anything dropped is reported back rather than ignored.
+ */
+export async function assignReviewers(k = 2, selected?: string[]): Promise<AssignResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
@@ -204,10 +222,15 @@ export async function assignReviewers(k = 2): Promise<AssignResult> {
   const active = (apps ?? []).filter((a) => !TERMINAL_STAGES.includes(a.stage));
 
   const pool = await getReviewerPool();
-  const reviewerEmails = pool.map((p) => p.email);
+  let reviewerEmails = pool.map((p) => p.email);
   if (reviewerEmails.length === 0) {
     return { ok: false, error: "No reviewers found. Seed members with a reviewer role first." };
   }
+
+  const resolved = resolveReviewerPool(reviewerEmails, selected, k);
+  if (resolved.error) return { ok: false, error: resolved.error, ignored: resolved.ignored };
+  reviewerEmails = resolved.emails;
+  const ignored = resolved.ignored;
 
   const existing = await getAssignments();
   const plan = planAssignments(
@@ -221,7 +244,13 @@ export async function assignReviewers(k = 2): Promise<AssignResult> {
     const { error } = await sb.from("assignments").upsert(plan, { onConflict: "applicant_id,reviewer_email" });
     if (error) return { ok: false, error: error.message };
   }
-  return { ok: true, assigned: plan.length, applicants: active.length, reviewers: reviewerEmails.length };
+  return {
+    ok: true,
+    assigned: plan.length,
+    applicants: active.length,
+    reviewers: reviewerEmails.length,
+    ...(ignored.length ? { ignored } : {}),
+  };
 }
 
 // ── Bulk import (from a Google Sheet of form responses) ──────────────────────
