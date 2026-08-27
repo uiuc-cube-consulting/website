@@ -8,6 +8,7 @@ import {
   isRecommendation,
   type Recommendation,
 } from "@/features/03-recruitment-ats/lib/interview";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 // An interviewer fills in ONE rubric (case or behavioral) for ONE candidate.
 //
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (!canInterview(session?.user?.role)) {
     return NextResponse.json({ ok: false, error: "Interviewer access required" }, { status: 403 });
+  }
+  if (!(await canViewRecruiting(session?.user?.role))) {
+    return NextResponse.json({ ok: false, error: "Recruiting is currently closed" }, { status: 403 });
   }
 
   let body: {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCoverage } from "@/features/03-recruitment-ats/lib/store";
 import { canAccessRecruiting } from "@/features/03-recruitment-ats/lib/access";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 import { summarizeCoverage } from "@/features/03-recruitment-ats/lib/assignment";
 
 // Who is short of reviewers, and who still owes one.
@@ -16,6 +17,9 @@ export async function GET() {
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!canAccessRecruiting(session.user.role)) {
     return NextResponse.json({ error: "Recruiting access required" }, { status: 403 });
+  }
+  if (!(await canViewRecruiting(session.user.role))) {
+    return NextResponse.json({ error: "Recruiting is currently closed" }, { status: 403 });
   }
 
   const result = await getCoverage();

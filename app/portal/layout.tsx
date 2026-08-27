@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 export const metadata: Metadata = {
   title: "Member Portal",
@@ -26,6 +27,10 @@ export default async function PortalLayout({
   const isLeadership = isExec || role === "project_manager" || role === "senior_consultant";
   // Interviewing also includes returning members — matches canInterview() in the ATS.
   const isInterviewer = isLeadership || role === "returning_member";
+  // Recruiting visibility is a cycle-to-cycle exec toggle (lib/visibility.ts),
+  // not a role — every member can see applications while it's open, and the
+  // nav link (and the page itself) disappears for everyone but exec once closed.
+  const recruitingOpen = await canViewRecruiting(role);
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-cream)]/40">
@@ -55,8 +60,8 @@ export default async function PortalLayout({
             {/* Accountability follows the project SEAT, not the title — returning members
                 can hold an SC seat, so they get the link too and the page decides. */}
             {isInterviewer && <Link href="/portal/accountability" className="nav-link">Accountability</Link>}
-            {isLeadership && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
-            {isInterviewer && <Link href="/portal/interview" className="nav-link">Interviews</Link>}
+            {recruitingOpen && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
+            {isInterviewer && recruitingOpen && <Link href="/portal/interview" className="nav-link">Interviews</Link>}
 
             <span aria-hidden className="h-4 w-px bg-white/20" />
             <Link href="/" className="nav-link">Public Site</Link>

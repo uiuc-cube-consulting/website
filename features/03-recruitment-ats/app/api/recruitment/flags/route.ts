@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { submitFlag } from "@/features/03-recruitment-ats/lib/store";
+import { canFlag } from "@/features/03-recruitment-ats/lib/access";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 // Auth-gated: any signed-in member can flag an applicant red or green. Append-only.
 
@@ -10,6 +12,12 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canFlag(session?.user?.role)) {
+    return NextResponse.json({ ok: false, error: "Recruiting access required" }, { status: 403 });
+  }
+  if (!(await canViewRecruiting(session?.user?.role))) {
+    return NextResponse.json({ ok: false, error: "Recruiting is currently closed" }, { status: 403 });
+  }
 
   let body: { applicant_id?: string; color?: string; description?: string };
   try {

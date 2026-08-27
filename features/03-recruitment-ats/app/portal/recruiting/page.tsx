@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { RecruitingDashboard } from "@/features/03-recruitment-ats/components/RecruitingDashboard";
 import { RecruitingTabs } from "@/features/03-recruitment-ats/components/RecruitingTabs";
 import { isExec } from "@/features/03-recruitment-ats/lib/access";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 export const metadata: Metadata = {
   title: "Recruiting",
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default async function RecruitingPage() {
   const session = await auth();
   if (!session?.user?.email) redirect("/portal/sign-in");
+  if (!(await canViewRecruiting(session.user.role))) redirect("/portal");
 
   return (
     <div className="container-x py-10 md:py-14">

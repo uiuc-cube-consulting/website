@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getBoard } from "@/features/03-recruitment-ats/lib/interview-store";
 import { canInterview } from "@/features/03-recruitment-ats/lib/interview";
 import { getReviewerPool } from "@/features/03-recruitment-ats/lib/store";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 // The interviewer console feed: every candidate, their resume pointer, who is on
 // their panel, and the CURRENT interviewer's own rubrics. Other interviewers'
@@ -20,6 +21,9 @@ export async function GET() {
   const role = session?.user?.role;
   if (!canInterview(role)) {
     return NextResponse.json({ error: "Interviewer access required" }, { status: 403 });
+  }
+  if (!(await canViewRecruiting(role))) {
+    return NextResponse.json({ error: "Recruiting is currently closed" }, { status: 403 });
   }
   const canManage = role === "exec";
 

@@ -12,7 +12,9 @@
 // a security boundary. Anyone can call an API route directly, so every route must
 // re-check the role itself. These helpers are what it re-checks with.
 
-/** Roles that may open the recruiting/interview area at all. */
+/** Roles that may score applicants, sit an interview panel, or otherwise act
+ *  as recruiting staff — the reviewer/interviewer pool assignment is drawn
+ *  from. Deliberately narrower than who may *view* the applicant pool. */
 export const RECRUITING_ROLES = [
   "exec",
   "project_manager",
@@ -21,6 +23,11 @@ export const RECRUITING_ROLES = [
 ] as const;
 
 export type RecruitingRole = (typeof RECRUITING_ROLES)[number];
+
+/** Every member role. Any signed-in member may view the applicant pool, look
+ *  applicants up, and submit red/green flags — this is the club-wide
+ *  transparency baseline the recruiting area is built on. */
+export const ALL_MEMBER_ROLES = [...RECRUITING_ROLES, "member"] as const;
 
 function has(list: readonly string[], role?: string | null): boolean {
   return Boolean(role && list.includes(role));
@@ -32,11 +39,17 @@ export function isExec(role?: string | null): boolean {
 }
 
 /**
- * May read the applicant pool. This is the gate that protects applicant PII —
- * names, emails, and full essay responses — from a plain `member`.
+ * May read the applicant pool and submit red/green flags. Every member role
+ * qualifies — flags and visibility are club-wide; only scoring, screener
+ * assignment, and stage decisions are restricted further below.
  */
 export function canAccessRecruiting(role?: string | null): boolean {
-  return has(RECRUITING_ROLES, role);
+  return has(ALL_MEMBER_ROLES, role);
+}
+
+/** May submit a red/green flag on an applicant. Same baseline as viewing. */
+export function canFlag(role?: string | null): boolean {
+  return has(ALL_MEMBER_ROLES, role);
 }
 
 /** May submit an application-screen review (subject to assignment, below). */

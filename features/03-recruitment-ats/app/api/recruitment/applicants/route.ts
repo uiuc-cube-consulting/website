@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getAssignments, getSnapshot } from "@/features/03-recruitment-ats/lib/store";
 import { aggregate, funnel, type Review } from "@/features/03-recruitment-ats/lib/types";
 import { canAccessRecruiting, isExec } from "@/features/03-recruitment-ats/lib/access";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 import { computeCoverage, summarizeCoverage } from "@/features/03-recruitment-ats/lib/assignment";
 
 // Auth-gated reviewer feed. Returns per-applicant aggregates (mean, spread,
@@ -22,6 +23,9 @@ export async function GET() {
   // so the role is re-checked here where it actually matters.
   if (!canAccessRecruiting(role)) {
     return NextResponse.json({ error: "Recruiting access required" }, { status: 403 });
+  }
+  if (!(await canViewRecruiting(role))) {
+    return NextResponse.json({ error: "Recruiting is currently closed" }, { status: 403 });
   }
 
   try {

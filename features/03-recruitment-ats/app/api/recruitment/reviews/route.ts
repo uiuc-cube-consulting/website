@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { submitReview, getAssignments } from "@/features/03-recruitment-ats/lib/store";
 import { canReview, canReviewApplicant } from "@/features/03-recruitment-ats/lib/access";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 import { RUBRIC, type Scores, type RubricKey } from "@/features/03-recruitment-ats/lib/types";
 
 // A reviewer submits/updates their own review (one per applicant).
@@ -21,6 +22,9 @@ export async function POST(req: NextRequest) {
   const role = session?.user?.role;
   if (!canReview(role)) {
     return NextResponse.json({ ok: false, error: "Reviewer access required" }, { status: 403 });
+  }
+  if (!(await canViewRecruiting(role))) {
+    return NextResponse.json({ ok: false, error: "Recruiting is currently closed" }, { status: 403 });
   }
 
   let body: { applicant_id?: string; scores?: Partial<Record<RubricKey, number>>; notes?: string };

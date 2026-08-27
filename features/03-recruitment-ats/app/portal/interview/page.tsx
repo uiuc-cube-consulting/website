@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { InterviewConsole } from "@/features/03-recruitment-ats/components/InterviewConsole";
 import { canInterview } from "@/features/03-recruitment-ats/lib/interview";
+import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 export const metadata: Metadata = {
   title: "Interviews",
@@ -13,6 +14,7 @@ export default async function InterviewPage() {
   const session = await auth();
   if (!session?.user?.email) redirect("/portal/sign-in");
   if (!canInterview(session.user.role)) redirect("/portal");
+  if (!(await canViewRecruiting(session.user.role))) redirect("/portal");
 
   return (
     <div className="container-x py-10 md:py-14">

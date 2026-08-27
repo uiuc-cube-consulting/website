@@ -43,13 +43,16 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 
-  // Recruitment: exec, PM, SC, returning members only.
-  // The routes are /portal/recruiting and /portal/interview — the previous
-  // "/portal/recruitment" prefix matched neither, so this gate never fired.
-  const recruitmentRoles = ["exec", "project_manager", "senior_consultant", "returning_member"];
-  const recruitmentRoute =
-    pathname.startsWith("/portal/recruiting") || pathname.startsWith("/portal/interview");
-  if (recruitmentRoute && !recruitmentRoles.includes(session.user.role)) {
+  // Recruiting applications: every member role may view the pool, look
+  // applicants up, and flag them. Scoring, screener assignment, and decisions
+  // are gated further inside the API routes (lib/access.ts), not here.
+  // No role check on /portal/recruiting itself — any signed-in member passes.
+
+  // Interview panel: exec, PM, SC, returning members only. Separate from
+  // application visibility above — sitting a panel is staff work, not
+  // read access.
+  const interviewRoles = ["exec", "project_manager", "senior_consultant", "returning_member"];
+  if (pathname.startsWith("/portal/interview") && !interviewRoles.includes(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 
