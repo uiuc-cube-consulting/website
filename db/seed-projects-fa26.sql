@@ -110,7 +110,7 @@ insert into roster values
 -- first, or this project's PM row is skipped by Check 1.
 insert into roster values
   ('SolutionExec', 'aadik3@illinois.edu', 'project_manager'),   -- Aadi Kenchammana
-  ('SolutionExec', 'aarvg2@illinois.edu', 'senior_consultant'); -- Aarav Gupta
+  ('SolutionExec', 'aaravg2@illinois.edu', 'senior_consultant'); -- Aarav Gupta
 -- ('SolutionExec', 'consultant@illinois.edu', 'consultant'),
 
 -- ── Apply the roster ─────────────────────────────────────────────────────────

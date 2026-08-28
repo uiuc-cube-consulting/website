@@ -23,7 +23,7 @@
 insert into members (full_name, email, role, cohort) values
   ('Aadi Kenchammana', 'aadik3@illinois.edu', 'project_manager', 'FA26'),
   ('Aadi Shah', 'aadis2@illinois.edu', 'senior_consultant', 'FA26'),
-  ('Aarav Gupta', 'aarvg2@illinois.edu', 'senior_consultant', 'FA26'),
+  ('Aarav Gupta', 'aaravg2@illinois.edu', 'senior_consultant', 'FA26'),
   ('Aarushi Ranjan', 'aranjan6@illinois.edu', 'senior_consultant', 'FA26'),
   ('Adrian Le', 'ajle2@illinois.edu', 'returning_member', 'FA26'),
   ('Advit Arora', 'advita2@illinois.edu', 'project_manager', 'FA26'),
