@@ -5,7 +5,17 @@
 // total, mirroring how `strikes` works. A member with no entries has 0 points,
 // which is why nothing needs seeding when the roster changes.
 
-/** Exec run the tracker; they don't appear on the board. */
+/**
+ * Exec run the tracker, so they don't appear on the board — and neither do the
+ * shared officer mailboxes, which carry `role = 'exec'` for exactly this reason:
+ * `hr@`, `coo@`, and `director@cubeconsulting.org` are positions rather than
+ * people, and a leaderboard of individuals should not have a position on it.
+ *
+ * This is the single gate. Anything that must stay off the board has to be
+ * `exec` in `members`; there is no second list to keep in step. The roster seed
+ * protects that with `where members.role <> 'exec'`, so a refresh cannot demote
+ * an officer account onto the board by accident.
+ */
 export const POINTS_EXCLUDED_ROLES = ["exec"] as const;
 
 export type PointEntry = {

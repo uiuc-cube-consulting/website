@@ -45,6 +45,12 @@ alter table point_entries enable row level security;
 -- (No policies for anon = no anon access. Awarding goes through POST
 --  /api/points, which is exec-only and re-checks the role itself.)
 
+-- ── Who is on the board ──────────────────────────────────────────────────────
+-- Exec are excluded, and that single filter is also what keeps the shared
+-- officer mailboxes off it: hr@, coo@ and director@cubeconsulting.org are
+-- positions rather than people, and all carry role = 'exec'. There is no second
+-- exclusion list to keep in step.
+
 -- ── Verify ───────────────────────────────────────────────────────────────────
 -- Standings, including everyone on zero. This is the same shape the API builds.
 --
@@ -54,3 +60,11 @@ alter table point_entries enable row level security;
 --   where m.role <> 'exec'
 --   group by m.id, m.full_name, m.role
 --   order by points desc, m.full_name;
+
+-- Guard: any shared/officer account NOT marked exec would show up on the board.
+-- Should return zero rows. A hit means fix that row's role to 'exec'.
+--
+--   select full_name, email, role from members
+--   where role <> 'exec'
+--     and (email like '%@cubeconsulting.org'
+--          or full_name ~* '\m(hr|coo|ceo|cfo|cto|director|president)\M');

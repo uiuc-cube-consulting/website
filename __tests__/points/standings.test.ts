@@ -37,6 +37,36 @@ describe("who is on the board", () => {
   });
 });
 
+describe("officer accounts stay off the board", () => {
+  // HR, COO and CEO/Director are shared mailboxes, not people. They exist in
+  // `members` so they can sign in, and carry role 'exec' so the single
+  // role filter keeps them off the leaderboard.
+  const officers: RosterMember[] = [
+    { id: "o1", full_name: "HR", email: "hr@cubeconsulting.org", role: "exec" },
+    { id: "o2", full_name: "COO", email: "coo@cubeconsulting.org", role: "exec" },
+    { id: "o3", full_name: "Director", email: "director@cubeconsulting.org", role: "exec" },
+  ];
+
+  it("excludes every shared officer mailbox", () => {
+    const rows = buildStandings([...roster, ...officers], []);
+    const names = rows.map((r) => r.name);
+    expect(names).not.toContain("HR");
+    expect(names).not.toContain("COO");
+    expect(names).not.toContain("Director");
+    expect(rows).toHaveLength(3); // the three real non-exec members only
+  });
+
+  it("keeps them off even if they somehow accrued entries", () => {
+    // Points awarded to a position would otherwise surface it onto the board.
+    const rows = buildStandings([...roster, ...officers], [
+      { member_id: "o1", delta: 50 },
+      { member_id: "o3", delta: 90 },
+    ]);
+    expect(rows.map((r) => r.name)).toEqual(["Advit Arora", "Bryan Zhang", "Kali Patel"]);
+    expect(rows.every((r) => r.points === 0)).toBe(true);
+  });
+});
+
 describe("everyone starts at zero", () => {
   it("lists every non-exec member with no ledger at all", () => {
     const rows = buildStandings(roster, []);
