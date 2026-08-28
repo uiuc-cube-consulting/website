@@ -5,6 +5,7 @@ import { MIN_REVIEWERS_PER_APPLICANT } from "@/features/03-recruitment-ats/lib/a
 
 // Exec-only: randomly + evenly assign k reviewers to every active applicant.
 // Optionally restricted to a chosen subset of the pool (body.reviewer_emails).
+// `reshuffle: true` re-deals from scratch instead of topping up.
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "exec") return NextResponse.json({ ok: false, error: "Exec only" }, { status: 403 });
 
-  let body: { k?: number; reviewer_emails?: unknown } = {};
+  let body: { k?: number; reviewer_emails?: unknown; reshuffle?: unknown } = {};
   try {
     body = await req.json();
   } catch {
@@ -35,7 +36,11 @@ export async function POST(req: NextRequest) {
   // which reads as consensus and hides a miscalibrated scorer.
   const k = Math.max(MIN_REVIEWERS_PER_APPLICANT, Math.min(5, Number(body.k) || MIN_REVIEWERS_PER_APPLICANT));
 
-  const result = await assignReviewers(k, reviewerEmails);
+  // Reshuffle tears down the current spread for active applicants and deals
+  // again. Opt-in, because it is destructive: the default run only tops up.
+  const reshuffle = body.reshuffle === true;
+
+  const result = await assignReviewers(k, reviewerEmails, { reshuffle });
   if (result.demo) {
     return NextResponse.json({ ok: false, demo: true, message: "Supabase not configured — assignments not saved." });
   }

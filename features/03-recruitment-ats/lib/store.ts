@@ -195,6 +195,12 @@ export type AssignResult = {
   reviewers?: number; // reviewer pool size actually used
   /** Submitted emails dropped because they aren't in the reviewer pool. */
   ignored?: string[];
+  /** Set when the run was a full reshuffle rather than a top-up. */
+  reshuffled?: boolean;
+  /** Assignments torn down before re-dealing. */
+  cleared?: number;
+  /** Assignments kept because the reviewer had already submitted a review. */
+  preserved?: number;
 };
 
 /** Randomly + evenly assign k reviewers to every active applicant (top-up aware). */
@@ -213,7 +219,11 @@ export type AssignResult = {
  * silently never arrives, which is exactly the failure coverage exists to catch.
  * Anything dropped is reported back rather than ignored.
  */
-export async function assignReviewers(k = 2, selected?: string[]): Promise<AssignResult> {
+export async function assignReviewers(
+  k = 2,
+  selected?: string[],
+  opts: { reshuffle?: boolean } = {}
+): Promise<AssignResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
@@ -232,7 +242,50 @@ export async function assignReviewers(k = 2, selected?: string[]): Promise<Assig
   reviewerEmails = resolved.emails;
   const ignored = resolved.ignored;
 
-  const existing = await getAssignments();
+  let existing = await getAssignments();
+  let cleared = 0;
+  let preserved = 0;
+
+  if (opts.reshuffle) {
+    // A reshuffle throws away the current spread and deals again, so a pool
+    // change (or a bad test run) doesn't leave half the cohort on the old
+    // allocation. Only ACTIVE applicants are re-dealt; assignments on rejected
+    // or withdrawn candidates are history and are left alone.
+    const activeIds = active.map((a) => a.id);
+
+    // One carve-out: a reviewer who has ALREADY SUBMITTED a review keeps that
+    // applicant. `canReviewApplicant` gates editing on assignment, so dealing
+    // them away would revoke their access to their own submitted work and leave
+    // a review that coverage counts but no assignment backs. Work already done
+    // is never reshuffled away.
+    const { data: reviewed } = await sb
+      .from("reviews")
+      .select("applicant_id, reviewer_email")
+      .in("applicant_id", activeIds.length ? activeIds : ["00000000-0000-0000-0000-000000000000"]);
+
+    const keep = (reviewed ?? []).map((r) => ({
+      applicant_id: r.applicant_id as string,
+      reviewer_email: (r.reviewer_email as string).toLowerCase(),
+    }));
+    const keepKeys = new Set(keep.map((r) => `${r.applicant_id}:${r.reviewer_email}`));
+    preserved = keepKeys.size;
+
+    cleared = existing.filter(
+      (a) =>
+        activeIds.includes(a.applicant_id) &&
+        !keepKeys.has(`${a.applicant_id}:${a.reviewer_email.toLowerCase()}`)
+    ).length;
+
+    if (activeIds.length) {
+      const { error: delErr } = await sb.from("assignments").delete().in("applicant_id", activeIds);
+      if (delErr) return { ok: false, error: delErr.message };
+    }
+
+    // Plan around the preserved pairs, so an applicant who already has one
+    // submitted review gets topped up to k rather than dealt a full fresh k.
+    existing = [...new Map(keep.map((r) => [`${r.applicant_id}:${r.reviewer_email}`, r])).values()];
+  }
+
   const plan = planAssignments(
     active.map((a) => ({ id: a.id, email: a.email })),
     reviewerEmails,
@@ -240,8 +293,14 @@ export async function assignReviewers(k = 2, selected?: string[]): Promise<Assig
     k
   );
 
-  if (plan.length) {
-    const { error } = await sb.from("assignments").upsert(plan, { onConflict: "applicant_id,reviewer_email" });
+  // On a reshuffle the preserved pairs were deleted along with the rest, so they
+  // are written back alongside the new plan.
+  const toWrite = opts.reshuffle ? [...existing, ...plan] : plan;
+
+  if (toWrite.length) {
+    const { error } = await sb
+      .from("assignments")
+      .upsert(toWrite, { onConflict: "applicant_id,reviewer_email" });
     if (error) return { ok: false, error: error.message };
   }
   return {
@@ -249,6 +308,7 @@ export async function assignReviewers(k = 2, selected?: string[]): Promise<Assig
     assigned: plan.length,
     applicants: active.length,
     reviewers: reviewerEmails.length,
+    ...(opts.reshuffle ? { reshuffled: true, cleared, preserved } : {}),
     ...(ignored.length ? { ignored } : {}),
   };
 }

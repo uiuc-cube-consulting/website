@@ -137,7 +137,8 @@ export function RecruitingDashboard() {
           ).error;
 
   // Exec-only: randomly assign reviewers across all active applicants.
-  async function assignReviewers() {
+  // `reshuffle` re-deals from scratch instead of topping up the current spread.
+  async function assignReviewers(reshuffle = false) {
     if (poolError) {
       setNotice(poolError);
       return;
@@ -150,6 +151,7 @@ export function RecruitingDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           k: 2,
+          ...(reshuffle ? { reshuffle: true } : {}),
           // Omitted entirely when not narrowed, so the server keeps its
           // whole-pool default rather than receiving a list that happens to
           // contain everyone. `.size > 0` matters: an empty Set is truthy, and
@@ -162,8 +164,11 @@ export function RecruitingDashboard() {
       const j = await r.json();
       if (j.ok) {
         const dropped = j.ignored?.length ? ` ${j.ignored.length} ignored (not in the pool).` : "";
+        const kept = j.preserved ? ` Kept ${j.preserved} already reviewed.` : "";
         setNotice(
-          `Assigned ${j.assigned} review slots across ${j.applicants} applicants (${j.reviewers} reviewers).${dropped}`
+          j.reshuffled
+            ? `Reshuffled: cleared ${j.cleared} and dealt ${j.assigned} new slots across ${j.applicants} applicants (${j.reviewers} reviewers).${kept}${dropped}`
+            : `Assigned ${j.assigned} review slots across ${j.applicants} applicants (${j.reviewers} reviewers).${dropped}`
         );
         await reload();
       } else setNotice(j.message || j.error || "Could not assign reviewers.");
@@ -229,7 +234,7 @@ export function RecruitingDashboard() {
       {data.canManage && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
           <button
-            onClick={assignReviewers}
+            onClick={() => void assignReviewers(false)}
             disabled={managing || Boolean(poolError)}
             title={poolError}
             className="btn btn-gold text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -247,6 +252,11 @@ export function RecruitingDashboard() {
           >
             {poolOpen ? "Hide reviewers" : "Choose reviewers"}
           </button>
+          <ReshuffleButton
+            disabled={managing || Boolean(poolError)}
+            busy={managing}
+            onConfirm={() => assignReviewers(true)}
+          />
           <div className="flex items-center gap-2">
             <input
               value={importUrl}
@@ -868,5 +878,72 @@ function ReviewerPoolPicker({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Exec-only full reshuffle: tear down the current spread and deal again.
+ *
+ * A separate control from "Assign reviewers" because the two do different
+ * things. The normal run only TOPS UP — it fills applicants who are short of k
+ * and never moves anyone, which is what you want mid-cycle as candidates
+ * trickle in. A reshuffle throws the existing allocation away, which is what you
+ * want after changing the reviewer pool or clearing out test data.
+ *
+ * Destructive, so it confirms in place rather than firing on the first click.
+ * An inline two-step is used instead of window.confirm() deliberately: a native
+ * modal blocks the page, and this keeps the warning readable while deciding.
+ */
+function ReshuffleButton({
+  disabled,
+  busy,
+  onConfirm,
+}: {
+  disabled?: boolean;
+  busy?: boolean;
+  onConfirm: () => Promise<void> | void;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  // Derived, not synced: a disabled button is never shown armed, so a stale
+  // "Confirm" cannot sit waiting behind a pool error and fire later. Computing
+  // it beats an effect that writes state back on every disabled change.
+  const showArmed = armed && !disabled;
+
+  if (!showArmed) {
+    return (
+      <button
+        onClick={() => setArmed(true)}
+        disabled={disabled}
+        className="text-xs px-4 py-2 rounded-full border border-[var(--border)] text-[var(--muted)] hover:border-red-300 hover:text-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Clear every current assignment and deal again from scratch"
+      >
+        Reshuffle from scratch
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5">
+      <span className="text-xs text-red-800">
+        Clear all current assignments and re-deal?
+      </span>
+      <button
+        onClick={async () => {
+          setArmed(false);
+          await onConfirm();
+        }}
+        disabled={busy}
+        className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-full px-3 py-1 disabled:opacity-50"
+      >
+        {busy ? "Working…" : "Yes, reshuffle"}
+      </button>
+      <button
+        onClick={() => setArmed(false)}
+        className="text-xs text-[var(--muted)] hover:text-[var(--bg-dark)]"
+      >
+        Cancel
+      </button>
+    </span>
   );
 }
