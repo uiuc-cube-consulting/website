@@ -47,7 +47,7 @@ insert into members (full_name, email, role, cohort) values
   ('Lakshya Agarwal', 'lakshya6@illinois.edu', 'returning_member', 'FA26'),
   ('Malcom Ripp', 'ripp3@illinois.edu', 'returning_member', 'FA26'),
   ('Michael Gong', 'msgong2@illinois.edu', 'senior_consultant', 'FA26'),
-  ('Nikhil Lalwani', 'nikhil2@illinois.edu', 'returning_member', 'FA26'),
+  ('Nikhil Lalwani', 'nikhill2@illinois.edu', 'returning_member', 'FA26'),
   ('Rahil Shah', 'rahilts2@illinois.edu', 'returning_member', 'FA26'),
   ('Satviki Inturi', 'sinturi2@illinois.edu', 'returning_member', 'FA26'),
   ('Taniya Agrawal', 'taniyaa2@illinois.edu', 'returning_member', 'FA26'),
