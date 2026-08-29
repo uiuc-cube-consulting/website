@@ -1,19 +1,27 @@
 "use client";
 
-// Search-first interviewer console. Type a name, get that candidate's resume and
-// both rubrics on one screen.
+// Search-first interviewer console, scoped to ONE ROUND. Type a name, get that
+// candidate's resume and both rubrics on one screen.
 //
-// The whole (small) cohort is fetched once and filtered in the browser, so search
-// responds on the keystroke instead of waiting on a request per character.
+// The round is the top-level control, because the two rounds are different jobs
+// with different rooms: the first round is staffed from the whole recruiting pool,
+// the final round is exec and nobody else. Switching rounds refetches rather than
+// filtering client-side — a non-exec never receives final-round data at all, so
+// there is nothing in the browser to filter.
+//
+// Within a round, the whole (small) cohort is fetched once and filtered in the
+// browser, so search responds on the keystroke instead of waiting on a request per
+// character.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  INTERVIEW_KINDS,
   KIND_LABEL,
+  ROUND_KINDS,
   isComplete,
   type Candidate,
   type InterviewBoard,
 } from "@/features/03-recruitment-ats/lib/interview";
+import { ROUND_BLURB, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
 import { CandidateWorkspace } from "./CandidateWorkspace";
 
 type Scope = "mine" | "all";
@@ -38,12 +46,13 @@ export function InterviewConsole() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<Scope>("mine");
+  const [round, setRound] = useState<InterviewRound>("first_round");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
     try {
-      const r = await fetch("/api/recruitment/interview", { cache: "no-store" });
+      const r = await fetch(`/api/recruitment/interview?round=${round}`, { cache: "no-store" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Failed (${r.status})`);
       const board: InterviewBoard = await r.json();
       setData(board);
@@ -52,13 +61,32 @@ export function InterviewConsole() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     }
-  }, []);
+  }, [round]);
 
   useEffect(() => {
     (async () => {
       await reload();
     })();
   }, [reload]);
+
+  /**
+   * Switch rounds, clearing what belonged to the old one.
+   *
+   * The reset lives in the handler rather than in an effect on `round`. A
+   * candidate selected in one round is not in the other, so leaving `selectedId`
+   * set would keep a stale workspace on screen until the fetch landed — but doing
+   * the clearing in an effect means a second render pass every time, and React
+   * (rightly) warns about setState in an effect body. Switching rounds is an
+   * event; treat it as one.
+   */
+  function switchRound(next: InterviewRound) {
+    if (next === round) return;
+    setSelectedId(null);
+    setError(null);
+    setData(null);
+    setQuery("");
+    setRound(next);
+  }
 
   const mineCount = data?.candidates.filter((c) => c.assignedToMe).length ?? 0;
 
@@ -93,6 +121,7 @@ export function InterviewConsole() {
     return (
       <CandidateWorkspace
         candidate={selected}
+        round={data.round}
         canManage={data.canManage}
         pool={data.pool}
         demo={data.demo}
@@ -107,13 +136,19 @@ export function InterviewConsole() {
       {data.demo && (
         <div className="rounded-2xl border border-[var(--gold)]/35 bg-[var(--gold)]/10 px-5 py-3 text-sm text-[var(--bg-dark)]">
           <span className="font-semibold">Demo data.</span> Configure Supabase and run
-          <code className="mx-1 rounded bg-white/70 px-1">db/interview.sql</code> to store real panels,
+          <code className="mx-1 rounded bg-white/70 px-1">db/interview.sql</code> then
+          <code className="mx-1 rounded bg-white/70 px-1">db/rounds.sql</code> to store real panels,
           resumes, and rubrics. Writes are disabled in demo mode.
         </div>
       )}
 
-      {data.canManage && <FolderProvisionBar onProvisioned={reload} />}
-      {data.canManage && <ResumeSyncBar onSynced={reload} />}
+      <RoundSwitcher round={data.round} available={data.availableRounds} onChange={switchRound} />
+
+      {/* Folders are a FIRST-ROUND artifact: a resume plus the two rubric docs,
+          created for the people actually being interviewed. Provisioning the
+          written pool would be hundreds of folders nobody opens. */}
+      {data.canManage && data.round === "first_round" && <FolderProvisionBar onProvisioned={reload} />}
+      {data.canManage && data.round === "first_round" && <ResumeSyncBar onSynced={reload} />}
 
       <div className="flex flex-wrap items-center gap-3">
         <input
@@ -125,7 +160,7 @@ export function InterviewConsole() {
             if (e.key === "Escape") setQuery("");
           }}
           autoFocus
-          placeholder="Search a candidate by name…"
+          placeholder={`Search the ${ROUND_LABEL[data.round].toLowerCase()} by name…`}
           className="w-full max-w-md rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
         />
         <div className="inline-flex overflow-hidden rounded-full border border-[var(--border)]">
@@ -156,8 +191,8 @@ export function InterviewConsole() {
               {query.trim()
                 ? `No candidate matches “${query.trim()}”.`
                 : scope === "mine"
-                  ? "No interviews assigned to you yet — an exec assigns panels."
-                  : "No candidates yet."}
+                  ? "No interviews assigned to you in this round — an exec assigns panels."
+                  : `Nobody is in the ${ROUND_LABEL[data.round].toLowerCase()} yet. Exec advances candidates into it from the decision queue.`}
             </li>
           )}
           {results.map((c) => (
@@ -179,7 +214,7 @@ export function InterviewConsole() {
                   {c.resume ? "✓" : "—"}
                 </span>
                 <span className="flex gap-1.5">
-                  {INTERVIEW_KINDS.map((k) => {
+                  {ROUND_KINDS[data.round].map((k) => {
                     const entry = c.myRubrics[k];
                     const done = entry && isComplete(k, entry.scores);
                     return (
@@ -200,6 +235,49 @@ export function InterviewConsole() {
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+// ── Round switcher ───────────────────────────────────────────────────────────
+
+/**
+ * Which round the console is showing.
+ *
+ * `available` comes from the server, not from a role check here. A non-exec is
+ * never offered the final round because the API never lists it for them — the tab
+ * and the data have exactly one source of truth, so hiding the control and
+ * refusing the request cannot drift apart.
+ */
+function RoundSwitcher({
+  round,
+  available,
+  onChange,
+}: {
+  round: InterviewRound;
+  available: InterviewRound[];
+  onChange: (r: InterviewRound) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {available.map((r) => (
+          <button
+            key={r}
+            onClick={() => onChange(r)}
+            className={
+              "rounded-full px-4 py-2 text-xs font-semibold transition " +
+              (round === r
+                ? "bg-[var(--gold)] text-[var(--bg-dark)]"
+                : "border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--bg-cream)]/50")
+            }
+          >
+            {ROUND_LABEL[r]}
+            {r === "final_round" && <span className="ml-1.5 opacity-70">· exec</span>}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-[var(--muted)]">{ROUND_BLURB[round]}</p>
     </div>
   );
 }

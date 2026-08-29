@@ -19,7 +19,7 @@ export default async function InterviewPage() {
   return (
     <div className="container-x py-10 md:py-14">
       <div>
-        <p className="eyebrow">Recruiting</p>
+        <p className="eyebrow">Recruiting · Rounds 2 and 3</p>
         <h1 className="mt-3 font-display text-4xl font-extrabold leading-[1.05] text-[var(--bg-dark)] md:text-5xl">
           Interview console.
         </h1>
@@ -27,6 +27,14 @@ export default async function InterviewPage() {
           Search the candidate you&rsquo;re about to interview and get their resume, case rubric, and
           behavioral rubric on one screen. Your rubrics are yours — you fill in a copy for the
           people you&rsquo;re interviewing, and the templates stay untouched.
+        </p>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
+          The first round is staffed from the whole recruiting pool; the final round is exec only.
+          Written applications are scored in the{" "}
+          <a href="/portal/recruiting" className="font-semibold text-[var(--gold-deep)] hover:underline">
+            applications console
+          </a>
+          .
         </p>
       </div>
       <div className="mt-8">

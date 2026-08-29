@@ -6,6 +6,7 @@
 // of it for the candidate they're assigned, and that instance is their own row in
 // `reviews` (unique on applicant + reviewer + kind).
 
+import type { InterviewRound } from "./rounds";
 import type { RubricCriterion, Stage } from "./types";
 
 /** Roles allowed to interview. Mirrors the reviewer roles in proxy.ts / store.ts. */
@@ -15,12 +16,42 @@ export function canInterview(role?: string | null): boolean {
   return Boolean(role && INTERVIEWER_ROLES.includes(role));
 }
 
-export type ReviewKind = "screen" | "case" | "behavioral";
-export const INTERVIEW_KINDS = ["case", "behavioral"] as const;
+// ── Kinds ────────────────────────────────────────────────────────────────────
+// A review's `kind` is what says which ROUND it belongs to. The first and final
+// rounds run the same two conversations, but they are stored under separate kinds
+// rather than sharing `case`/`behavioral`, for two reasons:
+//
+//   1. The uniqueness key on `reviews` is (applicant, reviewer, kind). An exec who
+//      interviews a candidate in the first round and again in the final would
+//      otherwise overwrite their own first-round rubric on save — silently losing
+//      the earlier score at exactly the moment both are worth comparing.
+//   2. Final-round scores are exec-only. Keeping them under their own kinds means
+//      the restriction is a filter on a column, not a join through the applicant's
+//      current stage, so a candidate moving stages can never expose them.
+
+export type ReviewKind = "screen" | InterviewKind;
+
+export const INTERVIEW_KINDS = ["case", "behavioral", "final_case", "final_behavioral"] as const;
 export type InterviewKind = (typeof INTERVIEW_KINDS)[number];
 
+/** The two rubrics conducted in each round, in the order the console shows them. */
+export const ROUND_KINDS: Record<InterviewRound, readonly InterviewKind[]> = {
+  first_round: ["case", "behavioral"],
+  final_round: ["final_case", "final_behavioral"],
+};
+
 export function isInterviewKind(v: unknown): v is InterviewKind {
-  return v === "case" || v === "behavioral";
+  return typeof v === "string" && (INTERVIEW_KINDS as readonly string[]).includes(v);
+}
+
+/** Which round a rubric belongs to — the inverse of ROUND_KINDS. */
+export function roundOfKind(kind: InterviewKind): InterviewRound {
+  return kind.startsWith("final_") ? "final_round" : "first_round";
+}
+
+/** True when `kind` is one of the rubrics `round` actually runs. */
+export function isKindInRound(kind: InterviewKind, round: InterviewRound): boolean {
+  return ROUND_KINDS[round].includes(kind);
 }
 
 // ── Case rubric ──────────────────────────────────────────────────────────────
@@ -79,14 +110,22 @@ export const BEHAVIORAL_RUBRIC: readonly RubricCriterion[] = [
   },
 ] as const;
 
+// Both rounds score the same two rubrics. The criteria that make a good case
+// interview do not change between a first and a final round — what changes is who
+// is in the room and how much the answer counts — so the templates are shared
+// deliberately rather than duplicated into a near-identical third and fourth copy.
 export const INTERVIEW_RUBRICS: Record<InterviewKind, readonly RubricCriterion[]> = {
   case: CASE_RUBRIC,
   behavioral: BEHAVIORAL_RUBRIC,
+  final_case: CASE_RUBRIC,
+  final_behavioral: BEHAVIORAL_RUBRIC,
 };
 
 export const KIND_LABEL: Record<InterviewKind, string> = {
   case: "Case",
   behavioral: "Behavioral",
+  final_case: "Case",
+  final_behavioral: "Behavioral",
 };
 
 // ── Bottom-line recommendation ───────────────────────────────────────────────
@@ -149,9 +188,11 @@ export type Candidate = {
   /** Provisioned Drive folder (resume + rubric docs + notes), when one exists.
    *  A URL only — the folder id stays server-side, same posture as `resume`. */
   driveFolderUrl?: string | null;
-  /** Interviewers assigned to this candidate (lowercased emails). */
+  /** Interviewers on THIS ROUND's panel for this candidate (lowercased emails).
+   *  A first-round panel and a final-round panel are separate rows. */
   panel: string[];
   assignedToMe: boolean;
+  /** Only the active round's kinds are ever populated; the others stay null. */
   myRubrics: Record<InterviewKind, RubricEntry | null>;
   /** How many panelists have completed each rubric — a count only, no scores. */
   completed: Record<InterviewKind, number>;
@@ -160,6 +201,11 @@ export type Candidate = {
 export type Reviewer = { email: string; name?: string | null };
 
 export type InterviewBoard = {
+  /** Which round this board is: its candidates, panels and rubrics are all scoped
+   *  to it, and a final-round board is only ever served to exec. */
+  round: InterviewRound;
+  /** Rounds the viewer may switch to — everyone gets the first, exec also the final. */
+  availableRounds: InterviewRound[];
   candidates: Candidate[];
   pool: Reviewer[];
   demo: boolean;

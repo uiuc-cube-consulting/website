@@ -10,16 +10,22 @@
 
 import { createServerClient } from "@/lib/supabase/server";
 import { DEMO_APPLICANTS } from "./demo";
-import { listResumeFiles } from "./drive";
+import { fetchFileMeta, listResumeFiles } from "./drive";
 import {
+  INTERVIEW_KINDS,
   INTERVIEW_RUBRICS,
+  ROUND_KINDS,
   isComplete,
+  roundOfKind,
   type Candidate,
   type InterviewKind,
   type Recommendation,
   type RubricEntry,
 } from "./interview";
+import { ROUND_STAGES, type InterviewRound } from "./rounds";
+import { parseResumeId } from "./form-resume";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
+import { excludeOwnApplications } from "./self-access";
 import { weightedTotalFor, type Stage } from "./types";
 
 function db() {
@@ -38,6 +44,7 @@ export type ResumePointer = {
 };
 
 export type Board = {
+  round: InterviewRound;
   candidates: Candidate[];
   demo: boolean;
   viewer: string;
@@ -55,8 +62,18 @@ type ReviewRow = {
   created_at?: string;
 };
 
+/** Every kind present, all empty. Kinds outside the active round stay null — the
+ *  board never carries another round's scores, which is what keeps a final-round
+ *  rubric out of a non-exec response by construction. */
 function emptyRubrics(): Record<InterviewKind, RubricEntry | null> {
-  return { case: null, behavioral: null };
+  return Object.fromEntries(INTERVIEW_KINDS.map((k) => [k, null])) as Record<
+    InterviewKind,
+    RubricEntry | null
+  >;
+}
+
+function zeroCounts(): Record<InterviewKind, number> {
+  return Object.fromEntries(INTERVIEW_KINDS.map((k) => [k, 0])) as Record<InterviewKind, number>;
 }
 
 function toEntry(row: ReviewRow, kind: InterviewKind): RubricEntry {
@@ -71,18 +88,43 @@ function toEntry(row: ReviewRow, kind: InterviewKind): RubricEntry {
 }
 
 /**
- * Everything the console needs, in three parallel queries. Interview cohorts are
- * small (hundreds at most), so we hand the whole set to the client once and let
- * search filter it locally — that makes typing a name feel instant instead of
- * firing a request per keystroke.
+ * Everything one ROUND's console needs, in three parallel queries. Interview
+ * cohorts are small (hundreds at most), so we hand the whole set to the client
+ * once and let search filter it locally — that makes typing a name feel instant
+ * instead of firing a request per keystroke.
+ *
+ * Every one of those three queries is scoped to `round`, and that is the point:
+ *
+ *   · candidates — only those whose stage puts them in this round, so the first
+ *     round is the people who cleared the written screen rather than the whole
+ *     applicant pool.
+ *   · panels — this round's panel rows only, so first- and final-round panels are
+ *     independent.
+ *   · rubrics — only this round's kinds, so a final-round score is not merely
+ *     hidden from a first-round response, it is never fetched into it.
+ *
+ * The route is what refuses a non-exec caller asking for `final_round`; this
+ * function assumes that check has already passed and simply builds the board it
+ * was asked for.
  */
-export async function getBoard(viewerEmail: string, canManage: boolean): Promise<Board> {
+export async function getBoard(
+  viewerEmail: string,
+  canManage: boolean,
+  round: InterviewRound
+): Promise<Board> {
   const viewer = viewerEmail.toLowerCase();
+  const stages = ROUND_STAGES[round];
+  const kinds = ROUND_KINDS[round];
   const sb = db();
 
   if (!sb) {
     return {
-      candidates: DEMO_APPLICANTS.map((a) => ({
+      round,
+      candidates: excludeOwnApplications(
+        viewer,
+        DEMO_APPLICANTS.filter((a) => stages.includes(a.stage)),
+        (a) => a.email
+      ).map((a) => ({
         id: a.id,
         name: a.name,
         email: a.email,
@@ -94,7 +136,7 @@ export async function getBoard(viewerEmail: string, canManage: boolean): Promise
         panel: [],
         assignedToMe: false,
         myRubrics: emptyRubrics(),
-        completed: { case: 0, behavioral: 0 },
+        completed: zeroCounts(),
       })),
       demo: true,
       viewer,
@@ -106,12 +148,13 @@ export async function getBoard(viewerEmail: string, canManage: boolean): Promise
     sb
       .from("applicants")
       .select("id, name, email, year, major, college, stage, resume_file_id, resume_name, resume_mime, resume_match, resume_linked_at, drive_folder_url")
+      .in("stage", stages as readonly string[])
       .order("name", { ascending: true }),
-    sb.from("interview_panel").select("applicant_id, interviewer_email"),
+    sb.from("interview_panel").select("applicant_id, interviewer_email").eq("round", round),
     sb
       .from("reviews")
       .select("applicant_id, reviewer_email, kind, scores, notes, recommendation, weighted_total, created_at")
-      .in("kind", ["case", "behavioral"]),
+      .in("kind", kinds as readonly string[]),
   ]);
 
   if (applicantsRes.error) throw applicantsRes.error;
@@ -130,10 +173,10 @@ export async function getBoard(viewerEmail: string, canManage: boolean): Promise
   const completed = new Map<string, Record<InterviewKind, number>>();
   for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
     const kind = r.kind as InterviewKind;
-    if (kind !== "case" && kind !== "behavioral") continue;
+    if (!kinds.includes(kind)) continue;
 
     if (isComplete(kind, r.scores ?? {})) {
-      const c = completed.get(r.applicant_id) ?? { case: 0, behavioral: 0 };
+      const c = completed.get(r.applicant_id) ?? zeroCounts();
       c[kind] += 1;
       completed.set(r.applicant_id, c);
     }
@@ -144,7 +187,21 @@ export async function getBoard(viewerEmail: string, canManage: boolean): Promise
     }
   }
 
-  const candidates: Candidate[] = (applicantsRes.data ?? []).map((a) => {
+  // Your own candidacy is not yours to read (lib/self-access.ts). Dropped HERE,
+  // after the panel and rubric joins rather than before them, so the `completed`
+  // counts other candidates carry still include reviews you happened to write —
+  // filtering earlier would quietly under-count them.
+  //
+  // This is the UI-level half. `GET /api/recruitment/resume/[id]` enforces the
+  // same rule independently, because a candidate id can be guessed whether or
+  // not the board ever listed it.
+  const visibleApplicants = excludeOwnApplications(
+    viewer,
+    applicantsRes.data ?? [],
+    (a) => a.email as string
+  );
+
+  const candidates: Candidate[] = visibleApplicants.map((a) => {
     const panel = panelByApplicant.get(a.id) ?? [];
     return {
       id: a.id,
@@ -167,21 +224,31 @@ export async function getBoard(viewerEmail: string, canManage: boolean): Promise
       panel,
       assignedToMe: panel.includes(viewer),
       myRubrics: mine.get(a.id) ?? emptyRubrics(),
-      completed: completed.get(a.id) ?? { case: 0, behavioral: 0 },
+      completed: completed.get(a.id) ?? zeroCounts(),
     };
   });
 
-  return { candidates, demo: false, viewer, canManage };
+  return { round, candidates, demo: false, viewer, canManage };
 }
 
 // ── Authorization ────────────────────────────────────────────────────────────
 
 /**
  * Panel membership is the whole access rule for writes: you may fill in a rubric
- * for a candidate you are interviewing, and no one else. Checked here as well as
- * in the route so a future caller can't skip it.
+ * for a candidate you are interviewing, in the round you are interviewing them
+ * for, and nothing else. Checked here as well as in the route so a future caller
+ * can't skip it.
+ *
+ * The round is part of the check, not decoration. Sitting a candidate's FIRST
+ * round is not authority to write their FINAL-round rubric — that round is exec's
+ * — so a first-round panelist posting a `final_case` body is refused here even
+ * though they are, in some sense, "on the panel".
  */
-export async function isOnPanel(applicantId: string, email: string): Promise<boolean> {
+export async function isOnPanel(
+  applicantId: string,
+  email: string,
+  round: InterviewRound
+): Promise<boolean> {
   const sb = db();
   if (!sb) return false;
   // eq, not ilike: `_` and `%` are LIKE wildcards and both are legal in an email
@@ -191,6 +258,7 @@ export async function isOnPanel(applicantId: string, email: string): Promise<boo
     .select("applicant_id")
     .eq("applicant_id", applicantId)
     .eq("interviewer_email", email.toLowerCase())
+    .eq("round", round)
     .maybeSingle();
   if (error) return false;
   return Boolean(data);
@@ -203,7 +271,13 @@ export type WriteResult = { ok: boolean; demo?: boolean; error?: string; forbidd
 /**
  * Upsert the viewer's own instance of one rubric. Keyed on
  * (applicant_id, reviewer_email, kind), so a second interviewer on the same
- * candidate writes a separate row and the two never overwrite each other.
+ * candidate writes a separate row and the two never overwrite each other — and,
+ * because the first and final rounds use different kinds, so does the same
+ * interviewer seeing the same candidate twice across the two rounds.
+ *
+ * The panel check is scoped to the round the KIND belongs to, not to the round
+ * the caller claims: the body carries a kind, the round is derived from it, and
+ * the two therefore cannot disagree.
  */
 export async function saveRubric(input: {
   applicant_id: string;
@@ -218,9 +292,14 @@ export async function saveRubric(input: {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
+  const round = roundOfKind(input.kind);
   const email = input.reviewer_email.toLowerCase();
-  if (!input.bypassPanel && !(await isOnPanel(input.applicant_id, email))) {
-    return { ok: false, forbidden: true, error: "You are not on this candidate's interview panel." };
+  if (!input.bypassPanel && !(await isOnPanel(input.applicant_id, email, round))) {
+    return {
+      ok: false,
+      forbidden: true,
+      error: `You are not on this candidate's ${round === "final_round" ? "final-round" : "first-round"} panel.`,
+    };
   }
 
   const { error } = await sb.from("reviews").upsert(
@@ -241,18 +320,31 @@ export async function saveRubric(input: {
 
 export type PanelResult = WriteResult & { panel?: string[] };
 
-/** Exec sets the full panel for one candidate (replaces whoever was there). */
+/**
+ * Exec sets the full panel for one candidate IN ONE ROUND (replacing whoever was
+ * on it for that round).
+ *
+ * Both the delete and the insert are scoped to `round`, so setting a final-round
+ * panel leaves the first-round one — and the rubrics it authorized — untouched.
+ * Without that scoping, naming the final-round panel would revoke the first-round
+ * interviewers' access to rubrics they had already written.
+ */
 export async function setPanel(input: {
   applicant_id: string;
   interviewer_emails: string[];
   assigned_by: string;
+  round: InterviewRound;
 }): Promise<PanelResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
   const emails = [...new Set(input.interviewer_emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
 
-  const { error: delErr } = await sb.from("interview_panel").delete().eq("applicant_id", input.applicant_id);
+  const { error: delErr } = await sb
+    .from("interview_panel")
+    .delete()
+    .eq("applicant_id", input.applicant_id)
+    .eq("round", input.round);
   if (delErr) return { ok: false, error: delErr.message };
 
   if (emails.length) {
@@ -260,6 +352,7 @@ export async function setPanel(input: {
       emails.map((interviewer_email) => ({
         applicant_id: input.applicant_id,
         interviewer_email,
+        round: input.round,
         assigned_by: input.assigned_by.toLowerCase(),
       }))
     );
@@ -285,6 +378,93 @@ export async function getResumePointer(applicantId: string): Promise<ResumePoint
     match: data.resume_match ?? null,
     linkedAt: data.resume_linked_at ?? null,
   };
+}
+
+// ── Resumes from the Form response ───────────────────────────────────────────
+
+/**
+ * Point applicants at the resume their Form response uploaded.
+ *
+ * This is what makes the resume readable during the WRITTEN round, and it has to
+ * be: the written rubric scores the resume out of 5, so a reader who cannot open
+ * it cannot honestly fill in the form. Waiting for first-round folder provisioning
+ * would mean nobody sees a resume until after the decision that needs it.
+ *
+ * The Form gives an authoritative candidate -> file mapping, so nothing is guessed
+ * here — contrast `syncResumes` below, which matches filenames because resumes
+ * used to arrive as a flat folder of arbitrarily named files.
+ *
+ * Applicants who already have a pointer are left alone. First-round provisioning
+ * copies the file into the candidate's own folder and repoints them at the copy,
+ * and that copy is the better pointer: it lives in the shared drive the service
+ * account owns, so it survives the applicant tidying up their own Drive.
+ */
+export type FormResumeLink = { applicantId: string; resumeLink?: string | null };
+
+export async function linkFormResumes(
+  links: FormResumeLink[]
+): Promise<{ linked: number; error?: string }> {
+  const sb = db();
+  if (!sb || links.length === 0) return { linked: 0 };
+
+  const wanted = links.flatMap((l) => {
+    const fileId = parseResumeId(l.resumeLink);
+    return fileId ? [{ applicantId: l.applicantId, fileId }] : [];
+  });
+  if (!wanted.length) return { linked: 0 };
+
+  // Only fill gaps. NOT NULL columns must ride along in an upsert tuple, so the
+  // name and email come back with the id.
+  const { data: rows, error } = await sb
+    .from("applicants")
+    .select("id, name, email, resume_file_id")
+    .in("id", wanted.map((w) => w.applicantId));
+  if (error) return { linked: 0, error: error.message };
+
+  const byId = new Map((rows ?? []).map((r) => [String(r.id), r]));
+  const todo = wanted.filter((w) => {
+    const row = byId.get(w.applicantId);
+    return row && !row.resume_file_id;
+  });
+  if (!todo.length) return { linked: 0 };
+
+  // One metadata call each, four at a time: enough to hide the latency on a
+  // 200-person import, well under Drive's per-user read limits.
+  const metas: (Awaited<ReturnType<typeof fetchFileMeta>> | null)[] = new Array(todo.length).fill(null);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(4, todo.length) }, async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= todo.length) return;
+        metas[i] = await fetchFileMeta(todo[i].fileId);
+      }
+    })
+  );
+
+  const now = new Date().toISOString();
+  const patches = todo.flatMap((w, i) => {
+    const row = byId.get(w.applicantId)!;
+    const meta = metas[i];
+    // A file we cannot read is a file we cannot stream either, so recording a
+    // pointer to it would only turn a visible gap into a broken viewer.
+    if (!meta?.ok) return [];
+    return [{
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      resume_file_id: w.fileId,
+      resume_name: meta.name,
+      resume_mime: meta.mimeType,
+      resume_match: "form", // authoritative — the Form told us, we did not guess
+      resume_linked_at: now,
+    }];
+  });
+  if (!patches.length) return { linked: 0 };
+
+  const { error: upErr } = await sb.from("applicants").upsert(patches, { onConflict: "id" });
+  if (upErr) return { linked: 0, error: upErr.message };
+  return { linked: patches.length };
 }
 
 // ── Resume sync ──────────────────────────────────────────────────────────────

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { setDecision, getSnapshot } from "@/features/03-recruitment-ats/lib/store";
 import { STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
+import { ROUND_STAGES } from "@/features/03-recruitment-ats/lib/rounds";
 import { canDecide } from "@/features/03-recruitment-ats/lib/access";
+import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
+import { SELF_ACCESS_DENIED, excludeOwnApplications } from "@/features/03-recruitment-ats/lib/self-access";
+import { isOwnApplicationId } from "@/features/03-recruitment-ats/lib/self-access-store";
 import {
   buildDecisionQueue,
   sortDecisionQueue,
@@ -37,6 +41,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "applicant_id and a valid stage are required" }, { status: 400 });
   }
 
+  // You never decide your own application (lib/self-access.ts). This route is
+  // already exec-only, which is exactly why the check is needed: the one person
+  // who could reach this handler for their own row is an exec who applied in an
+  // earlier cycle, and advancing yourself to `offer` is the single most damaging
+  // thing anyone can do with this endpoint.
+  if (await isOwnApplicationId(body.applicant_id, email)) {
+    return NextResponse.json({ ok: false, error: SELF_ACCESS_DENIED }, { status: 403 });
+  }
+
   const result = await setDecision({
     applicant_id: body.applicant_id,
     stage: body.stage as Stage,
@@ -51,14 +64,19 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * EXEC-ONLY: the final-decision queue — every candidate with their written
- * reviews UNBLINDED.
+ * EXEC-ONLY: the WRITTEN round's decision queue — every candidate still in the
+ * written round, with their written reviews UNBLINDED.
  *
  * The reviewer feed at /api/recruitment/applicants deliberately hides other
  * reviewers' scores and notes so the screen stays blind. That protection has
  * served its purpose once both reads are in, and exec needs the opposite: both
  * verdicts side by side, and a flag where they disagree. Hence a separate
  * exec-only route rather than loosening the reviewer feed.
+ *
+ * This queue is where the written round ends: advancing from here puts a
+ * candidate into the first round. The later two rounds are decided from the
+ * interview console, in front of the rubrics that justify the call, rather than
+ * from a second copy of this list.
  */
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -73,16 +91,33 @@ export async function GET(req: NextRequest) {
   const readyOnly = url.searchParams.get("ready") === "1";
 
   try {
-    const { applicants, reviews, demo } = await getSnapshot();
-    // Terminal candidates are already dealt with; showing them buries the work.
-    const active = applicants.filter((a) => !["rejected", "withdrawn", "accepted"].includes(a.stage));
+    // Scoped like the reviewer feed: decisions are made cohort by cohort, and a
+    // queue mixing two would put candidates nobody is deciding on right now in
+    // front of the ones exec is actually working.
+    const cycle = await resolveCycle(url.searchParams.get("cycle"));
+    const { applicants, reviews, demo } = await getSnapshot(cycle);
+    // Only the written round. Candidates who have already been advanced are being
+    // worked in the interview console now, and terminal ones are dealt with —
+    // both would bury the decisions that are actually outstanding.
+    const active = applicants.filter((a) =>
+      (ROUND_STAGES.written as readonly string[]).includes(a.stage)
+    );
 
-    const rows = sortDecisionQueue(buildDecisionQueue(active, reviews), order);
+    // This queue is deliberately UNBLINDED — both reviewers' point totals and
+    // both sets of written notes, side by side. That makes it the single worst
+    // row in the app to hand somebody about themselves, so the self-access rule
+    // (lib/self-access.ts) applies here more than anywhere: an exec who applied
+    // in an earlier cycle would otherwise read exactly what their now-teammates
+    // wrote about them while deciding.
+    const mine = excludeOwnApplications(email, active, (a) => a.email);
+
+    const rows = sortDecisionQueue(buildDecisionQueue(mine, reviews), order);
     const visible = readyOnly ? rows.filter((r) => r.ready) : rows;
 
     return NextResponse.json({
       rows: visible,
       summary: summarizeQueue(rows),
+      cycle,
       demo,
     });
   } catch (err) {

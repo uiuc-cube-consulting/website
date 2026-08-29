@@ -1,11 +1,22 @@
-// Server-only orchestration: Google Form responses -> per-candidate Drive folders.
-// Imports googleapis (transitively, via ./drive-write) — never import from client code.
+// Server-only orchestration: Google Form responses -> per-candidate Drive folders,
+// for the FIRST ROUND. Imports googleapis (transitively, via ./drive-write) —
+// never import from client code.
+//
+// Folders are a first-round artifact, not an application-time one. A folder holds
+// the resume plus the case and behavioral rubric docs, and those rubrics only mean
+// anything once a candidate is actually being interviewed. Provisioning the whole
+// written pool would create hundreds of folders — one per applicant, most of them
+// for people who will never reach an interview — each with two rubric docs nobody
+// opens, at ~5 Drive calls apiece. So this run is scoped to candidates whose stage
+// puts them in the first round (lib/rounds.ts), and re-running it after each batch
+// of advancement decisions picks up exactly the people who just moved.
 //
 // Shape of the run, modeled on syncResumes in ./interview-store.ts:
 //   1. read the Form's response sheet
 //   2. upsert the applicants it names (deduped by email, as the importer does)
-//   3. for each, create only the Drive artifacts that are missing
-//   4. record what exists in `candidate_drive_assets` and point the applicant row
+//   3. narrow to the ones currently in the first round
+//   4. for each, create only the Drive artifacts that are missing
+//   5. record what exists in `candidate_drive_assets` and point the applicant row
 //      at the folder
 //
 // The whole thing is idempotent. Re-running after adding 20 applicants creates
@@ -28,6 +39,9 @@ import {
 } from "./folder-naming";
 import { rubricDocRequests, notesDocRequests, type RubricDocMeta } from "./rubric-doc";
 import { CASE_RUBRIC, BEHAVIORAL_RUBRIC } from "./interview";
+import { ROUND_STAGES } from "./rounds";
+import { cycleLabel, normalizeCycle } from "./cycle";
+import { getActiveCycle } from "./visibility";
 import {
   driveWriteClients,
   ensureFolder,
@@ -52,7 +66,25 @@ export type ProvisionOptions = {
   sheetId?: string;
   /** A1 range, e.g. "Form Responses 1!A1:Z". Falls back to RECRUITING_FORM_SHEET_RANGE. */
   range?: string;
-  /** Cycle subfolder, e.g. "Fall 2026". Falls back to RECRUITING_CYCLE_LABEL. */
+  /**
+   * The cycle to provision, canonical ("fa26"). Defaults to the ACTIVE cycle.
+   *
+   * This is the cycle key, not the folder name: it scopes which applicants are
+   * considered and it names the Drive subfolder via `cycleLabel`.
+   */
+  cycleKey?: string;
+  /**
+   * Override the Drive subfolder name ("Fall 2026"). Normally left unset — the
+   * name is derived from `cycleKey` so the folder tree cannot disagree with the
+   * cycle the applicants belong to.
+   *
+   * That drift was a real hazard: the label used to come from
+   * RECRUITING_CYCLE_LABEL, so opening a new cycle in the portal without also
+   * redeploying with a new env var would file every new candidate under last
+   * cycle's folder. And because `candidateFolderName` is stable across cycles by
+   * design, a returning applicant's folder would resolve to their OLD one and the
+   * new resume and rubric docs would land on top of it.
+   */
   cycle?: string;
   /** Drive folder everything is created under. Falls back to RECRUITING_DRIVE_ROOT_FOLDER_ID. */
   rootFolderId?: string;
@@ -94,6 +126,9 @@ export type ProvisionResult =
       unchanged: number;
       /** Candidates still needing work after this call. Zero means done. */
       remaining: number;
+      /** Respondents skipped because they are not in the first round — still in
+       *  the written pool, or already past interviews. Not an error. */
+      notInRound: number;
       noResume: { name: string; email: string }[];
       failed: { name: string; email: string; error: string }[];
       outcomes: CandidateOutcome[];
@@ -105,6 +140,7 @@ type Candidate = {
   id: string;
   name: string;
   email: string;
+  stage?: string | null;
   year?: string | null;
   major?: string | null;
   college?: string | null;
@@ -170,7 +206,8 @@ export async function provisionCandidateFolders(
     return { ok: false, error: "No response sheet. Set RECRUITING_FORM_SHEET_ID or pass a sheet URL." };
   }
   const range = (opts.range || process.env.RECRUITING_FORM_SHEET_RANGE || "A1:Z").trim();
-  const cycle = cycleFolderName(opts.cycle || process.env.RECRUITING_CYCLE_LABEL);
+  const cycleKey = normalizeCycle(opts.cycleKey) ?? (await getActiveCycle());
+  const cycle = cycleFolderName(opts.cycle || cycleLabel(cycleKey));
 
   // ── 1. Read the Form responses ─────────────────────────────────────────────
   const sheet = await readApplicantsFromSheet(sheetId, range);
@@ -178,20 +215,24 @@ export async function provisionCandidateFolders(
   if (!sheet.rows.length) {
     return {
       ok: true, cycle, candidates: 0, foldersCreated: 0, assetsCreated: 0,
-      unchanged: 0, remaining: 0, noResume: [], failed: [], outcomes: [],
+      unchanged: 0, remaining: 0, notInRound: 0, noResume: [], failed: [], outcomes: [],
     };
   }
 
   // ── 2. Make sure every respondent exists as an applicant ───────────────────
   // importApplicants dedupes by email and inserts only the new ones, so this is
   // safe to call on every provisioning run.
-  const imported = await importApplicants(sheet.rows);
+  const imported = await importApplicants(sheet.rows, cycleKey);
   if (!imported.ok && !imported.demo) return { ok: false, error: imported.error ?? "Import failed" };
 
   const emails = [...new Set(sheet.rows.map((r) => r.email.toLowerCase()))];
+  // Scoped to the cycle being provisioned: an email can hold an application in
+  // several cycles now, and matching the sheet across all of them would pull last
+  // semester's row into this semester's folder tree.
   const { data: applicantRows, error: aErr } = await sb
     .from("applicants")
-    .select("id, name, email, year, major, college, drive_folder_id");
+    .select("id, name, email, year, major, college, stage, drive_folder_id")
+    .eq("cycle", cycleKey);
   if (aErr) return { ok: false, error: aErr.message };
 
   const byEmail = new Map(
@@ -201,7 +242,7 @@ export async function provisionCandidateFolders(
     sheet.rows.map((r) => [r.email.toLowerCase(), r.resumeLink])
   );
 
-  const candidates: Candidate[] = emails.flatMap((e) => {
+  const respondents: Candidate[] = emails.flatMap((e) => {
     const a = byEmail.get(e);
     if (!a) return [];
     return [{
@@ -213,7 +254,21 @@ export async function provisionCandidateFolders(
     } satisfies Candidate];
   });
 
-  if (!candidates.length) return { ok: false, error: "No applicants matched the sheet rows." };
+  if (!respondents.length) return { ok: false, error: "No applicants matched the sheet rows." };
+
+  // The whole point of the round scoping: only people actually being interviewed
+  // get a folder. Everyone else in the sheet is either still being read in the
+  // written round or already past this one.
+  const firstRound = ROUND_STAGES.first_round as readonly string[];
+  const candidates = respondents.filter((c) => firstRound.includes(String(c.stage ?? "")));
+  const notInRound = respondents.length - candidates.length;
+
+  if (!candidates.length) {
+    return {
+      ok: true, cycle, candidates: 0, foldersCreated: 0, assetsCreated: 0,
+      unchanged: 0, remaining: 0, notInRound, noResume: [], failed: [], outcomes: [],
+    };
+  }
 
   // ── 3. Cycle folder ────────────────────────────────────────────────────────
   const cycleFolder = await ensureFolder(clients, cycle, rootFolderId);
@@ -426,6 +481,7 @@ export async function provisionCandidateFolders(
   return {
     ok: true,
     cycle,
+    notInRound,
     candidates: candidates.length,
     foldersCreated: outcomes.filter((o) => o.created.includes("folder")).length,
     assetsCreated: outcomes.reduce((n, o) => n + o.created.length, 0),

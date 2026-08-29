@@ -94,6 +94,33 @@ export async function listResumeFiles(folderIdRaw: string): Promise<ListResult> 
   return { ok: true, files };
 }
 
+export type MetaResult =
+  | { ok: true; name: string | null; mimeType: string | null }
+  | { ok: false; error: string };
+
+/**
+ * Name and mime type for one Drive file.
+ *
+ * Needed because a Form response gives us a file id and nothing else, and the
+ * mime type is not cosmetic: `fetchResumeBytes` exports a Google Doc to PDF and
+ * streams everything else as-is, so a pointer stored without one would hand the
+ * browser a Doc's raw bytes under `application/octet-stream`.
+ */
+export async function fetchFileMeta(fileId: string): Promise<MetaResult> {
+  const drive = driveClient();
+  if (!drive) return { ok: false, error: "Drive is not configured." };
+  try {
+    const res = await drive.files.get({
+      fileId,
+      fields: "id, name, mimeType",
+      supportsAllDrives: true,
+    });
+    return { ok: true, name: res.data.name ?? null, mimeType: res.data.mimeType ?? null };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to read the file" };
+  }
+}
+
 export type FetchResult =
   | { ok: true; bytes: ArrayBuffer; mime: string }
   | { ok: false; error: string; status: number };

@@ -1,9 +1,22 @@
 "use client";
 
+// The WRITTEN round's console: the imported form responses, the resume, and the
+// 28-point rubric that scores them.
+//
+// Applicants who have moved on stay reachable here — any member may look somebody
+// up and flag them — but they are filtered out by default and cannot be re-scored.
+// The later rounds are worked in /portal/interview instead.
+
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RUBRIC,
+  SCREEN_MAX_POINTS,
   STAGES,
+  isScreenComplete,
+  screenTotal,
+  wasFiledBeforeApplying,
+  type Flag,
   type RubricKey,
   type Scores,
   type Stage,
@@ -12,6 +25,8 @@ import {
   MIN_REVIEWERS_PER_APPLICANT,
   resolveReviewerPool,
 } from "@/features/03-recruitment-ats/lib/assignment";
+import { DISAGREEMENT_THRESHOLD } from "@/features/03-recruitment-ats/lib/decision";
+import { type Round } from "@/features/03-recruitment-ats/lib/rounds";
 
 type Row = {
   applicant: {
@@ -28,10 +43,12 @@ type Row = {
   mean: number | null;
   spread: number | null;
   perCriterion: Record<RubricKey, number | null>;
+  /** null once they are past the rounds entirely (offer/accepted/rejected). */
+  round: Round | null;
   hasReviewed: boolean;
   assignedToMe: boolean;
   myReview: { scores: Scores; notes: string } | null;
-  flags: { id: string; color: "red" | "green"; description: string; submitter_email: string }[];
+  flags: Flag[];
   assignedReviewers: string[];
   reviewedBy: string[];
   outstanding: string[];
@@ -55,6 +72,8 @@ type ApiResponse = {
   progress: { assigned: number; reviewed: number; pending: number };
   hasAssignments: boolean;
   canManage: boolean;
+  /** The rubric ceiling (28), sent so the header can't drift from the server. */
+  maxPoints: number;
   coverage: CoverageSummary;
 };
 
@@ -63,8 +82,9 @@ type ApiResponse = {
 const MIN_REVIEWERS = MIN_REVIEWERS_PER_APPLICANT;
 
 const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied", screened: "Screened", interview: "Interview",
-  offer: "Offer", accepted: "Accepted", rejected: "Rejected", withdrawn: "Withdrawn",
+  applied: "Applied", screened: "Screened", interview: "First round",
+  final_round: "Final round", offer: "Offer", accepted: "Accepted",
+  rejected: "Rejected", withdrawn: "Withdrawn",
 };
 
 function nextStage(stage: Stage): Stage | null {
@@ -77,6 +97,10 @@ export function RecruitingDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [queueMode, setQueueMode] = useState<"all" | "mine">("all");
+  // The written round is this console's job, so it is what the list shows. "All"
+  // stays available because any member may look up and flag anybody, including
+  // people already in interviews.
+  const [roundFilter, setRoundFilter] = useState<"written" | "all">("written");
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [importUrl, setImportUrl] = useState("");
@@ -190,7 +214,12 @@ export function RecruitingDashboard() {
       });
       const j = await r.json();
       if (j.ok) {
-        setNotice(`Imported ${j.inserted} new applicant(s); skipped ${j.skipped} duplicate(s).`);
+        // Resumes are reported because the rubric scores one: an import that
+        // linked none is an import whose "Resume /5" row nobody can fill in.
+        const resumes = j.resumesLinked ? ` Linked ${j.resumesLinked} resume(s).` : "";
+        setNotice(
+          `Imported ${j.inserted} new applicant(s); skipped ${j.skipped} duplicate(s).${resumes}`
+        );
         setImportUrl("");
         await reload();
       } else setNotice(j.message || j.error || "Could not import.");
@@ -216,10 +245,13 @@ export function RecruitingDashboard() {
     return <div className="h-80 animate-pulse rounded-2xl bg-[var(--bg-cream)]" />;
   }
 
-  const needsReview = data.applicants.filter((r) => r.reviewCount < 2 && !["rejected", "withdrawn"].includes(r.applicant.stage)).length;
-  const disagreements = data.applicants.filter((r) => (r.spread ?? 0) >= 1.5).length;
+  const written = data.applicants.filter((r) => r.round === "written");
+  const needsReview = written.filter((r) => r.reviewCount < MIN_REVIEWERS).length;
+  const disagreements = data.applicants.filter((r) => (r.spread ?? 0) >= DISAGREEMENT_THRESHOLD).length;
   const maxReached = Math.max(1, ...data.funnel.map((f) => f.reached));
-  const visible = queueMode === "mine" ? data.applicants.filter((r) => r.assignedToMe) : data.applicants;
+  const visible = (roundFilter === "written" ? written : data.applicants).filter(
+    (r) => queueMode !== "mine" || r.assignedToMe
+  );
 
   return (
     <div className="space-y-6">
@@ -379,16 +411,41 @@ export function RecruitingDashboard() {
           <p className="eyebrow">Calibration</p>
           <div className="mt-4 space-y-3 text-sm">
             <div className="flex items-center justify-between"><span className="text-[var(--muted)]">Applicants</span><span className="font-bold text-[var(--bg-dark)]">{data.applicants.length}</span></div>
-            <div className="flex items-center justify-between"><span className="text-[var(--muted)]">Need a 2nd review</span><span className="font-bold text-[var(--bg-dark)]">{needsReview}</span></div>
+            <div className="flex items-center justify-between"><span className="text-[var(--muted)]">In the written round</span><span className="font-bold text-[var(--bg-dark)]">{written.length}</span></div>
+            <div className="flex items-center justify-between"><span className="text-[var(--muted)]">Short of {MIN_REVIEWERS} reads</span><span className="font-bold text-[var(--bg-dark)]">{needsReview}</span></div>
             <div className="flex items-center justify-between"><span className="text-[var(--muted)]">Reviewer disagreements</span><span className="font-bold text-[var(--bg-dark)]">{disagreements}</span></div>
           </div>
-          <p className="mt-3 text-xs text-[var(--muted)]">Disagreement = score spread ≥ 1.5 between reviewers.</p>
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Disagreement = point spread ≥ {DISAGREEMENT_THRESHOLD} of {SCREEN_MAX_POINTS} between reviewers.
+          </p>
         </div>
       </div>
 
       {/* Queue + detail */}
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
+          {/* Which round this list is showing. The console scores the written
+              round; the toggle is here because any member may still look up and
+              flag somebody who has already moved into interviews. */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="inline-flex overflow-hidden rounded-full border border-[var(--border)]">
+              <button
+                onClick={() => setRoundFilter("written")}
+                className={`px-4 py-1.5 text-sm font-medium ${roundFilter === "written" ? "bg-[var(--gold)] text-[var(--bg-dark)]" : "bg-white text-[var(--bg-dark)]"}`}
+              >
+                Written round ({written.length})
+              </button>
+              <button
+                onClick={() => setRoundFilter("all")}
+                className={`px-4 py-1.5 text-sm font-medium ${roundFilter === "all" ? "bg-[var(--gold)] text-[var(--bg-dark)]" : "bg-white text-[var(--bg-dark)]"}`}
+              >
+                Everyone ({data.applicants.length})
+              </button>
+            </div>
+            <span className="text-xs text-[var(--muted)]">
+              Scored out of {data.maxPoints ?? SCREEN_MAX_POINTS} points.
+            </span>
+          </div>
           <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
             <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               <span>Applicant</span><span>Stage</span><span>Reviews</span><span>Mean</span>
@@ -396,12 +453,18 @@ export function RecruitingDashboard() {
             <ul className="divide-y divide-[var(--border)]">
               {visible.length === 0 && (
                 <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-                  {queueMode === "mine" ? "Nothing assigned to you yet." : "No applicants."}
+                  {queueMode === "mine"
+                    ? "Nothing assigned to you yet."
+                    : roundFilter === "written"
+                      ? "Nobody is in the written round right now."
+                      : "No applicants."}
                 </li>
               )}
               {visible.map((r) => {
-                const flag = r.reviewCount < 2 && !["rejected", "withdrawn"].includes(r.applicant.stage);
-                const disagree = (r.spread ?? 0) >= 1.5;
+                // Only a candidate still IN the written round can be short of
+                // reads; once advanced, the reads are history, not a gap.
+                const flag = r.round === "written" && r.reviewCount < MIN_REVIEWERS;
+                const disagree = (r.spread ?? 0) >= DISAGREEMENT_THRESHOLD;
                 return (
                   <li key={r.applicant.id}>
                     <button
@@ -417,7 +480,10 @@ export function RecruitingDashboard() {
                       </span>
                       <span className="rounded-full bg-[var(--bg-cream)] px-2 py-0.5 text-[11px] text-[var(--bg-dark)]">{STAGE_LABEL[r.applicant.stage]}</span>
                       <span className={`text-sm tabular-nums ${flag ? "font-bold text-amber-700" : "text-[var(--muted)]"}`}>{r.reviewCount}{flag ? "!" : ""}</span>
-                      <span className={`w-10 text-right text-sm font-semibold tabular-nums ${disagree ? "text-amber-700" : "text-[var(--bg-dark)]"}`}>{r.mean ?? "—"}</span>
+                      <span className={`w-16 text-right text-sm font-semibold tabular-nums ${disagree ? "text-amber-700" : "text-[var(--bg-dark)]"}`}>
+                        {r.mean ?? "—"}
+                        {r.mean !== null && <span className="text-[11px] font-normal text-[var(--muted)]">/{SCREEN_MAX_POINTS}</span>}
+                      </span>
                     </button>
                   </li>
                 );
@@ -457,7 +523,14 @@ function ReviewPanel({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const scoreComplete = RUBRIC.every((c) => Number(scores[c.key]) >= 1);
+  // Presence, not "> 0": 0 is a legitimate score for an unanswered essay, and
+  // requiring a positive number would force reviewers to inflate a blank to a 1.
+  const scoreComplete = isScreenComplete(scores);
+  const runningTotal = screenTotal(scores);
+  // Scoring belongs to the written round. Once a candidate is advanced they are
+  // being scored on the interview rubrics instead, and the API refuses a late
+  // screen review — so the form is read-only here rather than failing on submit.
+  const scorable = row.round === "written";
 
   async function submitReview() {
     setBusy(true);
@@ -501,6 +574,8 @@ function ReviewPanel({
       <p className="text-sm text-[var(--muted)]">{a.email}</p>
       <p className="mt-1 text-sm text-[var(--bg-dark)]">{a.year} · {a.major} · {a.college}</p>
 
+      <ApplicationResume applicantId={a.id} name={a.name} />
+
       {Object.entries(a.responses).map(([k, v]) =>
         v ? (
           <div key={k} className="mt-3">
@@ -514,19 +589,39 @@ function ReviewPanel({
       <FlagPanel applicantId={a.id} flags={row.flags} onChanged={onChanged} />
 
       <hr className="my-4 border-[var(--border)]" />
-      <p className="eyebrow">Your rubric (1–5)</p>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="eyebrow">Your rubric</p>
+        <span className="text-sm font-semibold tabular-nums text-[var(--bg-dark)]">
+          {runningTotal}
+          <span className="font-normal text-[var(--muted)]"> / {SCREEN_MAX_POINTS}</span>
+        </span>
+      </div>
+      {!scorable && (
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          {a.name.split(" ")[0]} has left the written round ({STAGE_LABEL[a.stage] ?? a.stage}), so
+          this rubric is read-only. Their interview rubrics live in the interview console.
+        </p>
+      )}
+      {/* Each criterion runs 0..its own max — the case essay is worth 7, a short
+          essay 3 — so the row length is the ceiling, visibly. */}
       <div className="mt-3 space-y-3">
         {RUBRIC.map((c) => (
           <div key={c.key}>
-            <span className="text-sm font-medium text-[var(--bg-dark)]">{c.label}</span>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-medium text-[var(--bg-dark)]">{c.label}</span>
+              <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted)]">
+                {scores[c.key] ?? "–"} / {c.max}
+              </span>
+            </div>
             <p className="text-[11px] text-[var(--muted)]">{c.anchor}</p>
-            <div className="mt-1.5 flex gap-1.5">
-              {[1, 2, 3, 4, 5].map((n) => (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {Array.from({ length: c.max + 1 }, (_, n) => (
                 <button
                   key={n}
                   type="button"
+                  disabled={!scorable}
                   onClick={() => setScores((s) => ({ ...s, [c.key]: n }))}
-                  className={`h-9 w-9 rounded-lg border text-sm font-semibold ${Number(scores[c.key]) === n ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-dark)]" : "border-[var(--border)] bg-white text-[var(--bg-dark)] hover:border-[var(--gold)]"}`}
+                  className={`h-9 w-9 rounded-lg border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${Number(scores[c.key]) === n ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-dark)]" : "border-[var(--border)] bg-white text-[var(--bg-dark)] hover:border-[var(--gold)]"}`}
                 >
                   {n}
                 </button>
@@ -538,13 +633,19 @@ function ReviewPanel({
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
+        disabled={!scorable}
         rows={2}
         placeholder="Notes (optional)"
-        className="mt-3 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
+        className="mt-3 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)] disabled:bg-[var(--bg-cream)]/40"
       />
-      <button onClick={submitReview} disabled={busy || !scoreComplete} className="btn btn-gold mt-3 w-full disabled:opacity-50">
+      <button onClick={submitReview} disabled={busy || !scoreComplete || !scorable} className="btn btn-gold mt-3 w-full disabled:opacity-50">
         {row.hasReviewed ? "Update review" : "Submit review"}
       </button>
+      {scorable && !scoreComplete && (
+        <p className="mt-2 text-center text-xs text-[var(--muted)]">
+          Score every criterion to submit — a 0 counts as a score.
+        </p>
+      )}
 
       {canManage && <ReroutePanel row={row} onChanged={onChanged} />}
 
@@ -617,15 +718,35 @@ function FlagPanel({
       <p className="eyebrow">Flags</p>
       {flags.length > 0 && (
         <ul className="mt-2 space-y-2">
-          {flags.map((f) => (
-            <li key={f.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 px-3 py-2 text-sm">
-              <span className={`mr-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${f.color === "red" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                {f.color === "red" ? "Red flag" : "Green flag"}
-              </span>
-              <span className="text-[var(--bg-dark)]">{f.description}</span>
-              <span className="ml-2 text-[11px] text-[var(--muted)]">— {f.submitter_email}</span>
-            </li>
-          ))}
+          {flags.map((f) => {
+            const early = wasFiledBeforeApplying(f);
+            return (
+              <li key={f.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${f.color === "red" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                    {f.color === "red" ? "Red flag" : "Green flag"}
+                  </span>
+                  {f.event && (
+                    <span className="rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-[11px] text-[var(--muted)]">
+                      {f.event}
+                    </span>
+                  )}
+                  {/* Filed at an event, before this application existed — so the
+                      note was written about the person, not about their answers. */}
+                  {early && (
+                    <span className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--gold-deep)]">
+                      Before applying
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[var(--bg-dark)]">{f.description}</p>
+                <p className="mt-1 text-[11px] text-[var(--muted)]">
+                  — {f.submitter_email}
+                  {early && ` · ${new Date(f.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -656,6 +777,13 @@ function FlagPanel({
         {busy ? "Submitting…" : "Submit flag"}
       </button>
       {toast && <p className="mt-2 text-sm text-[var(--gold-deep)]">{toast}</p>}
+      <p className="mt-2 text-[11px] text-[var(--muted)]">
+        Someone who hasn&apos;t applied?{" "}
+        <Link href="/portal/flags" className="underline hover:text-[var(--gold-deep)]">
+          Flag them by email
+        </Link>{" "}
+        — it attaches when they apply.
+      </p>
     </div>
   );
 }
@@ -945,5 +1073,51 @@ function ReshuffleButton({
         Cancel
       </button>
     </span>
+  );
+}
+
+/**
+ * The candidate's resume, inline, in the written console.
+ *
+ * The written rubric scores the resume out of 5, so this is not a nicety — a
+ * reviewer who cannot see the resume cannot honestly fill in that row. The file
+ * is streamed by /api/recruitment/resume/<applicant id> under our own auth, so
+ * the Drive file id never reaches the browser (see that route).
+ *
+ * Collapsed by default. Most of the reading here is essays, and a 60vh iframe
+ * between the applicant's name and their answers pushes the actual application
+ * off the screen.
+ */
+function ApplicationResume({ applicantId, name }: { applicantId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const src = `/api/recruitment/resume/${applicantId}`;
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="btn btn-gold-outline text-xs px-3 py-1.5"
+          aria-expanded={open}
+        >
+          {open ? "Hide resume" : "Show resume"}
+        </button>
+        <a href={src} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--gold-deep)] hover:underline">
+          Open in a new tab ↗
+        </a>
+      </div>
+      {open && (
+        <iframe
+          src={src}
+          title={`${name} resume`}
+          className="mt-2 h-[55vh] w-full rounded-xl border border-[var(--border)]"
+        />
+      )}
+      {/* No pre-flight check that a resume exists: the feed does not carry the
+          pointer, and the route answers 404 with a readable message, which is the
+          same information one request later without a second round trip on every
+          candidate a reviewer clicks. */}
+    </div>
   );
 }

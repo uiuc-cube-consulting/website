@@ -1,10 +1,17 @@
-// Pure domain types + the calibrated rubric + scoring/aggregation helpers.
-// No server imports — safe to use from client components.
+// Pure domain types + the written-application rubric + scoring/aggregation
+// helpers. No server imports — safe to use from client components.
+//
+// The cycle runs in three rounds, and this module owns the FIRST one. See
+// ./rounds.ts for the round model itself and which stages belong to which round:
+//   · written      — the application + resume, scored on RUBRIC below
+//   · first_round  — case + behavioral interviews (./interview.ts)
+//   · final_round  — exec-only final interviews (./interview.ts)
 
 export const STAGES = [
   "applied",
   "screened",
   "interview",
+  "final_round",
   "offer",
   "accepted",
 ] as const;
@@ -14,42 +21,93 @@ export type Stage = (typeof STAGES)[number] | "rejected" | "withdrawn";
 export const FUNNEL_STAGES: Stage[] = [...STAGES];
 const STAGE_ORDER: Record<string, number> = Object.fromEntries(STAGES.map((s, i) => [s, i]));
 
-// ── Calibrated rubric ────────────────────────────────────────────────────────
-// Fixed criteria, each 1–5 with written anchors so a "4" means the same to every
-// reviewer. Equal weights by default — tune `weight` to reweight.
+// ── Written-application rubric ───────────────────────────────────────────────
+// The scored parts of a written application, as POINTS rather than a 1–5 scale.
+// Each criterion carries its own ceiling — the case essay is worth more than a
+// short-answer essay, and the rubric says so directly instead of hiding the
+// difference in a weight — and the totals reviewers compare are plain sums out
+// of SCREEN_MAX_POINTS.
+//
+// Zero is a real score, not "unscored": an unanswered essay earns 0 points. So
+// completeness is "every criterion has a value", never "every value is above
+// zero" — see isScreenComplete.
+//
+// This is deliberately a different shape from the interview rubrics in
+// ./interview.ts, which stay on a 1–5 anchored scale and average. The two rounds
+// score different things and their numbers are never mixed (see `aggregate`).
 export const RUBRIC = [
   {
-    key: "problem_solving",
-    label: "Problem-solving",
-    weight: 1,
-    anchor: "Structures ambiguous problems; reasons from first principles.",
+    key: "essay_1",
+    label: "Essay 1",
+    max: 5,
+    anchor:
+      "5 = specific, self-aware, and unmistakably about this person; 3 = answers the prompt but could be anyone's; 0 = unanswered or off-prompt.",
   },
   {
-    key: "communication",
-    label: "Communication",
-    weight: 1,
-    anchor: "Clear, concise, audience-aware; listens and synthesizes.",
+    key: "essay_2",
+    label: "Essay 2",
+    max: 3,
+    anchor: "3 = concrete and well-argued; 2 = fine but generic; 0 = unanswered or off-prompt.",
   },
   {
-    key: "drive",
-    label: "Drive & initiative",
-    weight: 1,
-    anchor: "Self-starts, follows through, seeks ownership.",
+    key: "essay_3",
+    label: "Essay 3",
+    max: 3,
+    anchor: "3 = concrete and well-argued; 2 = fine but generic; 0 = unanswered or off-prompt.",
   },
   {
-    key: "fit",
-    label: "Team fit",
-    weight: 1,
-    anchor: "Collaborative, coachable, raises the people around them.",
+    key: "case_essay",
+    label: "Case essay",
+    max: 7,
+    anchor:
+      "The heaviest single item. 7 = structured, quantified, and lands a recommendation; 4 = sound reasoning without a clear answer; 1–2 = unstructured; 0 = unanswered.",
+  },
+  {
+    key: "misc",
+    label: "Miscellaneous",
+    max: 5,
+    anchor:
+      "Everything the essays don't capture: involvement, writing quality, evidence of follow-through, anything notable in the rest of the form.",
+  },
+  {
+    key: "resume",
+    label: "Resume",
+    max: 5,
+    anchor:
+      "5 = relevant experience with real ownership, cleanly presented; 3 = solid but thin; 0 = no resume submitted.",
   },
 ] as const;
 
 export type RubricKey = (typeof RUBRIC)[number]["key"];
-export type Scores = Record<RubricKey, number>; // each 1–5
+/** Each criterion scored 0..its own `max`. */
+export type Scores = Record<RubricKey, number>;
 
-/** Shape shared by every rubric — the screen rubric above and the interview
- *  rubrics in `interview.ts`, so scoring helpers work across all of them. */
+/** Shape of one written-application criterion, for helpers that take any of them. */
+export type PointCriterion = { key: string; label: string; max: number; anchor: string };
+
+/** The best possible written application: 5 + 3 + 3 + 7 + 5 + 5 = 28. */
+export const SCREEN_MAX_POINTS: number = RUBRIC.reduce((a, c) => a + c.max, 0);
+
+/** Shape shared by the 1–5 anchored interview rubrics in `interview.ts`. */
 export type RubricCriterion = { key: string; label: string; weight: number; anchor: string };
+
+/**
+ * A whole number within this criterion's 0..max range.
+ *
+ * Deliberately does NOT coerce. `Number(null)` is 0 and `Number("")` is 0, so a
+ * coercing check would read a criterion the reviewer never touched as a scored
+ * zero — and on this rubric zero is a real, meaningful score, so that mistake is
+ * invisible: an unfinished review would submit and count as a harsh one. JSON
+ * numbers arrive as numbers, so requiring one costs nothing.
+ */
+export function isValidScore(criterion: PointCriterion, value: unknown): boolean {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= criterion.max
+  );
+}
 
 export type Applicant = {
   id: string;
@@ -61,6 +119,19 @@ export type Applicant = {
   college?: string;
   responses: Record<string, string>;
   stage: Stage;
+  /**
+   * The semester this application belongs to — "fa26", "sp27". Part of the
+   * application's identity, not a label on it: uniqueness is (lower(email),
+   * cycle), so one person holds one application per cycle and as many cycles as
+   * they apply in. See lib/cycle.ts for the format and db/cycles.sql for the
+   * constraint.
+   *
+   * `stage` and `cycle` are orthogonal and easy to confuse: stage is where a
+   * candidate got to WITHIN one cycle, cycle is WHICH attempt it was. Someone
+   * rejected in fa26 and interviewing in sp27 has two rows, each with its own
+   * stage.
+   */
+  cycle: string;
 };
 
 export type Review = {
@@ -69,15 +140,19 @@ export type Review = {
   applicant_id: string;
   reviewer_email: string;
   scores: Scores;
+  /** Column name is historical. For a screen review this holds POINTS out of
+   *  SCREEN_MAX_POINTS; for an interview rubric it holds the 1–5 weighted mean. */
   weighted_total: number;
   notes?: string;
-  /** Which rubric this row is an instance of. Absent on rows written before the
-   *  interview console existed, which are all application screens. */
-  kind?: "screen" | "case" | "behavioral";
+  /** Which rubric this row is an instance of, which is also which ROUND it
+   *  belongs to (see ./rounds.ts). Absent on rows written before the interview
+   *  console existed, which are all written-application screens. */
+  kind?: "screen" | "case" | "behavioral" | "final_case" | "final_behavioral";
   recommendation?: string | null;
 };
 
-/** Weighted average of any rubric's criterion scores, on the 1–5 scale. */
+/** Weighted average of an INTERVIEW rubric's criterion scores, on the 1–5 scale.
+ *  The written-application rubric does not use this — it sums points instead. */
 export function weightedTotalFor(
   rubric: readonly RubricCriterion[],
   scores: Record<string, number>
@@ -87,16 +162,40 @@ export function weightedTotalFor(
   return totalWeight ? Math.round((sum / totalWeight) * 100) / 100 : 0;
 }
 
-/** Weighted average of a single application-screen review, on the 1–5 scale. */
-export function weightedTotal(scores: Scores): number {
-  return weightedTotalFor(RUBRIC, scores);
+/**
+ * One written application's score: the plain sum of its criterion points, out of
+ * SCREEN_MAX_POINTS.
+ *
+ * Out-of-range and missing values contribute 0 rather than throwing, so a
+ * half-filled draft still totals to something sensible in the UI. The API
+ * validates properly before anything is stored (see isScreenComplete and the
+ * reviews route), so a saved row is never a partial one.
+ */
+export function screenTotal(scores: Partial<Record<RubricKey, number>>): number {
+  return RUBRIC.reduce((sum, c) => {
+    const v = Number(scores[c.key]);
+    return sum + (Number.isFinite(v) ? Math.min(Math.max(v, 0), c.max) : 0);
+  }, 0);
+}
+
+/**
+ * Every criterion carries a score in range.
+ *
+ * Explicitly a presence check, not a truthiness one: 0 is a legitimate score (an
+ * unanswered essay), so `scores[key] > 0` would refuse to let a reviewer submit
+ * an honest zero.
+ */
+export function isScreenComplete(scores: Partial<Record<RubricKey, number>>): boolean {
+  return RUBRIC.every((c) => isValidScore(c, scores[c.key]));
 }
 
 export type ApplicantAggregate = {
   applicant: Applicant;
   reviewCount: number;
-  mean: number | null; // mean of reviewers' weighted totals
-  spread: number | null; // max - min weighted total (calibration signal)
+  /** Mean of the reviewers' point totals, out of SCREEN_MAX_POINTS. */
+  mean: number | null;
+  /** max − min point total across reviewers (the calibration signal). */
+  spread: number | null;
   perCriterion: Record<RubricKey, number | null>;
   reviewers: string[];
 };
@@ -108,21 +207,28 @@ export function isScreenReview(r: Review): boolean {
 }
 
 /**
- * Aggregate one applicant's APPLICATION-SCREEN reviews: mean, spread, per-criterion
- * means. Interview rubrics (case/behavioral) score different criteria on a different
- * rubric, so they are excluded here — mixing them would silently corrupt these means.
+ * Aggregate one applicant's WRITTEN-APPLICATION reviews: mean, spread, and
+ * per-criterion means, all in points.
+ *
+ * Interview rubrics from the later rounds score different criteria on a 1–5
+ * scale, so they are excluded here — averaging a 4.25 case rubric into a 28-point
+ * written total would silently corrupt every number on this screen.
  */
 export function aggregate(applicant: Applicant, reviews: Review[]): ApplicantAggregate {
   const rs = reviews.filter((r) => r.applicant_id === applicant.id && isScreenReview(r));
-  const totals = rs.map((r) => r.weighted_total);
+  // Recomputed rather than read from the stored column, so a row written under an
+  // older rubric cannot contribute a total that no longer means anything.
+  const totals = rs.map((r) => screenTotal(r.scores));
   const mean = totals.length ? Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 100) / 100 : null;
   const spread = totals.length ? Math.round((Math.max(...totals) - Math.min(...totals)) * 100) / 100 : null;
 
   const perCriterion = Object.fromEntries(
-    RUBRIC.map((r) => {
-      const vals = rs.map((rv) => Number(rv.scores[r.key]) || 0).filter((v) => v > 0);
+    RUBRIC.map((c) => {
+      // Presence, not truthiness: a scored 0 belongs in the mean, a missing
+      // criterion does not.
+      const vals = rs.map((rv) => Number(rv.scores?.[c.key])).filter((v) => Number.isFinite(v));
       const m = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
-      return [r.key, m];
+      return [c.key, m];
     })
   ) as Record<RubricKey, number | null>;
 
@@ -155,14 +261,89 @@ export function funnel(applicants: Applicant[]): Funnel {
 // ── Reviewer assignment ────────────────────────────────────────────────────
 export type Assignment = { applicant_id: string; reviewer_email: string };
 
+/**
+ * A red (concern) or green (endorsement) flag on a PERSON.
+ *
+ * The subject is an email, not an application row, because flags are filed at
+ * info nights, coffee chats and callouts — often weeks before the application
+ * opens. A flag with no `applicant_id` is PENDING: it is waiting for a matching
+ * application to arrive, at which point it is claimed and shows up on that
+ * applicant's profile with its original author, note, event and timestamp.
+ */
 export type Flag = {
   id: string;
   created_at: string;
-  applicant_id: string;
+  /** Null while PENDING — nobody has applied from `subject_email` yet. */
+  applicant_id: string | null;
+  /** Who the flag is about. Always lowercase; the only key a pending flag has. */
+  subject_email: string;
+  /** Name as the submitter knew it — display only, never used for matching,
+   *  since two people share a name far more often than an email. */
+  subject_name?: string | null;
+  /** Where it was observed: "Fall Info Night", "Coffee chats", "Case night". */
+  event?: string | null;
+  /** When the flag attached to an applicant. Null while pending. */
+  linked_at?: string | null;
   submitter_email: string;
   color: "red" | "green";
   description: string;
 };
+
+/** The one canonical form of a flag subject. Matching is case-insensitive and
+ *  whitespace-insensitive; everything else about an email is left alone. */
+export function normalizeSubject(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** True while no application has been matched to this flag yet. */
+export function isPendingFlag(f: Flag): boolean {
+  return !f.applicant_id;
+}
+
+/** Split a mixed set into the flags already on a profile and those still waiting. */
+export function partitionFlags(flags: Flag[]): { linked: Flag[]; pending: Flag[] } {
+  const linked: Flag[] = [];
+  const pending: Flag[] = [];
+  for (const f of flags) (isPendingFlag(f) ? pending : linked).push(f);
+  return { linked, pending };
+}
+
+/**
+ * The flags a newly-arrived applicant should inherit: every PENDING flag whose
+ * subject matches their email.
+ *
+ * Pure and exported so the claim rule is testable without a database, and so the
+ * intake UI can preview "3 flags will attach when they apply" using the same
+ * comparison the server will actually run.
+ */
+export function pendingFlagsFor(flags: Flag[], email: string): Flag[] {
+  const key = normalizeSubject(email);
+  if (!key) return [];
+  return flags.filter((f) => isPendingFlag(f) && normalizeSubject(f.subject_email) === key);
+}
+
+/** Flags already attached to one applicant. */
+export function flagsForApplicant(flags: Flag[], applicantId: string): Flag[] {
+  return flags.filter((f) => f.applicant_id === applicantId);
+}
+
+/**
+ * True when this flag was filed BEFORE the person applied — it waited in the
+ * pending pool and was claimed later.
+ *
+ * Told apart by the gap between writing and linking: a flag filed on an existing
+ * candidate links in the same operation, so the two timestamps are the same
+ * moment, while a claimed one links whenever the application happened to arrive.
+ * A minute of slack absorbs clock skew between the insert and the claim.
+ *
+ * Worth showing, because it changes how the note should be read: it was written
+ * by someone who met this person at an event, with no application in front of
+ * them and no idea they would ever be a candidate.
+ */
+export function wasFiledBeforeApplying(f: Flag): boolean {
+  if (!f.applicant_id || !f.linked_at) return false;
+  return new Date(f.linked_at).getTime() - new Date(f.created_at).getTime() > 60_000;
+}
 
 function shuffle<T>(arr: T[], rng: () => number): T[] {
   const a = [...arr];

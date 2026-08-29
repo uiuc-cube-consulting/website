@@ -24,8 +24,23 @@ let mockSession: { user: { email: string; role: string; memberId?: string } } | 
 jest.mock("@/auth", () => ({ auth: jest.fn(() => Promise.resolve(mockSession)) }));
 
 // Data layer is stubbed: this suite is about WHO may call, not what is returned.
+// Both fixture applicants sit in the WRITTEN round: the reviews route refuses a
+// screen review for anyone who has already been advanced, and this suite is about
+// WHO may call, not about that rule (which has its own tests below).
+const WRITTEN_APPLICANTS = [
+  { id: "assigned-app", name: "Assigned Applicant", email: "assigned@illinois.edu", stage: "applied", responses: {}, created_at: "2026-01-01", cycle: "fa26" },
+  { id: "someone-elses", name: "Other Applicant", email: "other@illinois.edu", stage: "applied", responses: {}, created_at: "2026-01-01", cycle: "fa26" },
+];
+
 const stub = {
-  getSnapshot: jest.fn(async () => ({ applicants: [], reviews: [], demo: false })),
+  listCycles: jest.fn(async () => ["fa26"]),
+  getSnapshot: jest.fn(async () => ({
+    applicants: WRITTEN_APPLICANTS,
+    reviews: [],
+    flags: [],
+    pendingFlags: [],
+    demo: false,
+  })),
   getAssignments: jest.fn(async () => [
     { applicant_id: "assigned-app", reviewer_email: "user@illinois.edu" },
   ]),
@@ -34,6 +49,7 @@ const stub = {
 };
 jest.mock("@/features/03-recruitment-ats/lib/store", () => ({
   getSnapshot: (...a: unknown[]) => stub.getSnapshot(...(a as [])),
+  listCycles: (...a: unknown[]) => stub.listCycles(...(a as [])),
   getAssignments: (...a: unknown[]) => stub.getAssignments(...(a as [])),
   submitReview: (...a: unknown[]) => stub.submitReview(...(a as [])),
   setDecision: (...a: unknown[]) => stub.setDecision(...(a as [])),
@@ -75,7 +91,8 @@ function post(body: unknown): NextRequest {
   });
 }
 
-const VALID_SCORES = { problem_solving: 4, communication: 4, drive: 4, fit: 4 };
+// One score per criterion, each inside its own 0..max range (RUBRIC in types.ts).
+const VALID_SCORES = { essay_1: 4, essay_2: 3, essay_3: 2, case_essay: 6, misc: 3, resume: 4 };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -204,8 +221,65 @@ describe("POST /api/recruitment/reviews — scoring", () => {
 
   it("reports a bad payload as 400, not as a permission error", async () => {
     signInAs("senior_consultant");
-    const res = await reviewsPOST(post({ applicant_id: "assigned-app", scores: { problem_solving: 9 } }));
+    const res = await reviewsPOST(post({ applicant_id: "assigned-app", scores: { essay_1: 9 } }));
     expect(res.status).toBe(400);
+  });
+
+  it("refuses a score above that criterion's own ceiling", async () => {
+    // The ceilings differ — essay_2 is worth 3, the case essay 7 — so a flat 0-7
+    // check would quietly accept a 7 on a 3-point essay.
+    signInAs("senior_consultant");
+    const res = await reviewsPOST(
+      post({ applicant_id: "assigned-app", scores: { ...VALID_SCORES, essay_2: 7 } })
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/0 to 3/);
+    expect(stub.submitReview).not.toHaveBeenCalled();
+  });
+
+  it("accepts a zero, because an unanswered essay is worth zero", async () => {
+    signInAs("senior_consultant");
+    const zeroes = { essay_1: 0, essay_2: 0, essay_3: 0, case_essay: 0, misc: 0, resume: 0 };
+    const res = await reviewsPOST(post({ applicant_id: "assigned-app", scores: zeroes }));
+    expect(res.status).toBe(200);
+    expect(stub.submitReview).toHaveBeenCalled();
+  });
+
+  it("refuses a criterion left out entirely", async () => {
+    signInAs("senior_consultant");
+    const { resume: _omitted, ...partial } = VALID_SCORES;
+    const res = await reviewsPOST(post({ applicant_id: "assigned-app", scores: partial }));
+    expect(res.status).toBe(400);
+    expect(stub.submitReview).not.toHaveBeenCalled();
+  });
+
+  it("refuses a written review for a candidate already in interviews", async () => {
+    // They are being scored on the case and behavioral rubrics now; a late screen
+    // review would move the written mean underneath a decision already made.
+    stub.getSnapshot.mockResolvedValueOnce({
+      applicants: [{ ...WRITTEN_APPLICANTS[0], stage: "interview" }],
+      reviews: [],
+      flags: [],
+      pendingFlags: [],
+      demo: false,
+    });
+    signInAs("senior_consultant");
+    const res = await reviewsPOST(post({ applicant_id: "assigned-app", scores: VALID_SCORES }));
+    expect(res.status).toBe(409);
+    expect(stub.submitReview).not.toHaveBeenCalled();
+  });
+
+  it("still lets exec correct a record after the candidate has advanced", async () => {
+    stub.getSnapshot.mockResolvedValueOnce({
+      applicants: [{ ...WRITTEN_APPLICANTS[0], stage: "interview" }],
+      reviews: [],
+      flags: [],
+      pendingFlags: [],
+      demo: false,
+    });
+    signInAs("exec");
+    const res = await reviewsPOST(post({ applicant_id: "assigned-app", scores: VALID_SCORES }));
+    expect(res.status).toBe(200);
   });
 
   it("matches assignment case-insensitively", () => {

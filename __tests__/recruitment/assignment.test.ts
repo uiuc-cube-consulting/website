@@ -31,8 +31,8 @@ function review(applicant_id: string, reviewer_email: string, kind?: Review["kin
     created_at: "2026-01-01",
     applicant_id,
     reviewer_email,
-    scores: { problem_solving: 3, communication: 3, drive: 3, fit: 3 },
-    weighted_total: 3,
+    scores: { essay_1: 3, essay_2: 2, essay_3: 2, case_essay: 4, misc: 3, resume: 3 },
+    weighted_total: 17,
     kind,
   };
 }
