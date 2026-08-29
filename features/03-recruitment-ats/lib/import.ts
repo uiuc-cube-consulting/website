@@ -110,20 +110,45 @@ function nameFrom(cols: ColumnMap, cell: (i: number) => string): string {
   return cell(cols.name) || first || last;
 }
 
+export type ParsedSheet = {
+  rows: ImportRow[];
+  /** 1-based sheet row numbers dropped for having no email, so a human can go
+   *  look at them. Email is the dedupe key, so a row without one cannot be
+   *  imported — but it must not vanish silently either: this is the difference
+   *  between "16 people are missing" and "rows 34, 51 and 88 have no email". */
+  droppedNoEmail: number[];
+  /** Every non-empty row the sheet actually had, before any filtering. Reported
+   *  so the import can be reconciled against what you see in the spreadsheet. */
+  totalRows: number;
+};
+
 /**
- * Sheet values (row 1 = headers) -> ImportRow[]. Pure; the network half lives in
- * readApplicantsFromSheet. Rows with no email are skipped — email is the dedupe key.
+ * Sheet values (row 1 = headers) -> importable rows plus what was dropped.
+ * Pure; the network half lives in readApplicantsFromSheet.
  */
-export function rowsFromValues(values: string[][]): ImportRow[] {
-  if (values.length < 2) return [];
+export function rowsFromValues(values: string[][]): ParsedSheet {
+  if (values.length < 2) return { rows: [], droppedNoEmail: [], totalRows: 0 };
   const headers = values[0].map((h) => String(h ?? "").trim());
   const cols = mapColumns(headers);
 
   const rows: ImportRow[] = [];
-  for (const r of values.slice(1)) {
-    const cell = (i: number) => (i >= 0 ? String(r[i] ?? "").trim() : "");
+  const droppedNoEmail: number[] = [];
+  let totalRows = 0;
+
+  for (const [i, r] of values.slice(1).entries()) {
+    const sheetRow = i + 2; // 1-based, and row 1 is the header
+    const cell = (c: number) => (c >= 0 ? String(r[c] ?? "").trim() : "");
+
+    // A trailing blank row is formatting, not a missing applicant — don't report
+    // it as dropped or the diagnostics fill with noise.
+    if (r.every((v) => !String(v ?? "").trim())) continue;
+    totalRows++;
+
     const email = cell(cols.email);
-    if (!email) continue;
+    if (!email) {
+      droppedNoEmail.push(sheetRow);
+      continue;
+    }
     const responses: Record<string, string> = {};
     for (let i = 0; i < headers.length; i++) {
       if (cols.core.has(i)) continue;
@@ -141,20 +166,26 @@ export function rowsFromValues(values: string[][]): ImportRow[] {
       responses,
     });
   }
-  return rows;
+  return { rows, droppedNoEmail, totalRows };
 }
 
 export type ImportReadResult =
-  | { ok: true; rows: ImportRow[]; total: number }
+  | { ok: true; rows: ImportRow[]; total: number; totalRows: number; droppedNoEmail: number[] }
   | { ok: false; error: string };
 
 /**
- * Read `range` (default first sheet, A1:Z) and map rows to ImportRow. Row 1 is the
- * header. Recognized columns: name, email, year, major, college, and the Form's
- * resume-upload column; everything else is stored under `responses` keyed by its
- * header so no answer is lost.
+ * Read `range` and map rows to ImportRow. Row 1 is the header. Recognized
+ * columns: name, email, year, major, college, and the Form's resume-upload
+ * column; everything else is stored under `responses` keyed by its header so no
+ * answer is lost.
+ *
+ * The default reads to column BZ, not Z. A1:Z stops at 26 columns, and the
+ * Fall 2026 form already has 25 — so adding two questions would have silently
+ * truncated every answer past the 26th, including the case essay, with no error
+ * anywhere. Sheets returns only the columns that exist, so over-reaching costs
+ * nothing.
  */
-export async function readApplicantsFromSheet(sheetIdRaw: string, range = "A1:Z"): Promise<ImportReadResult> {
+export async function readApplicantsFromSheet(sheetIdRaw: string, range = "A1:BZ"): Promise<ImportReadResult> {
   const client = sheetsClient();
   if (!client) return { ok: false, error: "No Google credentials (GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_API_KEY)." };
   if (!sheetIdRaw) return { ok: false, error: "A sheet id or URL is required." };
@@ -166,6 +197,12 @@ export async function readApplicantsFromSheet(sheetIdRaw: string, range = "A1:Z"
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed to read sheet" };
   }
-  const rows = rowsFromValues(values);
-  return { ok: true, rows, total: rows.length };
+  const parsed = rowsFromValues(values);
+  return {
+    ok: true,
+    rows: parsed.rows,
+    total: parsed.rows.length,
+    totalRows: parsed.totalRows,
+    droppedNoEmail: parsed.droppedNoEmail,
+  };
 }
