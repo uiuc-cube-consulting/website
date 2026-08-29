@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { assignReviewers } from "@/features/03-recruitment-ats/lib/store";
 import { MIN_REVIEWERS_PER_APPLICANT } from "@/features/03-recruitment-ats/lib/assignment";
+import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
 
-// Exec-only: randomly + evenly assign k reviewers to every active applicant.
+// Exec-only: randomly + evenly assign k reviewers to every active applicant IN
+// ONE CYCLE (the active one unless `cycle` is given).
 // Optionally restricted to a chosen subset of the pool (body.reviewer_emails).
 // `reshuffle: true` re-deals from scratch instead of topping up.
+//
+// The cycle scope is not cosmetic: unscoped, every reviewer would be dealt last
+// semester's cohort alongside this one — hundreds of reads on applications that
+// were decided months ago, and a coverage report that can never reach done.
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "exec") return NextResponse.json({ ok: false, error: "Exec only" }, { status: 403 });
 
-  let body: { k?: number; reviewer_emails?: unknown; reshuffle?: unknown } = {};
+  let body: { k?: number; reviewer_emails?: unknown; reshuffle?: unknown; cycle?: string } = {};
   try {
     body = await req.json();
   } catch {
@@ -40,7 +46,8 @@ export async function POST(req: NextRequest) {
   // again. Opt-in, because it is destructive: the default run only tops up.
   const reshuffle = body.reshuffle === true;
 
-  const result = await assignReviewers(k, reviewerEmails, { reshuffle });
+  const cycle = await resolveCycle(body.cycle);
+  const result = await assignReviewers(k, reviewerEmails, { reshuffle, cycle });
   if (result.demo) {
     return NextResponse.json({ ok: false, demo: true, message: "Supabase not configured — assignments not saved." });
   }
@@ -51,5 +58,5 @@ export async function POST(req: NextRequest) {
     const status = reviewerEmails ? 400 : 500;
     return NextResponse.json({ ok: false, error: result.error, ignored: result.ignored }, { status });
   }
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, cycle });
 }
