@@ -4,6 +4,7 @@ import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
+import { PortalMobileNav, type PortalNavLink } from "@/components/PortalMobileNav";
 
 export const metadata: Metadata = {
   title: "Member Portal",
@@ -32,10 +33,42 @@ export default async function PortalLayout({
   // nav link (and the page itself) disappears for everyone but exec once closed.
   const recruitingOpen = await canViewRecruiting(role);
 
+  // ONE list, rendered twice — the desktop <nav> below and the mobile panel.
+  //
+  // Built as data rather than as two sets of JSX because the two drift
+  // otherwise: "Flags" was added to the desktop nav and, had a mobile menu
+  // existed then, would have been missing from it. A link added here now
+  // appears in both by construction.
+  //
+  // `false &&` entries are filtered out, so each line reads as "who gets this".
+  const navLinks: PortalNavLink[] = [
+    // Core — everyone. Calendar / Points / Resources live as sections on the Dashboard.
+    { href: "/portal", label: "Dashboard" },
+    { href: "/portal/case-studies", label: "Case Studies" },
+    { href: "/portal/brain", label: "CUBE Brain" },
+    // PMs file strikes; exec see the review dashboard (below).
+    ...(role === "project_manager" ? [{ href: "/portal/strikes/new", label: "File a Strike" }] : []),
+    // Leadership tools — only the roles that can use them.
+    ...(isExec && PIPELINE_ENABLED ? [{ href: "/portal/pipeline", label: "Pipeline" }] : []),
+    ...(isExec ? [{ href: "/portal/strikes", label: "Strikes" }] : []),
+    // Accountability follows the project SEAT, not the title — returning members
+    // can hold an SC seat, so they get the link too and the page decides.
+    ...(isInterviewer ? [{ href: "/portal/accountability", label: "Accountability" }] : []),
+    ...(recruitingOpen ? [{ href: "/portal/recruiting", label: "Recruiting" }] : []),
+    // Flags are NOT behind `recruitingOpen`: they are filed at info nights and
+    // coffee chats months before a cycle opens, which is exactly when the
+    // recruiting console is shut. See app/portal/flags/page.tsx.
+    { href: "/portal/flags", label: "Flags" },
+    ...(isInterviewer && recruitingOpen ? [{ href: "/portal/interview", label: "Interviews" }] : []),
+  ];
+
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-cream)]/40">
       {/* Portal-specific header — replaces the public site header on /portal/* */}
-      <header className="sticky top-0 z-50 bg-[var(--bg-dark)] text-[var(--fg-on-dark)]">
+      {/* `relative` is what the mobile menu panel positions against — it drops
+          out of flow as `absolute inset-x-0 top-full` so opening it can never
+          change the header's height. */}
+      <header className="relative sticky top-0 z-50 bg-[var(--bg-dark)] text-[var(--fg-on-dark)]">
         <div className="container-x flex h-16 md:h-20 items-center justify-between gap-6">
           <Link href="/portal" className="flex items-center gap-3 group">
             <Image src="/cube-logo.png" alt="" width={40} height={40} className="w-9 h-9" />
@@ -46,51 +79,42 @@ export default async function PortalLayout({
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-[14px]" aria-label="Portal">
-            {/* Core — everyone. Calendar / Points / Resources live as sections on the Dashboard. */}
-            <Link href="/portal" className="nav-link">Dashboard</Link>
-            <Link href="/portal/case-studies" className="nav-link">Case Studies</Link>
-            <Link href="/portal/brain" className="nav-link">CUBE Brain</Link>
-            {/* PMs file strikes; exec see the review dashboard (link below). */}
-            {role === "project_manager" && <Link href="/portal/strikes/new" className="nav-link">File a Strike</Link>}
-
-            {/* Leadership tools — grouped, shown only to the roles that can use them. */}
-            {isInterviewer && <span aria-hidden className="h-4 w-px bg-white/20" />}
-            {isExec && PIPELINE_ENABLED && <Link href="/portal/pipeline" className="nav-link">Pipeline</Link>}
-            {isExec && <Link href="/portal/strikes" className="nav-link">Strikes</Link>}
-            {/* Accountability follows the project SEAT, not the title — returning members
-                can hold an SC seat, so they get the link too and the page decides. */}
-            {isInterviewer && <Link href="/portal/accountability" className="nav-link">Accountability</Link>}
-            {recruitingOpen && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
-            {/* Flags are NOT behind `recruitingOpen`: they are filed at info nights
-                and coffee chats months before a cycle opens, which is exactly when
-                the recruiting console is shut. See app/portal/flags/page.tsx. */}
-            <Link href="/portal/flags" className="nav-link">Flags</Link>
-            {isInterviewer && recruitingOpen && <Link href="/portal/interview" className="nav-link">Interviews</Link>}
-
+            {navLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="nav-link">
+                {link.label}
+              </Link>
+            ))}
             <span aria-hidden className="h-4 w-px bg-white/20" />
             <Link href="/" className="nav-link">Public Site</Link>
           </nav>
 
-          {email ? (
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/" });
-              }}
-              className="flex items-center gap-3"
-            >
-              <span className="hidden sm:inline text-xs text-white/55">
-                {name || email}
-              </span>
-              <button type="submit" className="btn btn-gold text-xs px-4 py-2">
-                Sign out
-              </button>
-            </form>
-          ) : (
-            <Link href="/portal/sign-in" className="btn btn-gold text-xs px-4 py-2">
-              Sign in
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Mobile only. "Public Site" is appended here rather than living in
+                `navLinks`, because the desktop nav renders it after a divider as
+                a leave-the-portal action rather than as another portal page. */}
+            <PortalMobileNav links={[...navLinks, { href: "/", label: "Public Site" }]} />
+
+            {email ? (
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/" });
+                }}
+                className="flex items-center gap-3"
+              >
+                <span className="hidden sm:inline text-xs text-white/55">
+                  {name || email}
+                </span>
+                <button type="submit" className="btn btn-gold text-xs px-4 py-2">
+                  Sign out
+                </button>
+              </form>
+            ) : (
+              <Link href="/portal/sign-in" className="btn btn-gold text-xs px-4 py-2">
+                Sign in
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
