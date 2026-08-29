@@ -577,6 +577,20 @@ export type ImportResult = {
   error?: string;
   inserted?: number;
   skipped?: number;
+  /** WHY each skipped row was skipped. `skipped` is the sum of these three, and
+   *  on its own it cannot distinguish a typo'd address from a re-submission
+   *  from a row an earlier run already imported — which is exactly the question
+   *  asked when the sheet's row count and the imported count disagree. */
+  skippedDetail?: {
+    /** No address, or one that isn't shaped like an address. */
+    invalidEmail: string[];
+    /** This address appears more than once IN THE SHEET — a re-submission. */
+    duplicateInSheet: string[];
+    /** Already imported into this cycle. Re-running is meant to produce these. */
+    alreadyInCycle: string[];
+  };
+  /** Which cycle the rows landed in. */
+  cycle?: string;
   /** Pending event flags attached to the applicants this run created. */
   flagsLinked?: number;
   /** Applicants pointed at the resume their Form response uploaded. */
@@ -612,12 +626,33 @@ export async function importApplicants(rows: ImportRow[], cycle: string): Promis
   if (eErr) return { ok: false, error: eErr.message };
   const have = new Set((existing ?? []).map((e) => String(e.email).toLowerCase()));
 
+  // Why each row was dropped, not just how many. A bare `skipped` count made
+  // three very different situations indistinguishable — a malformed address, a
+  // person who submitted the form twice, and a row already imported by an
+  // earlier run — so "144 in the sheet, 128 imported" had no answer short of
+  // reading the spreadsheet by hand. Any domain is accepted; there is no
+  // allowlist, so @gmail.com and @illinois.edu are treated identically.
+  const invalidEmail: string[] = [];
+  const duplicateInSheet: string[] = [];
+  const alreadyInCycle: string[] = [];
+
   const seen = new Set<string>();
   const toInsert = rows
-    .filter((r) => r.email && /.+@.+\..+/.test(r.email))
+    .filter((r) => {
+      const ok = Boolean(r.email) && /.+@.+\..+/.test(r.email);
+      if (!ok) invalidEmail.push(r.email || "(blank)");
+      return ok;
+    })
     .filter((r) => {
       const key = r.email.toLowerCase();
-      if (have.has(key) || seen.has(key)) return false;
+      if (have.has(key)) {
+        alreadyInCycle.push(key);
+        return false;
+      }
+      if (seen.has(key)) {
+        duplicateInSheet.push(key);
+        return false;
+      }
       seen.add(key);
       return true;
     })
@@ -664,6 +699,8 @@ export async function importApplicants(rows: ImportRow[], cycle: string): Promis
     ok: true,
     inserted: toInsert.length,
     skipped: rows.length - toInsert.length,
+    skippedDetail: { invalidEmail, duplicateInSheet, alreadyInCycle },
+    cycle: target,
     flagsLinked,
     resumesLinked,
   };

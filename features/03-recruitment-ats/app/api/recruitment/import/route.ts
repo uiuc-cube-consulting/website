@@ -42,12 +42,37 @@ export async function POST(req: NextRequest) {
   // in this import — worth reporting, because it is the only visible sign that
   // the pending pool did its job. `resumesLinked` is the same idea for resumes:
   // it is how exec knows the written round can actually see what it is scoring.
+  // Reconciliation, not just a total. When the spreadsheet's row count and the
+  // imported count disagree, every number needed to explain the gap is here:
+  //
+  //   sheetRows  = non-empty rows in the sheet          (what you can count by eye)
+  //   noEmail    = dropped before import, by sheet row  (email is the dedupe key)
+  //   read       = rows handed to the importer          = sheetRows - noEmail.length
+  //   inserted   + skipped                              = read
+  //   skipped    = invalidEmail + duplicateInSheet + alreadyInCycle
+  //
+  // so `sheetRows` always accounts for itself, and the missing rows are named
+  // rather than merely counted.
+  const detail = result.skippedDetail;
   return NextResponse.json({
     ok: true,
     cycle,
+    sheetRows: read.totalRows,
+    noEmail: read.droppedNoEmail,
     read: read.total,
     inserted: result.inserted,
     skipped: result.skipped,
+    skippedDetail: detail,
+    reconcile: detail
+      ? {
+          sheetRows: read.totalRows,
+          droppedNoEmail: read.droppedNoEmail.length,
+          invalidEmail: detail.invalidEmail.length,
+          duplicateInSheet: detail.duplicateInSheet.length,
+          alreadyInCycle: detail.alreadyInCycle.length,
+          inserted: result.inserted ?? 0,
+        }
+      : undefined,
     flagsLinked: result.flagsLinked ?? 0,
     resumesLinked: result.resumesLinked ?? 0,
   });

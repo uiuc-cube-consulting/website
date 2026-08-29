@@ -105,7 +105,7 @@ describe("end to end from a sheet row", () => {
     "Harborline should…",
   ];
 
-  const rows = rowsFromValues([FALL_2026_HEADERS, row]);
+  const { rows } = rowsFromValues([FALL_2026_HEADERS, row]);
 
   it("joins first and last into a whole name", () => {
     expect(rows).toHaveLength(1);
@@ -135,14 +135,88 @@ describe("end to end from a sheet row", () => {
   it("skips a row with no email, since email is the dedupe key", () => {
     const blank = [...row];
     blank[1] = "";
-    expect(rowsFromValues([FALL_2026_HEADERS, blank])).toHaveLength(0);
+    const out = rowsFromValues([FALL_2026_HEADERS, blank]);
+    expect(out.rows).toHaveLength(0);
+    // …and says WHICH row, by its 1-based number in the sheet, so a human can go
+    // look at it. Silently dropping it is what made "144 in the sheet, 128
+    // imported" impossible to explain without reading the spreadsheet by hand.
+    expect(out.droppedNoEmail).toEqual([2]);
+    expect(out.totalRows).toBe(1);
+  });
+
+  it("does not report a trailing blank row as a dropped applicant", () => {
+    // Sheets pad with empty rows; reporting those as missing people would bury
+    // the real ones in noise.
+    const out = rowsFromValues([FALL_2026_HEADERS, row, ["", "", ""], []]);
+    expect(out.rows).toHaveLength(1);
+    expect(out.droppedNoEmail).toEqual([]);
+    expect(out.totalRows).toBe(1);
   });
 
   it("treats a missing upload as no resume rather than an error", () => {
     const noUpload = [...row];
     noUpload[19] = "";
-    const out = rowsFromValues([FALL_2026_HEADERS, noUpload]);
+    const out = rowsFromValues([FALL_2026_HEADERS, noUpload]).rows;
     expect(out[0].resumeLink).toBeUndefined();
     expect(parseResumeId(out[0].resumeLink)).toBeNull();
+  });
+});
+
+describe("reconciling the sheet against what was imported", () => {
+  // The question this exists to answer: "there are 144 rows in the sheet but
+  // only 128 applicants". Every number below has to account for itself, or the
+  // gap can only be explained by reading the spreadsheet by hand.
+  const row = (email: string, first: string) => {
+    const r = new Array(FALL_2026_HEADERS.length).fill("");
+    r[0] = "2026/08/01 10:00:00";
+    r[1] = email;
+    r[2] = first;
+    r[3] = "Doe";
+    return r;
+  };
+
+  it("accounts for every non-empty row", () => {
+    const out = rowsFromValues([
+      FALL_2026_HEADERS,
+      row("a@illinois.edu", "A"),
+      row("", "B"), // no email → dropped, and named
+      row("c@gmail.com", "C"), // any domain is fine — there is no allowlist
+      [], // trailing blank → not an applicant, not reported
+    ]);
+
+    expect(out.totalRows).toBe(3);
+    expect(out.rows).toHaveLength(2);
+    expect(out.droppedNoEmail).toEqual([3]);
+    // totalRows == imported + dropped, always.
+    expect(out.rows.length + out.droppedNoEmail.length).toBe(out.totalRows);
+  });
+
+  it("accepts any email domain", () => {
+    // Applicants use @illinois.edu, @gmail.com, or anything else; nothing in the
+    // import filters on domain, and a regression that added one would show here.
+    const out = rowsFromValues([
+      FALL_2026_HEADERS,
+      row("a@illinois.edu", "A"),
+      row("b@gmail.com", "B"),
+      row("c@outlook.co.uk", "C"),
+    ]);
+    expect(out.rows.map((r) => r.email)).toEqual([
+      "a@illinois.edu",
+      "b@gmail.com",
+      "c@outlook.co.uk",
+    ]);
+  });
+
+  it("keeps a re-submission as a row, leaving the dedupe to the importer", () => {
+    // Someone submitting the form twice is the most likely cause of a gap. The
+    // parser does NOT drop it — importApplicants does, and reports it under
+    // `duplicateInSheet`, so the two stages stay distinguishable.
+    const out = rowsFromValues([
+      FALL_2026_HEADERS,
+      row("dupe@illinois.edu", "First try"),
+      row("dupe@illinois.edu", "Second try"),
+    ]);
+    expect(out.rows).toHaveLength(2);
+    expect(out.droppedNoEmail).toEqual([]);
   });
 });
