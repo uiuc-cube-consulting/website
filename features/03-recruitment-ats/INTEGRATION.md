@@ -26,6 +26,35 @@ uses `lib/demo.ts` and writes are disabled.
 > Depends on the strike_system PR's `lib/supabase/server.ts`. If landing this branch first,
 > add that 8-line file (or rebase onto strike_system).
 
+### All migrations, in order
+
+Each feature's own section below repeats its prerequisites; this is the single list to run
+top to bottom. **Every file is idempotent** — guarded with `if not exists` / `if exists` /
+`on conflict do nothing` — so re-running one that has already been applied is a no-op, and
+when in doubt it is safer to run them all than to guess which are outstanding.
+
+| # | File | Creates / changes | Requires |
+|---|---|---|---|
+| 1 | `db/schema.sql` | `applicants`, `reviews`, `assignments`, `decisions` | — |
+| 2 | `db/visibility.sql` | `recruiting_settings` (the exec open/closed toggle) | 1 |
+| 3 | `db/interview.sql` | resume columns, `reviews.kind`, `interview_panel` | 1 |
+| 4 | `db/drive-folders.sql` | Drive columns, `candidate_drive_assets` | 1 |
+| 5 | `db/cycles.sql` | `applicants.cycle`, `(email, cycle)` uniqueness, `active_cycle` | 1, 2 |
+| 6 | `db/flags.sql` | `applicant_flags` + pending-flag columns | 1 |
+| 7 | `db/rounds.sql` | widened `reviews.kind`, `interview_panel.round` | 1, 3 |
+
+Two ordering traps worth stating, because both fail with an unhelpful error:
+
+- **`cycles.sql` needs `visibility.sql`**, not just `schema.sql` — it adds `active_cycle` to
+  `recruiting_settings`, which `visibility.sql` creates. Running 5 before 2 fails with
+  `relation "recruiting_settings" does not exist`.
+- **`rounds.sql` needs `interview.sql`** — it adds `round` to `interview_panel`, which
+  `interview.sql` creates.
+
+`cycles.sql` stops deliberately, with a message naming the count and a diagnostic query, if two
+applications already share an email within one cycle — that constraint cannot be added over
+existing duplicates, and failing loudly beats a bare index violation.
+
 ## Files outside this folder
 
 | File | Change | Why |
