@@ -3,10 +3,12 @@
 // from client code.
 
 import { createServerClient } from "@/lib/supabase/server";
-import { DEMO_APPLICANTS, DEMO_FLAGS, DEMO_REVIEWS } from "./demo";
+import { DEMO_APPLICANTS, DEMO_FLAGS, DEMO_PENDING_FLAGS, DEMO_REVIEWS } from "./demo";
 import {
+  normalizeSubject,
+  partitionFlags,
   planAssignments,
-  weightedTotal,
+  screenTotal,
   type Applicant,
   type Assignment,
   type Flag,
@@ -18,6 +20,8 @@ import {
 // Members who can be assigned as recruitment reviewers (matches proxy.ts).
 // Canonical list lives in ./access.ts so the gate and the pool can never diverge.
 import { RECRUITING_ROLES } from "./access";
+import { cycleForDate, cyclesPresent, inCycle, normalizeCycle } from "./cycle";
+import { linkFormResumes } from "./interview-store";
 import {
   computeCoverage,
   resolveReviewerPool,
@@ -38,34 +42,156 @@ function db() {
   return createServerClient();
 }
 
-export type Snapshot = { applicants: Applicant[]; reviews: Review[]; flags: Flag[]; demo: boolean };
+export type Snapshot = {
+  applicants: Applicant[];
+  reviews: Review[];
+  /** Flags attached to an applicant. */
+  flags: Flag[];
+  /** Flags filed against an email that has not applied yet. */
+  pendingFlags: Flag[];
+  demo: boolean;
+};
 
-export async function getSnapshot(): Promise<Snapshot> {
+/**
+ * Everything the console renders, for ONE recruiting cycle.
+ *
+ * `cycle` is optional only so a caller can deliberately ask for the whole
+ * history; every user-facing path passes one. Mixing cohorts is not a display
+ * preference — a funnel counting fa26 and sp27 together, or a mean spanning two
+ * different applications from the same person, is a number that describes
+ * nothing. Callers resolve the cycle with `resolveCycle`/`getActiveCycle`
+ * (lib/visibility.ts).
+ *
+ * The applicants query is narrowed in the database (indexed on `cycle`), while
+ * reviews and flags are narrowed in memory against the resulting id set. That
+ * keeps the three reads parallel: scoping reviews server-side would need the
+ * applicant ids first, turning one round trip into two on the request that runs
+ * on every dashboard load. At club scale — hundreds of applications a cycle,
+ * two or three reviews each — the rows filtered out here are cheap; revisit if
+ * `reviews` ever gets large enough for the transfer to matter.
+ */
+export async function getSnapshot(cycle?: string): Promise<Snapshot> {
+  const want = normalizeCycle(cycle);
   const sb = db();
-  if (!sb) return { applicants: DEMO_APPLICANTS, reviews: DEMO_REVIEWS, flags: DEMO_FLAGS, demo: true };
+  if (!sb) {
+    const applicants = inCycle(DEMO_APPLICANTS, want);
+    const ids = new Set(applicants.map((a) => a.id));
+    return {
+      applicants,
+      reviews: DEMO_REVIEWS.filter((r) => ids.has(r.applicant_id)),
+      flags: DEMO_FLAGS.filter((f) => f.applicant_id && ids.has(f.applicant_id)),
+      // Pending flags are deliberately NOT cycle-scoped: they are filed against
+      // an email before any application exists, so they belong to no cohort
+      // until one claims them.
+      pendingFlags: DEMO_PENDING_FLAGS,
+      demo: true,
+    };
+  }
+
+  const applicantQuery = sb.from("applicants").select("*").order("created_at", { ascending: false });
+  if (want) applicantQuery.eq("cycle", want);
 
   const [{ data: applicants, error: aErr }, { data: reviews, error: rErr }, { data: flags, error: fErr }] =
     await Promise.all([
-      sb.from("applicants").select("*").order("created_at", { ascending: false }),
+      applicantQuery,
       sb.from("reviews").select("*"),
       sb.from("applicant_flags").select("*").order("created_at", { ascending: false }),
     ]);
   if (aErr) throw aErr;
   if (rErr) throw rErr;
   if (fErr) throw fErr;
+
+  const rows = (applicants ?? []) as Applicant[];
+  const ids = new Set(rows.map((a) => a.id));
+  const { linked, pending } = partitionFlags((flags ?? []) as Flag[]);
   return {
-    applicants: (applicants ?? []) as Applicant[],
-    reviews: (reviews ?? []) as Review[],
-    flags: (flags ?? []) as Flag[],
+    applicants: rows,
+    reviews: want ? ((reviews ?? []) as Review[]).filter((r) => ids.has(r.applicant_id)) : ((reviews ?? []) as Review[]),
+    flags: want ? linked.filter((f) => f.applicant_id && ids.has(f.applicant_id)) : linked,
+    pendingFlags: pending,
     demo: false,
   };
 }
 
-export type WriteResult = { ok: boolean; demo?: boolean; id?: string; error?: string };
+/** Every flag still waiting for its applicant, newest first. */
+export async function getPendingFlags(): Promise<{ flags: Flag[]; demo: boolean }> {
+  const sb = db();
+  if (!sb) return { flags: DEMO_PENDING_FLAGS, demo: true };
+  const { data, error } = await sb
+    .from("applicant_flags")
+    .select("*")
+    .is("applicant_id", null)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return { flags: (data ?? []) as Flag[], demo: false };
+}
+
+/**
+ * Attach every pending flag filed against `email` to a newly-created applicant.
+ *
+ * This is the join between the two halves of the feature: members flag people at
+ * events, and weeks later an application arrives from that address and silently
+ * inherits everything already said about them. Called from every path that
+ * creates an applicant — the public intake form and the bulk sheet import — so
+ * there is no way to enter the pipeline and miss your flags.
+ *
+ * Failures are reported but never thrown: a flag that fails to link is a lost
+ * annotation, whereas an exception here would fail the application itself. The
+ * pending rows survive, so a later re-run picks them up.
+ *
+ * KNOWN LIMIT — one claim per person, not per application. A flag row points at
+ * a single applicant, so if the same email produces two applicant rows (a
+ * duplicate submission today; a second cycle once per-semester cycles land) the
+ * FIRST row to be created takes the flags and the second sees none. That is
+ * acceptable while duplicates are an anomaly, and stops being acceptable when
+ * re-applying is normal: at that point the fix is to resolve flags by email at
+ * READ time rather than claiming them at write time, since a flag is about a
+ * person and not about an application.
+ */
+export async function claimPendingFlags(
+  applicants: { id: string; email: string }[]
+): Promise<{ linked: number; error?: string }> {
+  const sb = db();
+  if (!sb || applicants.length === 0) return { linked: 0 };
+
+  let linked = 0;
+  for (const a of applicants) {
+    const key = normalizeSubject(a.email ?? "");
+    if (!key) continue;
+    // Emails are stored already-lowered (db/flags.sql), so this is an equality
+    // match on the partial index rather than a scan with ilike.
+    const { data, error } = await sb
+      .from("applicant_flags")
+      .update({ applicant_id: a.id, linked_at: new Date().toISOString() })
+      .is("applicant_id", null)
+      .eq("subject_email", key)
+      .select("id");
+    if (error) return { linked, error: error.message };
+    linked += (data ?? []).length;
+  }
+  return { linked };
+}
+
+export type WriteResult = {
+  ok: boolean;
+  demo?: boolean;
+  id?: string;
+  error?: string;
+  /** Pending flags this write attached to a new applicant. */
+  flagsLinked?: number;
+  /** This person already has an application in the cycle being written to. The
+   *  candidate's own mistake to correct, not a server fault — routes answer 409
+   *  rather than 500, so the intake form can say so instead of "try again". */
+  duplicate?: boolean;
+};
 
 export async function createApplicant(input: {
   name: string;
   email: string;
+  /** Which cycle this application joins. Callers resolve it from the active
+   *  cycle (lib/visibility.ts) rather than taking it from the applicant — an
+   *  applicant does not get to choose which cohort they are judged in. */
+  cycle: string;
   year?: string;
   major?: string;
   college?: string;
@@ -73,11 +199,20 @@ export async function createApplicant(input: {
 }): Promise<WriteResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
+
+  // Normalise rather than trust, and fall back to the cycle matching today
+  // rather than reject. A malformed cycle would be caught by the CHECK
+  // constraint and surface to a candidate as a failed submission — losing the
+  // essays they just wrote over an internal formatting problem. Landing in the
+  // date-derived cycle is recoverable; a lost application is not.
+  const cycle = normalizeCycle(input.cycle) ?? cycleForDate();
+
   const { data, error } = await sb
     .from("applicants")
     .insert({
       name: input.name,
       email: input.email,
+      cycle,
       year: input.year ?? null,
       major: input.major ?? null,
       college: input.college ?? null,
@@ -85,8 +220,25 @@ export async function createApplicant(input: {
     })
     .select("id")
     .single();
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, id: data.id };
+  if (error) {
+    // 23505 is unique_violation — here, only ever (lower(email), cycle) from
+    // db/cycles.sql. Applying again in a LATER cycle is the whole point of the
+    // column and is allowed; applying twice in the SAME one is not, and the
+    // candidate needs to be told which of those they just did.
+    if ((error as { code?: string }).code === "23505") {
+      return {
+        ok: false,
+        duplicate: true,
+        error: "You have already applied in this recruiting cycle.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  // Inherit anything already said about this person at an event. Deliberately
+  // not awaited-and-checked into a failure: the application is saved either way.
+  const claim = await claimPendingFlags([{ id: data.id, email: input.email }]);
+  return { ok: true, id: data.id, flagsLinked: claim.linked };
 }
 
 export async function submitReview(input: {
@@ -110,7 +262,9 @@ export async function submitReview(input: {
       reviewer_email: input.reviewer_email,
       kind: "screen",
       scores: input.scores,
-      weighted_total: weightedTotal(input.scores),
+      // Points out of SCREEN_MAX_POINTS. The column keeps its historical name;
+      // only interview rubrics still put a 1-5 weighted mean in it.
+      weighted_total: screenTotal(input.scores),
       notes: input.notes ?? null,
     },
     { onConflict: "applicant_id,reviewer_email,kind" }
@@ -119,22 +273,103 @@ export async function submitReview(input: {
   return { ok: true };
 }
 
+/**
+ * Escape the LIKE metacharacters before an email is used as an `ilike` pattern.
+ *
+ * `_` matches any single character in LIKE and is perfectly legal in an email
+ * local part, so an unescaped lookup for `first_last@illinois.edu` also matches
+ * `firstXlast@illinois.edu` — silently attaching one person's flag to another.
+ * `%` and the escape character itself have the same problem.
+ */
+function likeEscape(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+export type FlagResult = WriteResult & {
+  /** True when the flag landed on an existing applicant rather than the pending
+   *  pool — either because it was filed from their profile, or because the email
+   *  turned out to already be in the pipeline. */
+  linked?: boolean;
+};
+
+/**
+ * File a red/green flag, either on an applicant we already have or on a bare
+ * email address.
+ *
+ * Three cases, in order:
+ *   1. `applicant_id` given — filed from a candidate's profile. The subject email
+ *      is read from the applicant row rather than trusted from the caller, so the
+ *      match key can never disagree with the person it is attached to.
+ *   2. `subject_email` given and somebody has ALREADY applied from it — link it
+ *      immediately. Filing "by email" during an open cycle should not silently
+ *      strand the flag in a pending pool nobody reads.
+ *   3. `subject_email` given and nobody has applied yet — store it PENDING. This
+ *      is the event case: it waits, and `claimPendingFlags` attaches it when the
+ *      application arrives.
+ */
 export async function submitFlag(input: {
-  applicant_id: string;
+  applicant_id?: string | null;
+  subject_email?: string | null;
+  subject_name?: string | null;
+  event?: string | null;
   submitter_email: string;
   color: "red" | "green";
   description: string;
-}): Promise<WriteResult> {
+  /** Which cycle's application a by-email flag should attach to. Callers pass
+   *  the active cycle; omitted means "the person's most recent application,
+   *  whichever cycle that is". */
+  cycle?: string | null;
+}): Promise<FlagResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
+
+  let applicantId: string | null = input.applicant_id ?? null;
+  let subject = normalizeSubject(input.subject_email ?? "");
+
+  if (applicantId) {
+    const { data, error } = await sb
+      .from("applicants")
+      .select("email")
+      .eq("id", applicantId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "Unknown applicant." };
+    subject = normalizeSubject(String(data.email));
+  } else {
+    if (!subject) return { ok: false, error: "An email is required to flag someone." };
+
+    // Scoped to one cycle, because a returning candidate now has several
+    // applications and a flag filed today is an observation about them THIS
+    // cycle — hanging it on the fa26 row that was rejected last year would bury
+    // it where the people screening them now will never look.
+    const cycle = normalizeCycle(input.cycle);
+    const lookup = sb.from("applicants").select("id").ilike("email", likeEscape(subject));
+    if (cycle) lookup.eq("cycle", cycle);
+
+    const { data, error } = await lookup
+      // Not `maybeSingle` on its own: one person legitimately holds several
+      // applications across cycles, and even within one cycle the public intake
+      // form does not dedupe, so a double submission produces two rows.
+      // `maybeSingle` errors on more than one rather than picking. Newest wins.
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    applicantId = data?.id ?? null;
+  }
+
   const { error } = await sb.from("applicant_flags").insert({
-    applicant_id: input.applicant_id,
+    applicant_id: applicantId,
+    subject_email: subject,
+    subject_name: input.subject_name?.trim() || null,
+    event: input.event?.trim() || null,
+    linked_at: applicantId ? new Date().toISOString() : null,
     submitter_email: input.submitter_email,
     color: input.color,
     description: input.description,
   });
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return { ok: true, linked: Boolean(applicantId) };
 }
 
 export async function setDecision(input: {
@@ -162,7 +397,9 @@ export async function setDecision(input: {
 
 // ── Reviewer pool, assignments, queue ────────────────────────────────────────
 
-export type Reviewer = { email: string; name?: string | null };
+/** `role` rides along so callers can narrow further — the final-round interview
+ *  panel is exec-only, and the picker has to know who qualifies. */
+export type Reviewer = { email: string; name?: string | null; role?: string | null };
 
 /** The reviewer pool = members whose role can review applicants. */
 export async function getReviewerPool(): Promise<Reviewer[]> {
@@ -175,7 +412,7 @@ export async function getReviewerPool(): Promise<Reviewer[]> {
   }
   const { data, error } = await sb.from("members").select("email, full_name, role").in("role", REVIEWER_ROLES);
   if (error) throw error;
-  return (data ?? []).map((m) => ({ email: m.email, name: m.full_name }));
+  return (data ?? []).map((m) => ({ email: m.email, name: m.full_name, role: m.role }));
 }
 
 export async function getAssignments(): Promise<Assignment[]> {
@@ -222,12 +459,19 @@ export type AssignResult = {
 export async function assignReviewers(
   k = 2,
   selected?: string[],
-  opts: { reshuffle?: boolean } = {}
+  opts: { reshuffle?: boolean; cycle?: string } = {}
 ): Promise<AssignResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
-  const { data: apps, error: aErr } = await sb.from("applicants").select("id, email, stage");
+  // Scoped to one cycle, or every reviewer would be dealt last semester's
+  // cohort alongside this one — hundreds of reads on applications that were
+  // decided months ago, and a coverage report that can never reach done.
+  const cycle = normalizeCycle(opts.cycle);
+  const appQuery = sb.from("applicants").select("id, email, stage");
+  if (cycle) appQuery.eq("cycle", cycle);
+
+  const { data: apps, error: aErr } = await appQuery;
   if (aErr) return { ok: false, error: aErr.message };
   const active = (apps ?? []).filter((a) => !TERMINAL_STAGES.includes(a.stage));
 
@@ -327,14 +571,44 @@ export type ImportRow = {
   resumeLink?: string;
 };
 
-export type ImportResult = { ok: boolean; demo?: boolean; error?: string; inserted?: number; skipped?: number };
+export type ImportResult = {
+  ok: boolean;
+  demo?: boolean;
+  error?: string;
+  inserted?: number;
+  skipped?: number;
+  /** Pending event flags attached to the applicants this run created. */
+  flagsLinked?: number;
+  /** Applicants pointed at the resume their Form response uploaded. */
+  resumesLinked?: number;
+};
 
-/** Insert applicants, deduped by email (existing + within the batch). */
-export async function importApplicants(rows: ImportRow[]): Promise<ImportResult> {
+/**
+ * Insert applicants from a Form response sheet, deduped by (email, CYCLE) —
+ * against what is already stored and within the batch.
+ *
+ * The cycle in that key is load-bearing. This dedupe used to be on email alone,
+ * which quietly made re-applying impossible: someone who applied in fa26 and
+ * came back in sp27 was matched against their old row and dropped as a
+ * duplicate, so their new application never entered the pipeline and nobody
+ * found out — the import reported it under `skipped`, indistinguishable from a
+ * genuine double-submission.
+ *
+ * Scoped to one cycle it means the right thing: you cannot submit twice in one
+ * cycle, and every cycle starts clean. Re-running an import for the SAME cycle
+ * is still idempotent, which is what makes it safe to re-run as the sheet fills.
+ */
+export async function importApplicants(rows: ImportRow[], cycle: string): Promise<ImportResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
-  const { data: existing, error: eErr } = await sb.from("applicants").select("email");
+  const target = normalizeCycle(cycle) ?? cycleForDate();
+
+  // Only this cycle's rows can collide, so only they are fetched.
+  const { data: existing, error: eErr } = await sb
+    .from("applicants")
+    .select("email")
+    .eq("cycle", target);
   if (eErr) return { ok: false, error: eErr.message };
   const have = new Set((existing ?? []).map((e) => String(e.email).toLowerCase()));
 
@@ -350,17 +624,49 @@ export async function importApplicants(rows: ImportRow[]): Promise<ImportResult>
     .map((r) => ({
       name: r.name || r.email,
       email: r.email,
+      cycle: target,
       year: r.year ?? null,
       major: r.major ?? null,
       college: r.college ?? null,
       responses: r.responses ?? {},
     }));
 
+  let flagsLinked = 0;
+  let resumesLinked = 0;
   if (toInsert.length) {
-    const { error } = await sb.from("applicants").insert(toInsert);
+    // `select` the ids back, because the claim below needs them. The sheet import
+    // is the path most applicants actually arrive through, so skipping the claim
+    // here would leave event flags stranded for almost the whole cohort.
+    const { data: created, error } = await sb.from("applicants").insert(toInsert).select("id, email");
     if (error) return { ok: false, error: error.message };
+    const claim = await claimPendingFlags(
+      (created ?? []).map((r) => ({ id: String(r.id), email: String(r.email) }))
+    );
+    flagsLinked = claim.linked;
+
+    // Point them at the resume their Form response uploaded. The written rubric
+    // scores the resume out of 5, so this is not a convenience — without it the
+    // readers doing the written round have no way to see the thing they are
+    // scoring. Deliberately not fatal: an unreachable Drive should leave the
+    // import succeeding with the essays intact, not fail the whole cohort.
+    const linkByEmail = new Map(
+      rows.filter((r) => r.resumeLink).map((r) => [r.email.toLowerCase(), r.resumeLink])
+    );
+    const link = await linkFormResumes(
+      (created ?? []).map((r) => ({
+        applicantId: String(r.id),
+        resumeLink: linkByEmail.get(String(r.email).toLowerCase()),
+      }))
+    );
+    resumesLinked = link.linked;
   }
-  return { ok: true, inserted: toInsert.length, skipped: rows.length - toInsert.length };
+  return {
+    ok: true,
+    inserted: toInsert.length,
+    skipped: rows.length - toInsert.length,
+    flagsLinked,
+    resumesLinked,
+  };
 }
 
 // ── Coverage + manual reassignment (exec) ────────────────────────────────────
@@ -374,12 +680,19 @@ export type CoverageResult =
  * rather than inferred from the last assignment run, because the two drift the
  * moment an applicant arrives late or a reviewer goes quiet.
  */
-export async function getCoverage(): Promise<CoverageResult> {
+export async function getCoverage(cycle?: string): Promise<CoverageResult> {
   const sb = db();
   if (!sb) return { ok: true, demo: true, rows: [] };
 
+  // Assignments and reviews need no cycle filter of their own: they are keyed by
+  // applicant_id, and `computeCoverage` only emits rows for the applicants it is
+  // given, so narrowing the applicant query narrows the whole report.
+  const want = normalizeCycle(cycle);
+  const appQuery = sb.from("applicants").select("id, name, email, stage");
+  if (want) appQuery.eq("cycle", want);
+
   const [appsRes, assignsRes, reviewsRes] = await Promise.all([
-    sb.from("applicants").select("id, name, email, stage"),
+    appQuery,
     sb.from("assignments").select("applicant_id, reviewer_email"),
     sb.from("reviews").select("applicant_id, reviewer_email, kind"),
   ]);
@@ -461,6 +774,27 @@ export async function reassignReviewer(input: ReassignInput): Promise<ReassignRe
     .select("reviewer_email")
     .eq("applicant_id", input.applicant_id);
   return { ok: true, assigned: (after ?? []).map((r) => String(r.reviewer_email)).sort() };
+}
+
+/**
+ * Every cycle that actually has applications, newest first.
+ *
+ * What the console's cycle picker is built from. Derived from the applicant rows
+ * rather than from a list of cycles someone maintains, so it can never offer a
+ * cohort that turns out to be empty, and a cycle appears the moment its first
+ * application arrives.
+ *
+ * One column over the whole table: PostgREST has no DISTINCT, so the dedupe
+ * happens here. Cheap at club scale, and `sortCycles` canonicalises on the way
+ * through, so a row written before normalisation was enforced still lands in the
+ * right bucket instead of showing up as a second, near-identical entry.
+ */
+export async function listCycles(): Promise<string[]> {
+  const sb = db();
+  if (!sb) return cyclesPresent(DEMO_APPLICANTS);
+  const { data, error } = await sb.from("applicants").select("cycle");
+  if (error) throw error;
+  return cyclesPresent((data ?? []) as { cycle: string }[]);
 }
 
 export { MIN_REVIEWERS_PER_APPLICANT };

@@ -1,22 +1,27 @@
 "use client";
 
-// Exec-only final-decision view: every candidate whose written application has
-// been read by both reviewers, with BOTH verdicts unblinded side by side.
+// Exec-only: where the WRITTEN round ends. Every candidate whose application has
+// been read by both reviewers, with BOTH verdicts unblinded side by side, and the
+// call that either puts them into the first round or ends their cycle.
 //
 // Separate component (and separate endpoint) from RecruitingDashboard on purpose.
 // The dashboard is the reviewer's surface and keeps other people's scores hidden
 // so the screen stays blind. This is the opposite view, for the opposite job, and
 // only exec ever sees it.
+//
+// The later two rounds are decided in the interview console instead, next to the
+// rubrics and notes that justify the call.
 
 import { useCallback, useEffect, useState } from "react";
-import { RUBRIC } from "@/features/03-recruitment-ats/lib/types";
-import type { DecisionRow, QueueOrder, QueueSummary } from "@/features/03-recruitment-ats/lib/decision";
+import { RUBRIC, SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
+import { DISAGREEMENT_THRESHOLD, type DecisionRow, type QueueOrder, type QueueSummary } from "@/features/03-recruitment-ats/lib/decision";
 
 type ApiResponse = { rows: DecisionRow[]; summary: QueueSummary; demo: boolean; error?: string };
 
 const STAGE_LABEL: Record<string, string> = {
   applied: "Applied", screened: "Screened", interview: "First round",
-  offer: "Offer", accepted: "Accepted", rejected: "Rejected", withdrawn: "Withdrawn",
+  final_round: "Final round", offer: "Offer", accepted: "Accepted",
+  rejected: "Rejected", withdrawn: "Withdrawn",
 };
 
 export function DecisionQueue() {
@@ -79,7 +84,7 @@ export function DecisionQueue() {
       <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div>
-            <p className="eyebrow">Final decisions</p>
+            <p className="eyebrow">Written round decisions</p>
             <p className="mt-1 text-sm text-[var(--muted)]">
               <span className="font-semibold text-[var(--bg-dark)]">{s.undecided}</span> ready to decide ·{" "}
               {s.awaitingReviews} still awaiting reviews
@@ -114,7 +119,8 @@ export function DecisionQueue() {
 
       {data.rows.length === 0 && (
         <p className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted)]">
-          Nothing ready yet — candidates appear here once both reviewers have submitted.
+          Nothing ready yet — candidates appear here once both readers have submitted, and
+          leave once you advance or reject them.
         </p>
       )}
 
@@ -138,8 +144,11 @@ export function DecisionQueue() {
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                   {row.disagreement && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                      split · spread {row.spread}
+                    <span
+                      className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                      title={`The two readers differ by ${row.spread} points — at or above the ${DISAGREEMENT_THRESHOLD}-point threshold. Read the notes, not the mean.`}
+                    >
+                      split · {row.spread} pts apart
                     </span>
                   )}
                   {!row.ready && (
@@ -148,7 +157,7 @@ export function DecisionQueue() {
                     </span>
                   )}
                   <span className="rounded-full bg-[var(--bg-cream)] px-2.5 py-0.5 text-xs font-semibold text-[var(--bg-dark)]">
-                    {row.mean ?? "—"} / 5
+                    {row.mean ?? "—"} / {SCREEN_MAX_POINTS}
                   </span>
                   <span className="text-xs text-[var(--muted)]">{expanded ? "▲" : "▼"}</span>
                 </div>
@@ -163,13 +172,16 @@ export function DecisionQueue() {
                       <div key={v.reviewer_email} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 p-3">
                         <div className="flex items-center justify-between">
                           <p className="truncate text-xs font-semibold text-[var(--bg-dark)]">{v.reviewer_email}</p>
-                          <span className="text-xs font-semibold">{v.weighted_total} / 5</span>
+                          <span className="text-xs font-semibold">{v.weighted_total} / {SCREEN_MAX_POINTS}</span>
                         </div>
                         <ul className="mt-2 space-y-0.5">
                           {RUBRIC.map((c) => (
                             <li key={c.key} className="flex justify-between text-[11px] text-[var(--muted)]">
                               <span>{c.label}</span>
-                              <span className="font-medium text-[var(--bg-dark)]">{v.scores[c.key] ?? "—"}</span>
+                              <span className="font-medium text-[var(--bg-dark)]">
+                                {v.scores[c.key] ?? "—"}
+                                <span className="font-normal text-[var(--muted)]">/{c.max}</span>
+                              </span>
                             </li>
                           ))}
                         </ul>

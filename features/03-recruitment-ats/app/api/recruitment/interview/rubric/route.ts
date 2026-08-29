@@ -2,21 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { saveRubric } from "@/features/03-recruitment-ats/lib/interview-store";
 import {
+  INTERVIEW_KINDS,
   INTERVIEW_RUBRICS,
   canInterview,
   isInterviewKind,
   isRecommendation,
+  roundOfKind,
   type Recommendation,
 } from "@/features/03-recruitment-ats/lib/interview";
+import { canInterviewInRound, canViewRound } from "@/features/03-recruitment-ats/lib/rounds";
+import { SELF_ACCESS_DENIED } from "@/features/03-recruitment-ats/lib/self-access";
+import { isOwnApplicationId } from "@/features/03-recruitment-ats/lib/self-access-store";
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
-// An interviewer fills in ONE rubric (case or behavioral) for ONE candidate.
+// An interviewer fills in ONE rubric for ONE candidate. The `kind` says which
+// rubric AND which round: case/behavioral are the first round, final_case and
+// final_behavioral are the exec-only final.
 //
-// Two things are deliberately not trusted from the client:
+// Three things are deliberately not trusted from the client:
 //   · the reviewer identity — always the session email, never the body
-//   · the right to write at all — enforced by panel membership in the store, so an
-//     interviewer can only ever edit the rubric instance for a candidate they are
-//     handling. The rubric TEMPLATES live in code and no endpoint can change them.
+//   · the round — derived from the kind, never sent alongside it, so the two
+//     cannot be made to disagree
+//   · the right to write at all — the round's role floor is checked here and panel
+//     membership for that round is enforced in the store, so an interviewer can
+//     only ever edit the rubric instance for a candidate they are handling, in the
+//     round they are handling them for. The rubric TEMPLATES live in code and no
+//     endpoint can change them.
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +59,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "applicant_id required" }, { status: 400 });
   }
   if (!isInterviewKind(body.kind)) {
-    return NextResponse.json({ ok: false, error: "kind must be 'case' or 'behavioral'" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: `kind must be one of: ${INTERVIEW_KINDS.join(", ")}` },
+      { status: 400 }
+    );
+  }
+
+  // You never score your own interview (lib/self-access.ts). Ahead of the round
+  // gate below so a candidate gets the reason that actually applies to them,
+  // rather than being told the final round is exec-only — and ahead of the panel
+  // lookup in `saveRubric`, which exec bypasses via `bypassPanel` anyway.
+  if (await isOwnApplicationId(body.applicant_id, email)) {
+    return NextResponse.json({ ok: false, error: SELF_ACCESS_DENIED }, { status: 403 });
+  }
+
+  // A final-round rubric is exec-only to read and exec-only to write. Checked
+  // before the panel lookup so a non-exec cannot learn, from the difference
+  // between a 403 and a "not on the panel" 403, who exec has staffed the final
+  // round with.
+  const round = roundOfKind(body.kind);
+  const role = session?.user?.role;
+  if (!canViewRound(round, role) || !canInterviewInRound(round, role)) {
+    return NextResponse.json({ ok: false, error: "The final round is exec only" }, { status: 403 });
   }
 
   // Every criterion of the chosen rubric must carry a 1–5 score. Unknown keys are
@@ -77,7 +109,7 @@ export async function POST(req: NextRequest) {
     scores,
     notes: typeof body.notes === "string" ? body.notes : undefined,
     recommendation,
-    bypassPanel: session?.user?.role === "exec",
+    bypassPanel: role === "exec",
   });
 
   if (result.demo) {

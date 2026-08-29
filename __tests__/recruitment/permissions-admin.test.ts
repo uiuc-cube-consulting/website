@@ -78,6 +78,10 @@ function post(body: unknown = {}): NextRequest {
     body: JSON.stringify(body),
   });
 }
+/** GET with a query string — the interview board is addressed by round. */
+function get(query = ""): NextRequest {
+  return new NextRequest(`http://localhost/api/x${query}`, { method: "GET" });
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -123,23 +127,70 @@ describe.each(EXEC_ROUTES)("exec-only: %s", (_name, handler, sideEffect) => {
 describe("interviewer tier: GET /api/recruitment/interview", () => {
   it.each(ROLES)("%s", async (role) => {
     signInAs(role);
-    const res = await interviewGET();
+    const res = await interviewGET(get());
     expect(res.status).toBe(INTERVIEWERS.includes(role) ? 200 : 403);
   });
 
   it("signed out", async () => {
     signInAs(null);
-    expect((await interviewGET()).status).toBe(401);
+    expect((await interviewGET(get())).status).toBe(401);
   });
 
   it("passes canManage=true to the board only for exec", async () => {
     for (const role of INTERVIEWERS) {
       jest.clearAllMocks();
       signInAs(role);
-      await interviewGET();
+      await interviewGET(get());
       const [, canManage] = interviewStore.getBoard.mock.calls[0] as unknown as [string, boolean];
       expect(canManage).toBe(role === "exec");
     }
+  });
+
+  it("defaults to the first round", async () => {
+    signInAs("exec");
+    await interviewGET(get());
+    const [, , round] = interviewStore.getBoard.mock.calls[0] as unknown as [string, boolean, string];
+    expect(round).toBe("first_round");
+  });
+});
+
+// ── The final round is exec-only ─────────────────────────────────────────────
+// The whole point of the third round: exec interviews alone, and nobody else can
+// see who is in it or what was said. Hiding the tab is not enough — this route is
+// callable directly, so the refusal has to happen here.
+
+describe("final round: GET /api/recruitment/interview?round=final_round", () => {
+  it.each(ROLES)("%s", async (role) => {
+    signInAs(role);
+    const res = await interviewGET(get("?round=final_round"));
+    expect(res.status).toBe(role === "exec" ? 200 : 403);
+  });
+
+  it("never reads a final-round board for a non-exec interviewer", async () => {
+    // A 403 that still ran the query would have already pulled exec's scores out
+    // of the database; the refusal must precede the read.
+    signInAs("project_manager");
+    await interviewGET(get("?round=final_round"));
+    expect(interviewStore.getBoard).not.toHaveBeenCalled();
+  });
+
+  it("offers the final round to exec alone", async () => {
+    for (const role of INTERVIEWERS) {
+      jest.clearAllMocks();
+      signInAs(role);
+      const res = await interviewGET(get());
+      const body = await res.json();
+      expect(body.availableRounds).toEqual(
+        role === "exec" ? ["first_round", "final_round"] : ["first_round"]
+      );
+    }
+  });
+
+  it("rejects a round it does not recognize", async () => {
+    signInAs("exec");
+    const res = await interviewGET(get("?round=semifinal"));
+    expect(res.status).toBe(400);
+    expect(interviewStore.getBoard).not.toHaveBeenCalled();
   });
 });
 
@@ -172,7 +223,7 @@ describe("exec-only: reviewer pool (reroute picker)", () => {
 describe("club-wide: GET /api/recruitment/coverage", () => {
   it.each(ROLES)("%s", async (role) => {
     signInAs(role);
-    const res = await coverageGET();
+    const res = await coverageGET(get());
     // Every member — not just recruiting staff — can see coverage now: viewing
     // the applicant pool is club-wide, same boundary as canAccessRecruiting.
     expect(res.status).toBe(200);
@@ -180,7 +231,7 @@ describe("club-wide: GET /api/recruitment/coverage", () => {
 
   it("signed out", async () => {
     signInAs(null);
-    expect((await coverageGET()).status).toBe(401);
+    expect((await coverageGET(get())).status).toBe(401);
   });
 });
 

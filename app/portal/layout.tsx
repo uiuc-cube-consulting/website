@@ -61,6 +61,10 @@ export default async function PortalLayout({
                 can hold an SC seat, so they get the link too and the page decides. */}
             {isInterviewer && <Link href="/portal/accountability" className="nav-link">Accountability</Link>}
             {recruitingOpen && <Link href="/portal/recruiting" className="nav-link">Recruiting</Link>}
+            {/* Flags are NOT behind `recruitingOpen`: they are filed at info nights
+                and coffee chats months before a cycle opens, which is exactly when
+                the recruiting console is shut. See app/portal/flags/page.tsx. */}
+            <Link href="/portal/flags" className="nav-link">Flags</Link>
             {isInterviewer && recruitingOpen && <Link href="/portal/interview" className="nav-link">Interviews</Link>}
 
             <span aria-hidden className="h-4 w-px bg-white/20" />

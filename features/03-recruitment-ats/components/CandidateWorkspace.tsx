@@ -1,28 +1,48 @@
 "use client";
 
-// One candidate, everything an interviewer needs in a single view: their resume on
-// the left, the case and behavioral rubrics on the right. No tab-hunting, no Drive,
-// no copying a template into a folder.
+// One candidate in ONE ROUND: their resume on the left, that round's two rubrics on
+// the right. No tab-hunting, no Drive, no copying a template into a folder.
+//
+// Everything here is scoped to `round` — the rubrics written, the panel edited, and
+// the stage the exec controls advance to. The same component serves the first and
+// final rounds because the work is the same; what differs is which rubric kinds it
+// writes and who is allowed to be in the room.
 
 import { useState } from "react";
 import {
-  INTERVIEW_KINDS,
   INTERVIEW_RUBRICS,
   KIND_LABEL,
   RECOMMENDATIONS,
+  ROUND_KINDS,
   isComplete,
   type Candidate,
   type InterviewKind,
   type Reviewer,
 } from "@/features/03-recruitment-ats/lib/interview";
+import { ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
+import type { Stage } from "@/features/03-recruitment-ats/lib/types";
 
 const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied", screened: "Screened", interview: "Interview",
-  offer: "Offer", accepted: "Accepted", rejected: "Rejected", withdrawn: "Withdrawn",
+  applied: "Applied", screened: "Screened", interview: "First round",
+  final_round: "Final round", offer: "Offer", accepted: "Accepted",
+  rejected: "Rejected", withdrawn: "Withdrawn",
+};
+
+/**
+ * Where a candidate goes when this round is done with them.
+ *
+ * The written round hands off in the exec decision queue; these two hand off here,
+ * in front of the rubrics that justify the call, rather than in a third list that
+ * would show the scores without the notes.
+ */
+const NEXT_STAGE: Record<InterviewRound, { stage: Stage; label: string }> = {
+  first_round: { stage: "final_round", label: "Advance → Final round" },
+  final_round: { stage: "offer", label: "Advance → Offer" },
 };
 
 export function CandidateWorkspace({
   candidate,
+  round,
   canManage,
   pool,
   demo,
@@ -30,13 +50,15 @@ export function CandidateWorkspace({
   onChanged,
 }: {
   candidate: Candidate;
+  round: InterviewRound;
   canManage: boolean;
   pool: Reviewer[];
   demo: boolean;
   onBack: () => void;
   onChanged: () => Promise<void> | void;
 }) {
-  const [kind, setKind] = useState<InterviewKind>("case");
+  const kinds = ROUND_KINDS[round];
+  const [kind, setKind] = useState<InterviewKind>(kinds[0]);
   // Exec may correct any rubric; everyone else only writes for candidates they're on.
   const editable = candidate.assignedToMe || canManage;
 
@@ -50,7 +72,8 @@ export function CandidateWorkspace({
           >
             ← Back to search
           </button>
-          <h2 className="mt-2 font-display text-3xl font-extrabold text-[var(--bg-dark)]">
+          <p className="mt-2 eyebrow">{ROUND_LABEL[round]}</p>
+          <h2 className="mt-1 font-display text-3xl font-extrabold text-[var(--bg-dark)]">
             {candidate.name}
           </h2>
           <p className="text-sm text-[var(--muted)]">{candidate.email}</p>
@@ -72,19 +95,22 @@ export function CandidateWorkspace({
 
       {!editable && (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-cream)]/60 px-5 py-3 text-sm text-[var(--bg-dark)]">
-          You&rsquo;re not on this candidate&rsquo;s panel, so their rubrics are read-only for you.
-          You can still read the resume.
+          You&rsquo;re not on this candidate&rsquo;s {ROUND_LABEL[round].toLowerCase()} panel, so their
+          rubrics are read-only for you. You can still read the resume.
         </div>
       )}
 
-      {canManage && <PanelEditor candidate={candidate} pool={pool} demo={demo} onChanged={onChanged} />}
+      {canManage && (
+        <PanelEditor candidate={candidate} round={round} pool={pool} demo={demo} onChanged={onChanged} />
+      )}
+      {canManage && <RoundDecision candidate={candidate} round={round} onChanged={onChanged} />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <ResumePane candidate={candidate} />
 
         <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
           <div className="inline-flex overflow-hidden rounded-full border border-[var(--border)]">
-            {INTERVIEW_KINDS.map((k) => {
+            {kinds.map((k) => {
               const done = candidate.myRubrics[k] && isComplete(k, candidate.myRubrics[k]!.scores);
               return (
                 <button
@@ -310,7 +336,11 @@ function RubricForm({
         onChange={(e) => set<string>(setNotes)(e.target.value)}
         disabled={!editable}
         rows={5}
-        placeholder={kind === "case" ? "What did they do with the case? Where did they get stuck?" : "Specific moments, quotes, and follow-ups worth remembering."}
+        placeholder={
+          kind.endsWith("case")
+            ? "What did they do with the case? Where did they get stuck?"
+            : "Specific moments, quotes, and follow-ups worth remembering."
+        }
         className="mt-4 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)] disabled:bg-[var(--bg-cream)]/40"
       />
 
@@ -327,15 +357,98 @@ function RubricForm({
   );
 }
 
+// ── Round hand-off (exec) ────────────────────────────────────────────────────
+
+/**
+ * Exec moves the candidate on, or out, from inside the round.
+ *
+ * Deliberately here rather than in a fourth list: the decision this button makes
+ * is justified by the rubrics and notes on the same screen, and a separate queue
+ * would show the scores without the room they came from. The written round is the
+ * exception — it has its own queue because two blind readers have to be unblinded
+ * side by side before anyone can decide, which is a different job from this one.
+ *
+ * Hidden for non-exec, and refused for them by /api/recruitment/decisions anyway
+ * (lib/access.ts canDecide).
+ */
+function RoundDecision({
+  candidate,
+  round,
+  onChanged,
+}: {
+  candidate: Candidate;
+  round: InterviewRound;
+  onChanged: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const next = NEXT_STAGE[round];
+
+  async function decide(stage: Stage, label: string) {
+    setBusy(true);
+    setToast(null);
+    try {
+      const r = await fetch("/api/recruitment/decisions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicant_id: candidate.id, stage }),
+      });
+      const res = await r.json();
+      if (res.ok) {
+        setToast(`${candidate.name.split(" ")[0]} → ${label}.`);
+        // The candidate leaves this round's board on the next fetch, which is the
+        // visible confirmation that the move landed.
+        await onChanged();
+      } else setToast(res.message || res.error || "Could not update stage.");
+    } catch {
+      setToast("Could not update stage.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <p className="eyebrow">Decision</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">
+        Moving {candidate.name.split(" ")[0]} on takes them off this round&rsquo;s board.
+        {round === "first_round" && " The final round is exec-only from there."}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => decide(next.stage, STAGE_LABEL[next.stage])}
+          disabled={busy}
+          className="btn btn-gold text-xs px-3 py-1.5 disabled:opacity-50"
+        >
+          {next.label}
+        </button>
+        <button
+          onClick={() => decide("rejected", "Rejected")}
+          disabled={busy}
+          className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+        >
+          Reject
+        </button>
+        <span className="text-xs text-[var(--muted)]">
+          Currently {STAGE_LABEL[candidate.stage] ?? candidate.stage}
+        </span>
+      </div>
+      {toast && <p className="mt-2 text-sm text-[var(--gold-deep)]">{toast}</p>}
+    </div>
+  );
+}
+
 // ── Panel assignment (exec) ──────────────────────────────────────────────────
 
 function PanelEditor({
   candidate,
+  round,
   pool,
   demo,
   onChanged,
 }: {
   candidate: Candidate;
+  round: InterviewRound;
   pool: Reviewer[];
   demo: boolean;
   onChanged: () => Promise<void> | void;
@@ -356,11 +469,16 @@ function PanelEditor({
       const r = await fetch("/api/recruitment/interview/panel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicant_id: candidate.id, interviewer_emails: selected }),
+        body: JSON.stringify({ applicant_id: candidate.id, interviewer_emails: selected, round }),
       });
       const res = await r.json();
       if (res.ok) {
-        setToast("Panel saved.");
+        // The route intersects the list with who may interview in this round, so
+        // say what it actually saved rather than what was ticked.
+        const dropped = res.ignored?.length
+          ? ` ${res.ignored.length} dropped (not eligible for this round).`
+          : "";
+        setToast(`Panel saved.${dropped}`);
         await onChanged();
       } else setToast(res.message || res.error || "Could not save the panel.");
     } finally {
@@ -373,13 +491,19 @@ function PanelEditor({
 
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
-      <p className="eyebrow">Interview panel</p>
+      <p className="eyebrow">{ROUND_LABEL[round]} panel</p>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Whoever is listed here can fill in this candidate&rsquo;s rubrics — and only this candidate&rsquo;s.
+        Whoever is listed here can fill in this candidate&rsquo;s {ROUND_LABEL[round].toLowerCase()}{" "}
+        rubrics — and only this candidate&rsquo;s, and only this round&rsquo;s. The other round&rsquo;s
+        panel is set separately and is unaffected.
       </p>
       {pool.length === 0 ? (
         <p className="mt-3 text-sm text-[var(--muted)]">
-          {demo ? "Connect Supabase to assign a panel." : "No members with an interviewer role yet."}
+          {demo
+            ? "Connect Supabase to assign a panel."
+            : round === "final_round"
+              ? "No exec members found — the final round is staffed by exec only."
+              : "No members with an interviewer role yet."}
         </p>
       ) : (
         <>

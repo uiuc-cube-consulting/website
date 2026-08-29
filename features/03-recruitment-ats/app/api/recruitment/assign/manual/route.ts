@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { reassignReviewer } from "@/features/03-recruitment-ats/lib/store";
 import { canDecide } from "@/features/03-recruitment-ats/lib/access";
+import { SELF_ACCESS_DENIED } from "@/features/03-recruitment-ats/lib/self-access";
+import { isOwnApplicationId } from "@/features/03-recruitment-ats/lib/self-access-store";
 import type { ReassignAction } from "@/features/03-recruitment-ats/lib/assignment";
 
 // EXEC-ONLY: reroute one candidate's reviewers by hand.
@@ -38,6 +40,16 @@ export async function POST(req: NextRequest) {
       { ok: false, error: `action must be one of ${ACTIONS.join(", ")}` },
       { status: 400 }
     );
+  }
+
+  // Choosing who reads your own application is the same self-access problem as
+  // reading the scores, one step earlier — and it is the more damaging half,
+  // because picking a friendly reviewer changes the outcome rather than merely
+  // revealing it. `validateReassignment` already refuses to make a candidate
+  // their own reviewer; this refuses the exec who IS the candidate, which no
+  // rule downstream would catch.
+  if (await isOwnApplicationId(body.applicant_id, session.user.email)) {
+    return NextResponse.json({ ok: false, error: SELF_ACCESS_DENIED }, { status: 403 });
   }
 
   const result = await reassignReviewer({

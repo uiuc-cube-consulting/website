@@ -10,20 +10,33 @@
 //
 // So: the reviewer feed stays blind, and this queue is exec-only.
 
-import { RUBRIC, weightedTotal, isScreenReview, type Applicant, type Review, type RubricKey } from "./types";
+import {
+  RUBRIC,
+  SCREEN_MAX_POINTS,
+  isScreenReview,
+  screenTotal,
+  type Applicant,
+  type Review,
+  type RubricKey,
+} from "./types";
 import { MIN_REVIEWERS_PER_APPLICANT } from "./assignment";
 
 /**
- * Spread (max − min of the reviewers' weighted totals) at which two reads stop
- * being noise and start being a genuine disagreement worth a human look.
+ * Spread (max − min of the reviewers' point totals) at which two reads stop being
+ * noise and start being a genuine disagreement worth a human look.
  *
- * On the 1–5 scale, 1.5 is roughly "one reviewer said yes and the other said no"
- * — a 4.0 against a 2.5. Below that the two are arguing about degree; above it
- * they are arguing about the decision, and exec should read the notes rather than
- * the mean. The mean of a 4.5 and a 1.5 is a perfectly ordinary-looking 3.0, so
- * without this flag the most contested candidates are the easiest to skim past.
+ * A quarter of the whole scale — 7 of 28 points — is roughly "one reviewer said
+ * yes and the other said no": a 21 against a 14. Below that the two are arguing
+ * about degree; above it they are arguing about the decision, and exec should read
+ * the notes rather than the mean. The mean of a 25 and an 11 is a perfectly
+ * ordinary-looking 18, so without this flag the most contested candidates are the
+ * easiest to skim past.
+ *
+ * Derived from SCREEN_MAX_POINTS rather than written as a literal, so reweighting
+ * the rubric moves the threshold with it instead of leaving a constant that
+ * silently means something different.
  */
-export const DISAGREEMENT_THRESHOLD = 1.5;
+export const DISAGREEMENT_THRESHOLD = Math.round(SCREEN_MAX_POINTS * 0.25);
 
 export type ReviewerVerdict = {
   reviewer_email: string;
@@ -35,7 +48,7 @@ export type ReviewerVerdict = {
 
 export type DecisionRow = {
   applicant: Applicant;
-  /** Every screen review, unblinded, strongest first. */
+  /** Every written-application review, unblinded, strongest first. */
   verdicts: ReviewerVerdict[];
   reviewCount: number;
   mean: number | null;
@@ -64,7 +77,9 @@ export function buildDecisionQueue(
 ): DecisionRow[] {
   const byApplicant = new Map<string, Review[]>();
   for (const r of reviews) {
-    if (!isScreenReview(r)) continue; // case/behavioral belong to a later round
+    // Interview rubrics belong to the first and final rounds and score a
+    // different scale entirely; only the written application decides this queue.
+    if (!isScreenReview(r)) continue;
     const cur = byApplicant.get(r.applicant_id);
     if (cur) cur.push(r);
     else byApplicant.set(r.applicant_id, [r]);
@@ -77,9 +92,10 @@ export function buildDecisionQueue(
       .map((r) => ({
         reviewer_email: r.reviewer_email,
         scores: r.scores as Record<string, number>,
-        // Recompute rather than trust the stored column: a rubric reweighting
-        // would otherwise leave old rows sorting against a stale total.
-        weighted_total: r.weighted_total ?? weightedTotal(r.scores),
+        // Recompute rather than trust the stored column: a rubric change would
+        // otherwise leave old rows sorting against a total that no longer means
+        // anything. Points out of SCREEN_MAX_POINTS.
+        weighted_total: screenTotal(r.scores),
         notes: r.notes ?? "",
         submitted_at: r.created_at,
       }))
@@ -91,7 +107,9 @@ export function buildDecisionQueue(
 
     const perCriterion = Object.fromEntries(
       RUBRIC.map((c) => {
-        const vals = verdicts.map((v) => Number(v.scores[c.key]) || 0).filter((n) => n > 0);
+        // Presence, not truthiness: 0 is a real score on this rubric (an
+        // unanswered essay), and dropping zeros would flatter every weak answer.
+        const vals = verdicts.map((v) => Number(v.scores?.[c.key])).filter((n) => Number.isFinite(n));
         return [c.key, vals.length ? round2(vals.reduce((a, b) => a + b, 0) / vals.length) : null];
       })
     ) as Record<RubricKey, number | null>;

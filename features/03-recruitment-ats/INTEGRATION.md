@@ -179,17 +179,32 @@ asserts both halves — who gets in, and who is refused before any side effect r
 
 Recruiting intake runs through a Google Form whose responses land in a sheet, with each
 resume arriving as a **Drive link**. Exec hits **Provision candidate folders** on
-`/portal/interview` and every respondent gets:
+`/portal/interview`, and every candidate **currently in the first round** gets:
 
 ```
 CUBE Recruiting/                     ← RECRUITING_DRIVE_ROOT_FOLDER_ID, made by hand once
-└── Fall 2026/                       ← RECRUITING_CYCLE_LABEL
+└── Fall 2026/                       ← cycleLabel(active cycle), NOT an env var
     └── Jane Doe — jdoe2@illinois.edu/
         ├── Resume — Jane Doe.pdf        copy of the Form upload
         ├── Case Rubric — Jane Doe       generated Google Doc
         ├── Behavioral Rubric — Jane Doe generated Google Doc
         └── Interview Notes — Jane Doe   blank, for the panel to type into live
 ```
+
+Two things about that run are worth stating plainly, because both changed:
+
+- **First round only.** Folders are provisioned for candidates whose stage puts them in the
+  first round, not for every respondent. A folder holds the two rubric docs, and those mean
+  nothing until somebody is actually being interviewed — provisioning the whole written pool
+  would be hundreds of folders nobody opens, at ~5 Drive calls each. Re-run it after each
+  batch of advancement decisions and it picks up exactly the people who just moved. The
+  result reports `notInRound` for everyone skipped; that is information, not an error.
+- **The cycle folder follows the active cycle**, via `cycleLabel(await getActiveCycle())`, not
+  `RECRUITING_CYCLE_LABEL`. The env var remains only as a manual override through
+  `opts.cycle`. Deriving it removes a quiet, nasty failure: opening a new cycle in the portal
+  without redeploying used to file every new candidate under last cycle's folder — and because
+  `candidateFolderName` is stable across cycles by design, a returning applicant's folder
+  would resolve to their OLD one and the new resume and rubric docs would land on top of it.
 
 ### Why the Form changes the resume story
 
@@ -272,6 +287,256 @@ links keep working and the Form's own records are untouched.
 | `app/api/recruitment/folders/provision/route.ts` | **new** — shim (POST) | Exec provisions candidate Drive folders. |
 | `.env.example` | **+ resume folder section**, **+ Drive folder section** | `RECRUITING_RESUME_FOLDER_ID`; the `RECRUITING_FORM_*` / `RECRUITING_DRIVE_*` vars. |
 
+## Three rounds (built)
+
+The cycle runs in three explicitly separated rounds. A round is **derived from the
+applicant's stage** (`lib/rounds.ts`) rather than stored beside it, so the two can never
+disagree — moving a candidate between rounds is the one stage write exec already makes.
+
+| Round | Stages | Where | Who | Scored on |
+|---|---|---|---|---|
+| **Written applications** | `applied`, `screened` | `/portal/recruiting` | every member may read + flag; recruiting roles score | the 28-point rubric in `lib/types.ts` |
+| **First round** | `interview` | `/portal/interview` → First round | exec, PM, SC, returning members — on the panel | case + behavioral, 1–5 (`lib/interview.ts`) |
+| **Final round** | `final_round` | `/portal/interview` → Final round | **exec only** | the same two rubrics, stored as `final_case` / `final_behavioral` |
+
+`offer`, `accepted`, `rejected` and `withdrawn` belong to **no** round — there is no work
+left to do on them, and treating them as one would put them back on somebody's board.
+
+Run **`db/rounds.sql`** (after `schema.sql` and `interview.sql`). It widens the `reviews.kind`
+check to the two final-round kinds, adds `round` to `interview_panel` and repoints its primary
+key at `(applicant_id, interviewer_email, round)`, and documents the new `final_round` stage.
+
+### The written rubric is points, not a 1–5 mean
+
+`RUBRIC` in `lib/types.ts` is six criteria, each with **its own ceiling**, summing to 28:
+
+| Criterion | Points |
+|---|---|
+| Essay 1 | 0–5 |
+| Essay 2 | 0–3 |
+| Essay 3 | 0–3 |
+| Case essay | 0–7 |
+| Miscellaneous | 0–5 |
+| Resume | 0–5 |
+
+Three consequences worth knowing:
+
+- **Zero is a real score**, meaning an unanswered or worthless answer — not "unscored". So
+  completeness is a presence check (`isScreenComplete`), never `> 0`, and `isValidScore`
+  refuses to coerce: `Number(null)` is 0, and a coercing check would let an untouched
+  criterion submit as a harsh zero. Aggregates count zeros for the same reason — dropping
+  them would flatter exactly the applications that left the most blank.
+- **`reviews.weighted_total` keeps its column name but holds points** for `screen` rows. Only
+  the interview rubrics still put a 1–5 weighted mean in it. Totals are recomputed from
+  `scores` on read, so a row written under an older rubric cannot skew a mean.
+- **The disagreement threshold is 7 points** (a quarter of the scale), derived from
+  `SCREEN_MAX_POINTS` so a rubric change moves it rather than leaving a stale constant.
+
+Reviews written under the OLD four-criterion rubric are left in place and score 0 under the
+new one. `db/rounds.sql` carries the (deliberately not executed) cleanup statement.
+
+### The resume is visible during the written round
+
+The rubric scores the resume out of 5, so `importApplicants` now links each applicant to the
+Drive file their Form response uploaded (`linkFormResumes`, `resume_match = 'form'`), and the
+written console shows it inline. Waiting for first-round provisioning would mean nobody could
+see a resume until after the decision that needs it. First-round provisioning still copies the
+file into the candidate's folder and repoints them at the copy — that copy lives in the shared
+drive the service account owns, so it survives the applicant tidying up their own Drive.
+
+### How the final round stays exec-only
+
+Not by hiding a tab. `GET /api/recruitment/interview?round=final_round` refuses a non-exec
+**before** `getBoard` runs, so no final-round score is read out of the database for them; the
+board's three queries are each scoped to the round, so another round's rubrics are never
+fetched into a response rather than merely filtered out of one; `interview/rubric` derives the
+round from the submitted `kind` (the client never sends a round, so the two cannot be made to
+disagree) and re-checks; the panel picker is narrowed to who may interview in that round, and
+`interview/panel` intersects the submitted list with the same rule; and
+`GET /api/recruitment/applicants` omits `final_round`-stage applicants entirely for everyone
+but exec, so the roster itself does not leak who is still in it.
+
+## Red & green flags (any time, on anyone)
+
+A flag is about a **person, keyed by email** — not about an application row. Members flag
+people at info nights, callouts and coffee chats, weeks before the application opens and
+while the recruiting console is closed. A flag filed that way is stored **pending**
+(`applicant_id` null) and is **claimed automatically** the first time an application arrives
+from that address, carrying its original author, note, event and date onto the candidate's
+profile.
+
+**Migration:** re-run `db/flags.sql` in the Supabase SQL editor. It is additive and safe to
+re-run: it adds `subject_email` / `subject_name` / `event` / `linked_at`, backfills existing
+rows from `applicants`, makes `applicant_id` nullable, and switches the applicant foreign key
+from `ON DELETE CASCADE` to `ON DELETE SET NULL` — a deleted application no longer destroys
+the observation somebody made at an event; the flag reverts to pending instead.
+
+| Where | What |
+|---|---|
+| `/portal/flags` | Standalone intake: colour, their email, optional name + event, note. Lists the pending pool. |
+| `/portal/recruiting` → candidate | Unchanged flag panel, now showing the event and a **"Before applying"** badge on claimed flags. |
+| `POST /api/recruitment/flags` | Takes **either** `applicant_id` (as before) **or** `subject_email` + optional `subject_name` / `event`. |
+| `GET /api/recruitment/flags` | The pending pool — flags still waiting on an application. |
+
+### Two deliberate decisions
+
+**`/portal/flags` is not behind the recruiting visibility toggle.** The console is
+cycle-scoped and shut between cycles; flags are not, and the most valuable ones are filed
+during exactly that window. Gating them on `canViewRecruiting` would switch the feature off
+for the period it exists to serve. The gate still applies to anything that reads applicant
+data: flagging by `applicant_id` is refused while recruiting is closed, and the response
+withholds whether the email is already in the pipeline.
+
+**You never see or file flags about yourself.** The pending pool is the one surface where a
+flag is visible without going through an applicant row, so `GET /api/recruitment/flags` drops
+any flag whose `subject_email` is the viewer's, and the POST refuses a flag on your own email
+or on an applicant id that resolves to one of your own applications. Redaction is by
+**subject**, not submitter — your own filings about other people stay visible — and there is
+no exec bypass, for the reasons in `lib/self-access.ts`.
+
+**Claiming happens on every path that creates an applicant** — the public form
+(`createApplicant`) and the bulk sheet import (`importApplicants`, which now reports
+`flagsLinked`). Most applicants arrive through the import, so claiming only on the form
+would strand event flags for nearly the whole cohort.
+
+### Files outside this folder (flags)
+
+| File | Change | Why |
+|---|---|---|
+| `app/portal/flags/page.tsx` | **new** — shim | Year-round flag intake route. |
+| `app/api/recruitment/flags/route.ts` | **+GET** | Pending pool feed; POST already shimmed. |
+| `app/portal/layout.tsx` | **+1 line** in `<nav>` | "Flags" link, shown to every member regardless of the recruiting toggle. |
+
+## Recruiting cycles — applying more than once (built)
+
+People apply to CUBE more than once. Someone turned down in fa26 comes back in sp27, and
+both attempts are real applications with their own essays, reviewers and scores. Before this,
+`applicants` held one row per person: the sheet import deduped on email alone, so a returning
+candidate was matched against their old row and dropped as a duplicate — reported under
+`skipped`, indistinguishable from a genuine double submission, and nobody found out.
+
+An application now belongs to a **semester**, and identity is `(person, cycle)`:
+
+- `applicants.cycle` holds a canonical key — `fa26`, `sp27`, `su26`
+- `unique (lower(email), cycle)` — one application per person per cycle, as many cycles as
+  they apply in
+
+Everything hanging off an application (reviews, assignments, decisions, `interview_panel`,
+`candidate_drive_assets`) keys on `applicant_id` and inherits the cycle for free. None of them
+gets a cycle of its own — that would be a second source of truth that could disagree with the
+application it belongs to.
+
+**`stage` and `cycle` are orthogonal** and easy to confuse: stage is how far someone got
+*within* one cycle, cycle is *which attempt* it was. Marcus rejected in sp26 and screening in
+fa26 is two rows, each with its own stage.
+
+### Setup
+
+Run **`db/cycles.sql`** in the Supabase SQL editor (after `schema.sql` and `visibility.sql`).
+It backfills existing rows from `created_at` (Jan–May spring, Jun–Jul summer, Aug–Dec fall),
+adds the uniqueness index, and seeds `recruiting_settings.active_cycle` from the newest cycle
+that has applications. If two rows already share an email within one cycle it stops with a
+message naming the count and a diagnostic query, rather than a bare index violation.
+
+### The active cycle
+
+Which cycle recruiting is *running* lives on the existing `recruiting_settings` singleton, next
+to the visibility toggle and for the same reason: it changes every semester and **exec, not a
+developer, changes it**. `GET/POST /api/recruitment/visibility` reads and writes both; POST
+takes `visible`, `cycle`, or both, and writes the cycle first so a failed cycle write can never
+leave recruiting open on the *previous* cohort.
+
+`getActiveCycle()` never returns null — it falls back to the cycle matching today's date. An
+application must always land in some cohort, and refusing one because exec hadn't clicked a
+button would close intake at exactly the wrong moment. The database applies the same
+date-derived default if an insert somehow arrives without one.
+
+`lib/cycle.ts` is pure and holds the format: `normalizeCycle` collapses `"FA26"`, `"Fall 2026"`,
+`"fa2026"` onto the single key `fa26`, so one cohort can't fragment across three spellings.
+**Never sort cycles as text** — `"fa26" < "sp26"` alphabetically, which puts Fall 2026 before
+Spring 2026. Use `compareCycles`.
+
+### Scoped reads
+
+`getSnapshot(cycle)`, `getCoverage(cycle)` and `assignReviewers(…, { cycle })` all narrow to one
+cohort. This isn't a display preference: a funnel counting fa26 and sp27 together, or a mean
+spanning two different applications from the same person, is a number that describes nothing.
+Unscoped, reviewers would also be dealt last semester's cohort alongside this one — hundreds of
+reads on applications decided months ago, and a coverage report that can never reach done.
+
+`GET /applicants`, `GET /decisions` and `GET /coverage` default to the active cycle and accept
+`?cycle=fa26` to open a past cohort — the point of storing a cycle per application rather than
+clearing the table each semester. An unparseable value falls back to the active cycle rather than
+erroring, so a stale bookmark shows the current pool instead of a 400. `GET /applicants` also
+returns `cycle`, `cycleLabel` and `cycles` (every cohort that has applications, newest first,
+from `listCycles()`), so the console can name the cohort it is showing and offer the others.
+`POST /import` and `POST /assign` take a `cycle` in the body on the same terms.
+
+Pending flags are deliberately **not** cycle-scoped: they're filed against an email before any
+application exists, so they belong to no cohort until one claims them.
+
+## You never see your own application (built)
+
+Almost everyone in CUBE applied to CUBE. They were scored on the rubric by two reviewers who
+didn't know each other's marks, someone filed a flag on them after an info night, and exec wrote
+a note next to the decision. All of it is still in the database, keyed by the same email they
+now sign in with as a member.
+
+Recruiting reads are club-wide by design — `canAccessRecruiting` admits every member role,
+because transparency about the pipeline is the point. That baseline is correct for other
+people's applications and catastrophic for your own: without this, a member elected to exec in
+fa26 can open `/portal/recruiting`, find themselves in the fa26 cohort, and read the scores two
+of their now-teammates gave them, the spread between those two, and what was flagged about them
+at a callout.
+
+**The rule: you never see, score, or decide on your own application.** `lib/self-access.ts` holds
+the pure predicates, `lib/self-access-store.ts` the one indexed lookup that write routes need
+(they arrive carrying only an `applicant_id`, with no email to compare against the session).
+
+Three properties are deliberate:
+
+- **No exec bypass.** Every other gate in `lib/access.ts` lets exec through so a stuck queue can
+  be unblocked. There's nothing to unblock here — the point is to withhold information from one
+  specific person, and that person being exec makes the leak worse, not more legitimate. The
+  predicates take no role argument at all, which is what makes the bypass impossible rather than
+  merely absent.
+- **Every cycle, not just closed ones.** A member applying again while holding a role must not
+  watch their own live application being scored.
+- **Reads and writes alike.** Hiding the row from the dashboard while letting the same person
+  POST a review of it, set their own stage, or stream their own resume would leave the
+  interesting half open.
+
+Matching is by **email**, because that's what the two records actually share: an application row
+carries no member id, and names collide.
+
+### Where it is enforced
+
+| Surface | What it does |
+|---|---|
+| `GET /applicants` | Drops your rows before coverage, aggregates and your queue are derived |
+| `GET /decisions` | Drops your rows from the UNBLINDED queue (both verdicts + both sets of notes) |
+| `POST /decisions` | Refuses setting a stage on your own application |
+| `POST /reviews` | Refuses scoring your own application, ahead of the assignment check |
+| `POST /interview/rubric` | Refuses scoring your own interview, ahead of the round gate |
+| `getBoard()` | Omits your candidacy, so resume/panel/rubric state go with the row |
+| `GET /resume/[id]` | 403 before any Drive traffic — an id can be guessed |
+| `GET /coverage` | Drops your row; summary counted after, so it matches what you can act on |
+| `GET /flags` | Withholds pending flags whose SUBJECT is you |
+| `POST /flags` | Refuses flagging yourself, by email or by your own applicant id |
+| `POST /assign/manual` | Refuses rerouting reviewers on your own application |
+
+The funnel on `GET /applicants` deliberately counts the **full** cohort, including your own
+application. That is the one place the rule does not apply, and it is a considered exception: a
+funnel is a reporting number and should be right — "5 reached offer" says nothing about whether
+you are one of them — whereas coverage is a to-do list and has to match the rows you can act on.
+
+### Why this can't be RLS
+
+Every query in this feature runs through the **service role**, which bypasses RLS by design, and
+the viewer's identity comes from a NextAuth session that Postgres never sees. So the rule is
+applied in the API routes on both reads and writes. RLS stays deny-by-default for anon, which is
+what it's there for.
+
 ## Phase 2 (still scoped in SPEC.md)
 
 Interview *scheduling* (`interview_slots`/`interviews` tables already exist — the console covers
@@ -281,7 +546,7 @@ and migrating the Join Us CTA to `/apply`.
 ## Remove cleanly
 
 ```bash
-rm -rf features/03-recruitment-ats "app/(public)/apply" app/portal/recruiting app/api/recruitment
-# remove the "Recruiting" line from app/portal/layout.tsx and the Supabase block in .env.example
+rm -rf features/03-recruitment-ats "app/(public)/apply" app/portal/recruiting app/portal/flags app/api/recruitment
+# remove the "Recruiting" and "Flags" lines from app/portal/layout.tsx and the Supabase block in .env.example
 # (optionally drop the tables in Supabase)
 ```
