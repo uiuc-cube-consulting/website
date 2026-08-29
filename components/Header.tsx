@@ -89,7 +89,7 @@ export function Header() {
 
         <button
           type="button"
-          className="md:hidden -mr-2 p-2 rounded-md text-[var(--fg-on-dark)] hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+          className="md:hidden -mr-2 p-2 inline-flex items-center justify-center min-h-11 min-w-11 rounded-md text-[var(--fg-on-dark)] hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}

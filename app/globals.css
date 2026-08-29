@@ -168,6 +168,13 @@ h1, h2, h3, h4 {
 }
 
 .marquee-mask {
+  /* Clips the max-content .marquee-track inside. mask-image only fades the
+     edges when painting — it does NOT constrain layout, so without this the
+     track (as wide as all its duplicated logos) sets the document scroll
+     width and the whole page pans sideways on a phone, carrying the sticky
+     header off-screen. Also zeroes the automatic minimum size when this sits
+     in a grid/flex track, which is what blew out the AlumniMarquee columns. */
+  overflow: hidden;
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0,
