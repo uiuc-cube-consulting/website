@@ -88,6 +88,18 @@ const STAGE_LABEL: Record<string, string> = {
   rejected: "Rejected", withdrawn: "Withdrawn",
 };
 
+/** Every stage a candidate can be moved to, forward or back. `rejected` and
+ *  `withdrawn` are not in STAGES — they are exits, not steps — so they are
+ *  appended explicitly rather than being silently unreachable from the picker. */
+const ALL_STAGES: Stage[] = [...STAGES, "rejected", "withdrawn"];
+
+/** Out of the running: hidden from the written round, and not re-scorable until
+ *  reopened. `accepted` is excluded — that is a finished success, not something
+ *  anyone needs an "undo" button for on this screen. */
+function isTerminalStage(stage: Stage): boolean {
+  return stage === "rejected" || stage === "withdrawn";
+}
+
 function nextStage(stage: Stage): Stage | null {
   const i = (STAGES as readonly string[]).indexOf(stage);
   return i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1] : null;
@@ -102,6 +114,17 @@ export function RecruitingDashboard() {
   // stays available because any member may look up and flag anybody, including
   // people already in interviews.
   const [roundFilter, setRoundFilter] = useState<"written" | "all">("written");
+  // Find one person, or everyone at one stage. At 300+ applicants the list is no
+  // longer scannable, and "who has been screened?" is a question people ask
+  // constantly — both filters run on data already loaded, so they are instant.
+  const [query, setQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState<Stage | "all">("all");
+  // Review progress is a SEPARATE axis from stage, and conflating them is the
+  // easy mistake: a candidate sits at `applied` until exec advances them, so
+  // "has two people read this?" and "what stage are they at?" answer different
+  // questions and can disagree for weeks. Both filters are needed because both
+  // questions get asked — "who still needs a read" and "who is ready to decide".
+  const [reviewFilter, setReviewFilter] = useState<"all" | "none" | "partial" | "full">("all");
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [importUrl, setImportUrl] = useState("");
@@ -250,9 +273,34 @@ export function RecruitingDashboard() {
   const needsReview = written.filter((r) => r.reviewCount < MIN_REVIEWERS).length;
   const disagreements = data.applicants.filter((r) => (r.spread ?? 0) >= DISAGREEMENT_THRESHOLD).length;
   const maxReached = Math.max(1, ...data.funnel.map((f) => f.reached));
-  const visible = (roundFilter === "written" ? written : data.applicants).filter(
-    (r) => queueMode !== "mine" || r.assignedToMe
-  );
+  // Stage counts come from whatever the round toggle is showing, so the numbers
+  // in the dropdown always match the list you are looking at rather than the
+  // whole cohort. Counted BEFORE the stage filter is applied — otherwise picking
+  // "Screened" would rewrite every other option's count to zero.
+  const inRound = roundFilter === "written" ? written : data.applicants;
+  const stageCounts = new Map<string, number>();
+  for (const r of inRound) stageCounts.set(r.applicant.stage, (stageCounts.get(r.applicant.stage) ?? 0) + 1);
+
+  const reviewCounts = {
+    none: inRound.filter((r) => r.reviewCount === 0).length,
+    partial: inRound.filter((r) => r.reviewCount > 0 && r.reviewCount < MIN_REVIEWERS).length,
+    full: inRound.filter((r) => r.reviewCount >= MIN_REVIEWERS).length,
+  };
+
+  const q = query.trim().toLowerCase();
+  const visible = inRound.filter((r) => {
+    if (queueMode === "mine" && !r.assignedToMe) return false;
+    if (stageFilter !== "all" && r.applicant.stage !== stageFilter) return false;
+    if (reviewFilter === "none" && r.reviewCount !== 0) return false;
+    if (reviewFilter === "partial" && !(r.reviewCount > 0 && r.reviewCount < MIN_REVIEWERS)) return false;
+    if (reviewFilter === "full" && r.reviewCount < MIN_REVIEWERS) return false;
+    if (!q) return true;
+    // Name and email both, because you look someone up by whichever you have —
+    // a name from a conversation, an address from an email thread.
+    return (
+      r.applicant.name.toLowerCase().includes(q) || r.applicant.email.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -447,6 +495,60 @@ export function RecruitingDashboard() {
               Scored out of {data.maxPoints ?? SCREEN_MAX_POINTS} points.
             </span>
           </div>
+
+          {/* Find one person, or everyone at one stage. */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name or email…"
+              aria-label="Search applicants by name or email"
+              className="min-w-0 flex-1 rounded-full border border-[var(--border)] bg-white px-4 py-1.5 text-sm placeholder:text-[var(--muted)]"
+            />
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value as Stage | "all")}
+              aria-label="Filter by stage"
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="all">Any stage ({inRound.length})</option>
+              {/* Driven by STAGES so a new stage cannot be added to the pipeline
+                  and quietly go missing from this filter. Stages nobody is at are
+                  listed but disabled, so the set of options stays stable instead
+                  of appearing and vanishing as people move through. */}
+              {[...STAGES, "rejected" as const, "withdrawn" as const].map((s) => {
+                const n = stageCounts.get(s) ?? 0;
+                return (
+                  <option key={s} value={s} disabled={n === 0}>
+                    {STAGE_LABEL[s]} ({n})
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              value={reviewFilter}
+              onChange={(e) => setReviewFilter(e.target.value as typeof reviewFilter)}
+              aria-label="Filter by review progress"
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="all">Any reviews ({inRound.length})</option>
+              <option value="none">Not reviewed ({reviewCounts.none})</option>
+              <option value="partial">Partly reviewed ({reviewCounts.partial})</option>
+              <option value="full">Fully reviewed ({reviewCounts.full})</option>
+            </select>
+            {(q || stageFilter !== "all" || reviewFilter !== "all") && (
+              <button
+                onClick={() => { setQuery(""); setStageFilter("all"); setReviewFilter("all"); }}
+                className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--bg-dark)]"
+              >
+                Clear
+              </button>
+            )}
+            <span className="text-xs tabular-nums text-[var(--muted)]">
+              {visible.length} shown
+            </span>
+          </div>
           <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
             <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               <span>Applicant</span><span>Stage</span><span>Reviews</span><span>Mean</span>
@@ -454,11 +556,17 @@ export function RecruitingDashboard() {
             <ul className="divide-y divide-[var(--border)]">
               {visible.length === 0 && (
                 <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-                  {queueMode === "mine"
-                    ? "Nothing assigned to you yet."
-                    : roundFilter === "written"
-                      ? "Nobody is in the written round right now."
-                      : "No applicants."}
+                  {/* A filter matching nothing is not the same as an empty
+                      pipeline, and saying "No applicants" over 328 hidden rows
+                      sends people looking for a bug. Named first because it is
+                      the one the reader can fix. */}
+                  {q || stageFilter !== "all" || reviewFilter !== "all"
+                    ? "Nobody matches those filters."
+                    : queueMode === "mine"
+                      ? "Nothing assigned to you yet."
+                      : roundFilter === "written"
+                        ? "Nobody is in the written round right now."
+                        : "No applicants."}
                 </li>
               )}
               {visible.map((r) => {
@@ -572,6 +680,7 @@ function ReviewPanel({
   }
 
   const advance = nextStage(a.stage);
+  const isTerminal = isTerminalStage(a.stage);
 
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
@@ -667,12 +776,57 @@ function ReviewPanel({
                 Advance → {STAGE_LABEL[advance]}
               </button>
             )}
+            {/* Reopening is the counterpart to Reject, and it needs to be a
+                first-class button rather than something buried in the picker
+                below. A rejection made in error is the one stage change people
+                actually need to undo — and until this existed there was no way
+                to: `nextStage("rejected")` is null and Reject hides itself once
+                taken, so a rejected candidate had NO controls at all and was
+                stuck there permanently.
+
+                Reopening to `applied` rather than to whatever they were before,
+                because `decisions` upserts one row per applicant and therefore
+                keeps no history — there is no prior stage to restore. Landing
+                them back at the start of the written round is honest about that,
+                and their existing reviews are untouched, so they return with
+                their scores intact rather than needing a re-read. */}
+            {isTerminal && (
+              <button onClick={() => decide("applied")} disabled={busy} className="btn btn-gold-outline text-xs px-3 py-1.5">
+                Reopen → Applied
+              </button>
+            )}
             {a.stage !== "rejected" && (
               <button onClick={() => decide("rejected")} disabled={busy} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
                 Reject
               </button>
             )}
           </div>
+
+          {/* Every stage, in both directions. The buttons above cover the path the
+              process actually takes; this covers the corrections — a candidate
+              advanced by mistake, or one rejected who should go back to a
+              specific stage rather than to the start. Value resets to "" after
+              each change so it reads as an action, not as current state. */}
+          <label className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
+            Move to
+            <select
+              value=""
+              disabled={busy}
+              onChange={(e) => { if (e.target.value) decide(e.target.value as Stage); }}
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs text-[var(--bg-dark)]"
+            >
+              <option value="">Choose a stage…</option>
+              {ALL_STAGES.filter((s) => s !== a.stage).map((s) => (
+                <option key={s} value={s}>{STAGE_LABEL[s]}</option>
+              ))}
+            </select>
+          </label>
+          {isTerminal && (
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              {a.name.split(" ")[0]} is {STAGE_LABEL[a.stage]?.toLowerCase()} and is hidden from the
+              written round. Reopening puts them back in the queue with their existing reviews.
+            </p>
+          )}
         </>
       )}
       {toast && <p className="mt-3 text-sm text-[var(--gold-deep)]">{toast}</p>}
