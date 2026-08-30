@@ -16,8 +16,9 @@ import { useState } from "react";
 import { RecruitingDashboard } from "./RecruitingDashboard";
 import { DecisionQueue } from "./DecisionQueue";
 import { VisibilityToggle } from "./VisibilityToggle";
+import { DemographicsPanel } from "./DemographicsPanel";
 
-type Tab = "review" | "decide" | "visibility";
+type Tab = "review" | "decide" | "demographics" | "visibility";
 
 export function RecruitingTabs() {
   const [tab, setTab] = useState<Tab>("review");
@@ -43,10 +44,12 @@ export function RecruitingTabs() {
       <div className="flex flex-wrap gap-2">
         {btn("review", "Review applications", "Score candidates on the 28-point written rubric")}
         {btn("decide", "Written decisions", "Both readers' verdicts, unblinded — advance to the first round or reject")}
+        {btn("demographics", "Demographics", "Who applied, and how each group moves through the pipeline")}
         {btn("visibility", "Visibility", "Open or close recruiting for everyone else")}
       </div>
       {tab === "review" && <RecruitingDashboard />}
       {tab === "decide" && <DecisionQueue />}
+      {tab === "demographics" && <DemographicsPanel />}
       {tab === "visibility" && <VisibilityToggle />}
     </div>
   );
