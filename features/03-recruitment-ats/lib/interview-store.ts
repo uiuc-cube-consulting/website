@@ -24,6 +24,7 @@ import {
 } from "./interview";
 import { ROUND_STAGES, type InterviewRound } from "./rounds";
 import { parseResumeId } from "./form-resume";
+import { readApplicantsFromSheet } from "./import";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
 import { excludeOwnApplications } from "./self-access";
 import { weightedTotalFor, type Flag, type Stage } from "./types";
@@ -561,3 +562,86 @@ export async function syncResumes(folderIdRaw: string): Promise<SyncResult> {
 }
 
 export type { DriveFileMeta };
+
+// ── Backfilling resumes from the response sheet ──────────────────────────────
+
+export type LinkMissingResult = {
+  ok: boolean;
+  demo?: boolean;
+  error?: string;
+  /** Applicants in this cycle with no resume when the run started. */
+  missing?: number;
+  /** Newly pointed at their Form upload. */
+  linked?: number;
+  /** No row in the sheet for that email — imported from somewhere else. */
+  notInSheet?: number;
+  /** The sheet cell held nothing a Drive id could be parsed out of. */
+  noLink?: number;
+  /** Parsed an id, but Drive would not serve the file. */
+  unreadable?: number;
+};
+
+/**
+ * Point every resume-less applicant at the file their Form response uploaded.
+ *
+ * This exists because `linkFormResumes` only ever runs over the rows an import
+ * just CREATED. Anyone already in the table when resume linking was added — or
+ * whose Drive call failed transiently that day — stays unlinked forever, with no
+ * way to notice except a reviewer opening the candidate and finding nothing.
+ * That is not hypothetical: it left 115 of 328 applicants with no resume in the
+ * middle of a live cycle, while the links sat unused in the sheet the whole time.
+ *
+ * Idempotent and safe to run repeatedly: it only ever fills a row whose
+ * `resume_file_id` is still null, re-checked immediately before the write, so a
+ * concurrent import or a manual fix is never overwritten. A file Drive refuses
+ * is counted and skipped rather than recorded — a pointer to something we cannot
+ * stream would turn a visible gap into a broken viewer.
+ */
+export async function linkMissingResumes(
+  sheetId: string,
+  cycle?: string
+): Promise<LinkMissingResult> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+
+  const query = sb.from("applicants").select("id, email").is("resume_file_id", null);
+  if (cycle) query.eq("cycle", cycle);
+  const { data: missing, error } = await query;
+  if (error) return { ok: false, error: error.message };
+  if (!missing?.length) return { ok: true, missing: 0, linked: 0, notInSheet: 0, noLink: 0, unreadable: 0 };
+
+  const read = await readApplicantsFromSheet(sheetId);
+  if (!read.ok) return { ok: false, error: read.error };
+
+  // First row wins per address, matching the import's own dedupe.
+  const linkByEmail = new Map<string, string | undefined>();
+  for (const r of read.rows) {
+    const key = r.email.trim().toLowerCase();
+    if (!linkByEmail.has(key)) linkByEmail.set(key, r.resumeLink);
+  }
+
+  let notInSheet = 0;
+  let noLink = 0;
+  const todo: { applicantId: string; resumeLink: string }[] = [];
+  for (const a of missing) {
+    const key = String(a.email).trim().toLowerCase();
+    if (!linkByEmail.has(key)) { notInSheet++; continue; }
+    const cell = linkByEmail.get(key);
+    if (!cell || !parseResumeId(cell)) { noLink++; continue; }
+    todo.push({ applicantId: String(a.id), resumeLink: cell });
+  }
+
+  // Reuses the same routine the import path uses, so a resume linked by a
+  // backfill is indistinguishable from one linked at import — same provenance
+  // tag, same gap-filling check, same refusal to record an unreadable file.
+  const res = await linkFormResumes(todo);
+  return {
+    ok: true,
+    missing: missing.length,
+    linked: res.linked,
+    notInSheet,
+    noLink,
+    unreadable: todo.length - res.linked,
+    ...(res.error ? { error: res.error } : {}),
+  };
+}

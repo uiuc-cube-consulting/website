@@ -103,6 +103,60 @@ export async function setActiveCycle(
   return { ok: true, cycle: canonical };
 }
 
+// ── The response sheet this cycle came from ──────────────────────────────────
+
+/** A Drive id out of either a bare id or a full spreadsheet URL. */
+export function normalizeSheetId(raw: string | null | undefined): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const fromUrl = /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(s);
+  const id = fromUrl ? fromUrl[1] : s;
+  return /^[a-zA-Z0-9_-]{10,}$/.test(id) ? id : null;
+}
+
+/**
+ * Which sheet "Link missing resumes" reads.
+ *
+ * Stored rather than accepted as a parameter, because that action is open to
+ * every member: a sheet id in the request body would let anyone point the
+ * service account at an arbitrary spreadsheet and learn from the response
+ * whether it was readable. Falls back to the env var so an install that already
+ * sets RECRUITMENT_IMPORT_SHEET_ID keeps working without a database write.
+ */
+export async function getImportSheetId(): Promise<string | null> {
+  const sb = db();
+  if (sb) {
+    const { data, error } = await sb
+      .from("recruiting_settings")
+      .select("import_sheet_id")
+      .eq("id", true)
+      .maybeSingle();
+    const stored = error ? null : normalizeSheetId(data?.import_sheet_id as string | null);
+    if (stored) return stored;
+  }
+  return normalizeSheetId(process.env.RECRUITMENT_IMPORT_SHEET_ID);
+}
+
+/** Exec records the cycle's response sheet. */
+export async function setImportSheetId(
+  raw: string,
+  updatedBy: string
+): Promise<{ ok: boolean; demo?: boolean; error?: string; invalid?: boolean; sheetId?: string }> {
+  const sheetId = normalizeSheetId(raw);
+  if (!sheetId) return { ok: false, invalid: true, error: "That doesn't look like a Google Sheet id or URL." };
+
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+  const { error } = await sb.from("recruiting_settings").upsert({
+    id: true,
+    import_sheet_id: sheetId,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, sheetId };
+}
+
 /**
  * Resolve the cycle a request should operate on: an explicit `?cycle=` when it
  * names a real cycle, otherwise the active one.

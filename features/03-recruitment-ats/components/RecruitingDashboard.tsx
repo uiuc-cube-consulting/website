@@ -125,6 +125,7 @@ export function RecruitingDashboard() {
   // questions and can disagree for weeks. Both filters are needed because both
   // questions get asked — "who still needs a read" and "who is ready to decide".
   const [reviewFilter, setReviewFilter] = useState<"all" | "none" | "partial" | "full">("all");
+  const [linkingResumes, setLinkingResumes] = useState(false);
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [importUrl, setImportUrl] = useState("");
@@ -183,6 +184,44 @@ export function RecruitingDashboard() {
             [...selectedReviewers],
             MIN_REVIEWERS
           ).error;
+
+  /**
+   * Fill in resumes for anyone who has none, from their Form upload.
+   *
+   * Reports every bucket rather than just the successes: "Linked 0" alone reads
+   * as a broken button, when the honest answer is almost always "nobody was
+   * missing one" or "those candidates never uploaded a file". A reviewer who
+   * presses this and sees nothing happen needs to know which.
+   */
+  async function linkResumes() {
+    setLinkingResumes(true);
+    setNotice(null);
+    try {
+      const r = await fetch("/api/recruitment/resumes/link", { method: "POST" });
+      const j = await r.json();
+      if (!j.ok) {
+        setNotice(j.error || j.message || "Could not link resumes.");
+        return;
+      }
+      if (!j.missing) {
+        setNotice("Every candidate already has a resume.");
+      } else {
+        const detail = [
+          j.noLink ? `${j.noLink} uploaded no file` : "",
+          j.notInSheet ? `${j.notInSheet} not in the response sheet` : "",
+          j.unreadable ? `${j.unreadable} unreadable in Drive` : "",
+        ].filter(Boolean).join(", ");
+        setNotice(
+          `Linked ${j.linked} of ${j.missing} missing.${detail ? ` Remaining: ${detail}.` : ""}`
+        );
+      }
+      await reload();
+    } catch {
+      setNotice("Could not link resumes.");
+    } finally {
+      setLinkingResumes(false);
+    }
+  }
 
   // Exec-only: randomly assign reviewers across all active applicants.
   // `reshuffle` re-deals from scratch instead of topping up the current spread.
@@ -548,6 +587,19 @@ export function RecruitingDashboard() {
             <span className="text-xs tabular-nums text-[var(--muted)]">
               {visible.length} shown
             </span>
+            {/* Open to EVERY member, unlike the exec-only import and export. A
+                reviewer scores the resume out of 5, so a missing one silently
+                costs a candidate points — whoever finds the gap should be able to
+                close it rather than wait for an officer. It only ever fills a
+                blank, never changes a resume already linked. */}
+            <button
+              onClick={linkResumes}
+              disabled={linkingResumes}
+              title="Point any candidate with no resume at the file their application uploaded"
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)] disabled:opacity-50"
+            >
+              {linkingResumes ? "Linking…" : "Link missing resumes"}
+            </button>
             {/* Exec-only, matching the endpoint. A plain <a download> rather than
                 a fetch: the browser streams the file straight to disk under the
                 portal session, so the CSV never passes through client memory and

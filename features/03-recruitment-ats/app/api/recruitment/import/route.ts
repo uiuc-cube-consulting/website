@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { importApplicants } from "@/features/03-recruitment-ats/lib/store";
 import { readApplicantsFromSheet } from "@/features/03-recruitment-ats/lib/import";
 import { normalizeCycle } from "@/features/03-recruitment-ats/lib/cycle";
-import { getActiveCycle } from "@/features/03-recruitment-ats/lib/visibility";
+import { getActiveCycle, setImportSheetId } from "@/features/03-recruitment-ats/lib/visibility";
 
 // Exec-only: read a Google Sheet of form responses and import them as applicants,
 // into the ACTIVE cycle unless one is named. This is the front door of the WRITTEN
@@ -31,6 +31,12 @@ export async function POST(req: NextRequest) {
 
   const read = await readApplicantsFromSheet(sheetId, body.range);
   if (!read.ok) return NextResponse.json({ ok: false, error: read.error }, { status: 400 });
+
+  // Remember which sheet this cycle came from. "Link missing resumes" is open to
+  // every member and therefore takes no sheet parameter — it reads this. Recorded
+  // on a SUCCESSFUL read, so a typo'd id is never stored. Failing to store it must
+  // not fail the import, which is the thing the caller actually asked for.
+  await setImportSheetId(sheetId, session.user.email.toLowerCase()).catch(() => {});
 
   const cycle = normalizeCycle(body.cycle) ?? (await getActiveCycle());
   const result = await importApplicants(read.rows, cycle);
