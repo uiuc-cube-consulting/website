@@ -4,7 +4,7 @@ import { getSnapshot } from "@/features/03-recruitment-ats/lib/store";
 import { isExec } from "@/features/03-recruitment-ats/lib/access";
 import { excludeOwnApplications } from "@/features/03-recruitment-ats/lib/self-access";
 import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
-import { demographicsReport } from "@/features/03-recruitment-ats/lib/demographics";
+import { breakdownBy, type Dimension } from "@/features/03-recruitment-ats/lib/demographics";
 import { STAGES } from "@/features/03-recruitment-ats/lib/types";
 
 // EXEC-ONLY: who is applying, and whether the process treats them the same.
@@ -27,6 +27,7 @@ import { STAGES } from "@/features/03-recruitment-ats/lib/types";
 export const dynamic = "force-dynamic";
 
 const STAGE_ORDER: string[] = [...STAGES, "rejected", "withdrawn"];
+const DIMENSIONS: Dimension[] = ["pronouns", "major", "college", "year"];
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -36,7 +37,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Exec only" }, { status: 403 });
   }
 
-  const cycle = await resolveCycle(new URL(req.url).searchParams.get("cycle"));
+  const params = new URL(req.url).searchParams;
+  const cycle = await resolveCycle(params.get("cycle"));
+  // An unknown `by` falls back to pronouns rather than erroring — a stale link
+  // should show something useful, not a 400.
+  const by = params.get("by");
+  const dimension: Dimension = DIMENSIONS.includes(by as Dimension) ? (by as Dimension) : "pronouns";
 
   try {
     const { applicants, reviews, demo } = await getSnapshot(cycle);
@@ -47,7 +53,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       cycle,
       demo,
-      ...demographicsReport(visible, reviews, STAGE_ORDER),
+      ...breakdownBy(dimension, visible, reviews, STAGE_ORDER),
     });
   } catch (err) {
     return NextResponse.json(

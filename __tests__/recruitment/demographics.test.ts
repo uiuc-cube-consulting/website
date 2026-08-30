@@ -9,7 +9,9 @@
  */
 
 import {
+  breakdownBy,
   demographicsReport,
+  normalizeMajor,
   pronounGroup,
   PRONOUN_FIELD,
 } from "@/features/03-recruitment-ats/lib/demographics";
@@ -146,6 +148,109 @@ describe("demographicsReport", () => {
 
   it("handles an empty cohort without dividing by zero", () => {
     const r = demographicsReport([], [], STAGE_ORDER);
-    expect(r).toEqual({ total: 0, groups: [], stages: [] });
+    expect(r).toEqual({ dimension: "pronouns", total: 0, groups: [], stages: [], distinct: 0 });
+  });
+});
+
+describe("normalizeMajor", () => {
+  it("collapses the ways one major gets written", () => {
+    // The live cycle has "Finance + Data Science" (25), "Finance + DS" (5) and
+    // "Finance and Data Science" (4) — 34 people reported as three majors, with
+    // the largest appearing as 25.
+    const key = normalizeMajor("Finance + Data Science");
+    expect(normalizeMajor("Finance + DS")).toBe(key);
+    expect(normalizeMajor("Finance and Data Science")).toBe(key);
+    expect(normalizeMajor("finance & data science")).toBe(key);
+    expect(normalizeMajor("  Finance  +  Data   Science ")).toBe(key);
+  });
+
+  it("is order-independent for a double major", () => {
+    expect(normalizeMajor("CS + Econ")).toBe(normalizeMajor("Economics + Computer Science"));
+  });
+
+  it("expands abbreviations only as whole tokens", () => {
+    // Substring expansion would turn "Design" into "Data ScienceIGN".
+    expect(normalizeMajor("Systems Engineering & Design")).toContain("design");
+    expect(normalizeMajor("Design")).toBe("design");
+    expect(normalizeMajor("DS")).toBe("data science");
+  });
+
+  it("dedupes a repeated component", () => {
+    expect(normalizeMajor("Economics and Economics")).toBe("economics");
+  });
+
+  it("treats a blank as no answer", () => {
+    expect(normalizeMajor("")).toBe("");
+    expect(normalizeMajor(null)).toBe("");
+    expect(normalizeMajor("   ")).toBe("");
+  });
+});
+
+describe("breakdownBy — high-cardinality dimensions", () => {
+  const many = (n: number, major: string, stage = "applied") =>
+    Array.from({ length: n }, (_, i) => {
+      const a = applicant(`${major}-${i}`, "he/him", stage);
+      return { ...a, major };
+    });
+
+  it("merges spellings of the same major into one group", () => {
+    const applicants = [
+      ...many(3, "Finance + Data Science"),
+      ...many(2, "Finance + DS"),
+      ...many(1, "Finance and Data Science"),
+    ];
+    const r = breakdownBy("major", applicants, [], STAGE_ORDER);
+    expect(r.groups).toHaveLength(1);
+    expect(r.groups[0].count).toBe(6);
+    expect(r.distinct).toBe(1);
+  });
+
+  it("keeps the largest groups and collapses the tail into Other", () => {
+    // 99 of 146 majors appear exactly once. Drawing all of them is a list, not
+    // a chart.
+    const applicants = [
+      ...many(10, "Computer Science"),
+      ...many(5, "Economics"),
+      ...Array.from({ length: 8 }, (_, i) => ({ ...applicant(`solo-${i}`, "he/him"), major: `Major ${i}` })),
+    ];
+    const r = breakdownBy("major", applicants, [], STAGE_ORDER, 2);
+    expect(r.groups.map((g) => g.count)).toEqual([10, 5, 8]);
+    expect(r.groups[2].group).toBe("__other__");
+    expect(r.groups[2].label).toContain("8 more");
+    // The true variety is still reported, even though only 2 rows are drawn.
+    expect(r.distinct).toBe(10);
+  });
+
+  it("never truncates pronouns", () => {
+    const applicants = [
+      applicant("a", "she/her"), applicant("b", "he/him"),
+      applicant("c", "they/them"), applicant("d", "xe/xem"), applicant("e", undefined),
+    ];
+    const r = breakdownBy("pronouns", applicants, [], STAGE_ORDER, 2);
+    expect(r.groups).toHaveLength(5);
+    expect(r.groups.some((g) => g.group === "__other__")).toBe(false);
+  });
+
+  it("orders groups largest first", () => {
+    const applicants = [...many(2, "Economics"), ...many(5, "Computer Science")];
+    const r = breakdownBy("major", applicants, [], STAGE_ORDER);
+    expect(r.groups[0].label).toBe("Computer Science");
+  });
+
+  it("buckets a missing major as Not stated rather than dropping the person", () => {
+    const applicants = [{ ...applicant("a", "he/him"), major: undefined }];
+    const r = breakdownBy("major", applicants, [], STAGE_ORDER);
+    expect(r.total).toBe(1);
+    expect(r.groups[0].label).toBe("Not stated");
+  });
+
+  it("merges known college synonyms", () => {
+    const applicants = [
+      { ...applicant("a", "he/him"), college: "iSchool" },
+      { ...applicant("b", "he/him"), college: "School of Information Sciences" },
+    ];
+    const r = breakdownBy("college", applicants, [], STAGE_ORDER);
+    expect(r.groups).toHaveLength(1);
+    expect(r.groups[0].count).toBe(2);
   });
 });
