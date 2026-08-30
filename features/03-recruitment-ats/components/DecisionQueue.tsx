@@ -32,6 +32,10 @@ export function DecisionQueue() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // Bulk decisions. Ids rather than rows, so a selection survives the queue being
+  // re-sorted or reloaded underneath it.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [reloadKey, setReloadKey] = useState(0);
   const reload = useCallback(() => setReloadKey((n) => n + 1), []);
@@ -72,6 +76,51 @@ export function DecisionQueue() {
       if (j.ok) reload();
     } finally {
       setBusy(null);
+    }
+  }
+
+  /**
+   * Apply one decision to everything ticked.
+   *
+   * Confirmed by NAME rather than by count: "Reject 40?" is a number nobody can
+   * check, while a list is something a human can scan for the one they did not
+   * mean to tick. Rejection is reversible, but reversing forty is still worse
+   * than not sending them.
+   */
+  async function bulkDecide(stage: string) {
+    const ids = [...picked];
+    if (!ids.length) return;
+
+    const names = (data?.rows ?? [])
+      .filter((r) => picked.has(r.applicant.id))
+      .map((r) => r.applicant.name);
+    const preview = names.slice(0, 12).join(", ") + (names.length > 12 ? `, and ${names.length - 12} more` : "");
+    if (!window.confirm(`Move ${ids.length} to ${STAGE_LABEL[stage] ?? stage}?\n\n${preview}`)) return;
+
+    setBulkBusy(true);
+    setToast(null);
+    try {
+      const r = await fetch("/api/recruitment/decisions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicant_ids: ids, stage }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setToast(j.error || j.message || "Could not apply that decision.");
+        return;
+      }
+      const extra = [
+        j.skippedSelf ? `${j.skippedSelf} skipped (your own application)` : "",
+        j.notFound ? `${j.notFound} no longer existed` : "",
+      ].filter(Boolean).join(", ");
+      setToast(`Moved ${j.updated} to ${STAGE_LABEL[stage] ?? stage}.${extra ? ` ${extra}.` : ""}`);
+      setPicked(new Set());
+      reload();
+    } catch {
+      setToast("Could not apply that decision.");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -125,15 +174,86 @@ export function DecisionQueue() {
         </p>
       )}
 
+      {/* Appears only once something is ticked, so it never takes space from the
+          queue it acts on. This is the surface where the cutoff actually gets
+          drawn — the rows are already sorted by score with both verdicts
+          visible — so a block at the bottom is usually one uniform call. */}
+      {picked.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--gold)] bg-[var(--bg-cream)]/60 px-3 py-2">
+          <span className="text-sm font-semibold text-[var(--bg-dark)]">{picked.size} selected</span>
+          <button
+            onClick={() => bulkDecide("rejected")}
+            disabled={bulkBusy}
+            className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {bulkBusy ? "Working…" : "Reject selected"}
+          </button>
+          <button
+            onClick={() => bulkDecide("interview")}
+            disabled={bulkBusy}
+            className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)] disabled:opacity-50"
+          >
+            Advance to first round
+          </button>
+          <button
+            onClick={() => setPicked(new Set())}
+            disabled={bulkBusy}
+            className="ml-auto text-xs text-[var(--muted)] underline hover:text-[var(--bg-dark)]"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {data.rows.length > 0 && (
+        <label className="flex items-center gap-2 px-1 text-xs text-[var(--muted)]">
+          <input
+            type="checkbox"
+            className="accent-[var(--gold)]"
+            // Acts on what is SHOWN — which respects the "only fully reviewed"
+            // toggle and the sort. Selecting people the queue is currently
+            // hiding is exactly the mistake this must not enable.
+            checked={data.rows.length > 0 && data.rows.every((r) => picked.has(r.applicant.id))}
+            onChange={(e) => {
+              const next = new Set(picked);
+              for (const r of data.rows) {
+                if (e.target.checked) next.add(r.applicant.id);
+                else next.delete(r.applicant.id);
+              }
+              setPicked(next);
+            }}
+          />
+          Select all {data.rows.length} shown
+        </label>
+      )}
+
       <div className="space-y-3">
         {data.rows.map((row) => {
           const id = row.applicant.id;
           const expanded = open === id;
           return (
             <div key={id} className="rounded-2xl border border-[var(--border)] bg-white">
+              <div className="flex items-center">
+                {/* Outside the button, not inside it: a checkbox nested in a
+                    <button> is not independently clickable, so ticking a row
+                    would also expand it. */}
+                <label className="flex shrink-0 items-center py-4 pl-4">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${row.applicant.name}`}
+                    className="accent-[var(--gold)]"
+                    checked={picked.has(id)}
+                    onChange={(e) => {
+                      const next = new Set(picked);
+                      if (e.target.checked) next.add(id);
+                      else next.delete(id);
+                      setPicked(next);
+                    }}
+                  />
+                </label>
               <button
                 onClick={() => setOpen(expanded ? null : id)}
-                className="flex w-full flex-wrap items-center gap-3 p-4 text-left"
+                className="flex w-full flex-wrap items-center gap-3 py-4 pl-3 pr-4 text-left"
               >
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 font-semibold text-[var(--bg-dark)]">
@@ -169,6 +289,7 @@ export function DecisionQueue() {
                   <span className="text-xs text-[var(--muted)]">{expanded ? "▲" : "▼"}</span>
                 </div>
               </button>
+              </div>
 
               {expanded && (
                 <div className="border-t border-[var(--border)] p-4">
