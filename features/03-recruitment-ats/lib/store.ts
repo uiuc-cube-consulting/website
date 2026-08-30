@@ -241,6 +241,61 @@ export async function createApplicant(input: {
   return { ok: true, id: data.id, flagsLinked: claim.linked };
 }
 
+/**
+ * Move SEVERAL applicants to the same stage in one operation.
+ *
+ * Bulk rejection is the delibs-day case: exec works down a sorted queue and the
+ * bottom forty are all the same call. Doing that as forty round trips is slow
+ * enough that people batch it wrong — closing the tab halfway, or double-clicking
+ * and losing track of which went through.
+ *
+ * Two writes total, not two per applicant: one `update ... in (ids)` and one
+ * upsert of the decision rows. Postgres applies each statement atomically, so
+ * either every stage moved or none did — there is no half-rejected cohort to
+ * reconcile afterwards.
+ *
+ * Callers must have already removed the viewer's own application (self-access)
+ * and validated the stage; this does the write, not the policy.
+ */
+export async function setDecisions(input: {
+  applicant_ids: string[];
+  stage: Stage;
+  decided_by: string;
+  note?: string;
+}): Promise<WriteResult & { updated?: number }> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+
+  const ids = [...new Set(input.applicant_ids.filter(Boolean))];
+  if (!ids.length) return { ok: true, updated: 0 };
+
+  const { data: moved, error: uErr } = await sb
+    .from("applicants")
+    .update({ stage: input.stage })
+    .in("id", ids)
+    .select("id");
+  if (uErr) return { ok: false, error: uErr.message };
+
+  // Only ids that actually matched a row get a decision, so a stale id from a
+  // browser tab that has been open a while cannot leave an orphan behind.
+  const hit = (moved ?? []).map((r) => String(r.id));
+  if (hit.length) {
+    const decidedAt = new Date().toISOString();
+    const { error: dErr } = await sb.from("decisions").upsert(
+      hit.map((applicant_id) => ({
+        applicant_id,
+        decision: input.stage,
+        decided_by: input.decided_by,
+        decided_at: decidedAt,
+        note: input.note ?? null,
+      })),
+      { onConflict: "applicant_id" }
+    );
+    if (dErr) return { ok: false, error: dErr.message, updated: hit.length };
+  }
+  return { ok: true, updated: hit.length };
+}
+
 export async function submitReview(input: {
   applicant_id: string;
   reviewer_email: string;

@@ -125,6 +125,10 @@ export function RecruitingDashboard() {
   // questions and can disagree for weeks. Both filters are needed because both
   // questions get asked — "who still needs a read" and "who is ready to decide".
   const [reviewFilter, setReviewFilter] = useState<"all" | "none" | "partial" | "full">("all");
+  // Bulk decisions (exec only). Ids rather than rows, so a selection survives
+  // the list being re-filtered or reloaded underneath it.
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [linkingResumes, setLinkingResumes] = useState(false);
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -184,6 +188,51 @@ export function RecruitingDashboard() {
             [...selectedReviewers],
             MIN_REVIEWERS
           ).error;
+
+  /**
+   * Apply one decision to everything ticked.
+   *
+   * Confirmed by NAME, not by count. "Reject 40 applicants?" is a number nobody
+   * can check; a list is something a human can actually scan for the one they
+   * did not mean to tick. Rejection is reversible now, but reversing forty is
+   * still worse than not sending them.
+   */
+  async function bulkDecide(stage: Stage) {
+    const ids = [...bulkSelected];
+    if (!ids.length) return;
+
+    const names = (data?.applicants ?? [])
+      .filter((r) => bulkSelected.has(r.applicant.id))
+      .map((r) => r.applicant.name);
+    const preview = names.slice(0, 12).join(", ") + (names.length > 12 ? `, and ${names.length - 12} more` : "");
+    if (!window.confirm(`Move ${ids.length} to ${STAGE_LABEL[stage]}?\n\n${preview}`)) return;
+
+    setBulkBusy(true);
+    setNotice(null);
+    try {
+      const r = await fetch("/api/recruitment/decisions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicant_ids: ids, stage }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setNotice(j.error || j.message || "Could not apply that decision.");
+        return;
+      }
+      const extra = [
+        j.skippedSelf ? `${j.skippedSelf} skipped (your own application)` : "",
+        j.notFound ? `${j.notFound} no longer existed` : "",
+      ].filter(Boolean).join(", ");
+      setNotice(`Moved ${j.updated} to ${STAGE_LABEL[stage]}.${extra ? ` ${extra}.` : ""}`);
+      setBulkSelected(new Set());
+      await reload();
+    } catch {
+      setNotice("Could not apply that decision.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   /**
    * Fill in resumes for anyone who has none, from their Form upload.
@@ -624,8 +673,60 @@ export function RecruitingDashboard() {
               </a>
             )}
           </div>
+          {/* Bulk decisions, exec only — mirrors `canDecide`, and the API refuses
+              everyone else regardless. Appears only once something is ticked, so
+              it never takes space from the list it acts on. */}
+          {canManage && bulkSelected.size > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--gold)] bg-[var(--bg-cream)]/60 px-3 py-2">
+              <span className="text-sm font-semibold text-[var(--bg-dark)]">
+                {bulkSelected.size} selected
+              </span>
+              <button
+                onClick={() => bulkDecide("rejected")}
+                disabled={bulkBusy}
+                className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                {bulkBusy ? "Working…" : "Reject selected"}
+              </button>
+              <button
+                onClick={() => bulkDecide("interview")}
+                disabled={bulkBusy}
+                className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)] disabled:opacity-50"
+              >
+                Advance to first round
+              </button>
+              <button
+                onClick={() => setBulkSelected(new Set())}
+                disabled={bulkBusy}
+                className="ml-auto text-xs text-[var(--muted)] underline hover:text-[var(--bg-dark)]"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
           <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <div className={`grid ${canManage ? "grid-cols-[auto_1fr_auto_auto_auto]" : "grid-cols-[1fr_auto_auto_auto]"} gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}>
+              {canManage && (
+                <input
+                  type="checkbox"
+                  aria-label="Select all shown"
+                  className="accent-[var(--gold)]"
+                  checked={visible.length > 0 && visible.every((r) => bulkSelected.has(r.applicant.id))}
+                  // Acts on what is VISIBLE, not the whole cohort: the filters are
+                  // how you build the set you mean, and a "select all" that
+                  // silently included 300 filtered-out people would be the most
+                  // dangerous control on the page.
+                  onChange={(e) => {
+                    const next = new Set(bulkSelected);
+                    for (const r of visible) {
+                      if (e.target.checked) next.add(r.applicant.id);
+                      else next.delete(r.applicant.id);
+                    }
+                    setBulkSelected(next);
+                  }}
+                />
+              )}
               <span>Applicant</span><span>Stage</span><span>Reviews</span><span>Mean</span>
             </div>
             <ul className="divide-y divide-[var(--border)]">
@@ -650,10 +751,29 @@ export function RecruitingDashboard() {
                 const flag = r.round === "written" && r.reviewCount < MIN_REVIEWERS;
                 const disagree = (r.spread ?? 0) >= DISAGREEMENT_THRESHOLD;
                 return (
-                  <li key={r.applicant.id}>
+                  <li key={r.applicant.id} className="flex items-center">
+                    {/* Outside the button, not inside it: a checkbox nested in a
+                        <button> is not clickable independently, so ticking a row
+                        would also open it. */}
+                    {canManage && (
+                      <label className="flex shrink-0 items-center py-3 pl-4 pr-1">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${r.applicant.name}`}
+                          className="accent-[var(--gold)]"
+                          checked={bulkSelected.has(r.applicant.id)}
+                          onChange={(e) => {
+                            const next = new Set(bulkSelected);
+                            if (e.target.checked) next.add(r.applicant.id);
+                            else next.delete(r.applicant.id);
+                            setBulkSelected(next);
+                          }}
+                        />
+                      </label>
+                    )}
                     <button
                       onClick={() => setSelectedId(r.applicant.id)}
-                      className={`grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40 ${selectedId === r.applicant.id ? "bg-[var(--bg-cream)]/60" : ""}`}
+                      className={`grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-3 pr-4 text-left hover:bg-[var(--bg-cream)]/40 ${canManage ? "pl-2" : "pl-4"} ${selectedId === r.applicant.id ? "bg-[var(--bg-cream)]/60" : ""}`}
                     >
                       <span className="min-w-0">
                         <span className="flex items-center gap-1.5 font-medium text-[var(--bg-dark)]">
