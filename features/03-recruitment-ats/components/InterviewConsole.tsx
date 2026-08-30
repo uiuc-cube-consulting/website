@@ -23,6 +23,7 @@ import {
 } from "@/features/03-recruitment-ats/lib/interview";
 import { ROUND_BLURB, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
 import { CandidateWorkspace } from "./CandidateWorkspace";
+import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 
 type Scope = "mine" | "all";
 
@@ -202,9 +203,10 @@ export function InterviewConsole() {
                 className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40"
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-[var(--bg-dark)]">
-                    {c.name}
-                    {c.assignedToMe && <span className="ml-2 text-[11px] text-[var(--gold-deep)]">yours</span>}
+                  <span className="flex items-center gap-1.5 font-medium text-[var(--bg-dark)]">
+                    <span className="truncate">{c.name}</span>
+                    <FlagBadge flags={c.flags} />
+                    {c.assignedToMe && <span className="shrink-0 text-[11px] text-[var(--gold-deep)]">yours</span>}
                   </span>
                   <span className="block truncate text-[12px] text-[var(--muted)]">
                     {[c.year, c.major].filter(Boolean).join(" · ") || c.email}

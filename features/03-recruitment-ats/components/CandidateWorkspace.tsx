@@ -9,6 +9,7 @@
 // writes and who is allowed to be in the room.
 
 import { useState } from "react";
+import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 import {
   INTERVIEW_RUBRICS,
   KIND_LABEL,
@@ -73,8 +74,9 @@ export function CandidateWorkspace({
             ← Back to search
           </button>
           <p className="mt-2 eyebrow">{ROUND_LABEL[round]}</p>
-          <h2 className="mt-1 font-display text-3xl font-extrabold text-[var(--bg-dark)]">
+          <h2 className="mt-1 flex flex-wrap items-center gap-2 font-display text-3xl font-extrabold text-[var(--bg-dark)]">
             {candidate.name}
+            <FlagBadge flags={candidate.flags} />
           </h2>
           <p className="text-sm text-[var(--muted)]">{candidate.email}</p>
           <p className="mt-1 text-sm text-[var(--bg-dark)]">

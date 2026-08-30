@@ -16,6 +16,7 @@ import {
   isScreenReview,
   screenTotal,
   type Applicant,
+  type Flag,
   type Review,
   type RubricKey,
 } from "./types";
@@ -60,6 +61,15 @@ export type DecisionRow = {
   disagreement: boolean;
   /** Reviews still owed before this candidate is decidable. */
   awaiting: number;
+  /**
+   * Red/green flags on this candidate, so the queue can show them beside the
+   * name. A flag is evidence the RUBRIC cannot capture — somebody no-showed
+   * three coffee chats, or carried a case night — and this queue is where the
+   * call is actually made, so it is the last place that evidence should be a
+   * click away. Never folded into the mean: a flag is one person's observation,
+   * not a score, and averaging it with one would launder it into a number.
+   */
+  flags: Flag[];
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -73,8 +83,17 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function buildDecisionQueue(
   applicants: Applicant[],
   reviews: Review[],
-  minReviews: number = MIN_REVIEWERS_PER_APPLICANT
+  minReviews: number = MIN_REVIEWERS_PER_APPLICANT,
+  flags: Flag[] = []
 ): DecisionRow[] {
+  const flagsByApplicant = new Map<string, Flag[]>();
+  for (const f of flags) {
+    if (!f.applicant_id) continue; // still pending — attached to nobody yet
+    const cur = flagsByApplicant.get(f.applicant_id);
+    if (cur) cur.push(f);
+    else flagsByApplicant.set(f.applicant_id, [f]);
+  }
+
   const byApplicant = new Map<string, Review[]>();
   for (const r of reviews) {
     // Interview rubrics belong to the first and final rounds and score a
@@ -124,6 +143,7 @@ export function buildDecisionQueue(
       ready: verdicts.length >= minReviews,
       disagreement: spread !== null && spread >= DISAGREEMENT_THRESHOLD,
       awaiting: Math.max(0, minReviews - verdicts.length),
+      flags: flagsByApplicant.get(applicant.id) ?? [],
     };
   });
 }

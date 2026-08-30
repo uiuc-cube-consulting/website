@@ -9,7 +9,7 @@
 // demo mode instead of silently succeeding.
 
 import { createServerClient } from "@/lib/supabase/server";
-import { DEMO_APPLICANTS } from "./demo";
+import { DEMO_APPLICANTS, DEMO_FLAGS } from "./demo";
 import { fetchFileMeta, listResumeFiles } from "./drive";
 import {
   INTERVIEW_KINDS,
@@ -26,7 +26,7 @@ import { ROUND_STAGES, type InterviewRound } from "./rounds";
 import { parseResumeId } from "./form-resume";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
 import { excludeOwnApplications } from "./self-access";
-import { weightedTotalFor, type Stage } from "./types";
+import { weightedTotalFor, type Flag, type Stage } from "./types";
 
 function db() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -137,6 +137,7 @@ export async function getBoard(
         assignedToMe: false,
         myRubrics: emptyRubrics(),
         completed: zeroCounts(),
+        flags: DEMO_FLAGS.filter((f) => f.applicant_id === a.id),
       })),
       demo: true,
       viewer,
@@ -144,7 +145,7 @@ export async function getBoard(
     };
   }
 
-  const [applicantsRes, panelRes, reviewsRes] = await Promise.all([
+  const [applicantsRes, panelRes, reviewsRes, flagsRes] = await Promise.all([
     sb
       .from("applicants")
       .select("id, name, email, year, major, college, stage, resume_file_id, resume_name, resume_mime, resume_match, resume_linked_at, drive_folder_url")
@@ -155,11 +156,24 @@ export async function getBoard(
       .from("reviews")
       .select("applicant_id, reviewer_email, kind, scores, notes, recommendation, weighted_total, created_at")
       .in("kind", kinds as readonly string[]),
+    // Only flags already attached to an applicant. A PENDING flag is filed
+    // against an email nobody has applied from, so it belongs to no candidate on
+    // this board — it is claimed at application time, not matched here.
+    sb.from("applicant_flags").select("*").not("applicant_id", "is", null),
   ]);
 
   if (applicantsRes.error) throw applicantsRes.error;
   if (panelRes.error) throw panelRes.error;
   if (reviewsRes.error) throw reviewsRes.error;
+  // A flag that fails to load is a missing annotation, not a broken board — the
+  // interview can go ahead without it, so this degrades rather than throws.
+  const flagsByApplicant = new Map<string, Flag[]>();
+  for (const f of (flagsRes.error ? [] : ((flagsRes.data ?? []) as Flag[]))) {
+    if (!f.applicant_id) continue;
+    const cur = flagsByApplicant.get(f.applicant_id);
+    if (cur) cur.push(f);
+    else flagsByApplicant.set(f.applicant_id, [f]);
+  }
 
   const panelByApplicant = new Map<string, string[]>();
   for (const p of panelRes.data ?? []) {
@@ -225,6 +239,7 @@ export async function getBoard(
       assignedToMe: panel.includes(viewer),
       myRubrics: mine.get(a.id) ?? emptyRubrics(),
       completed: completed.get(a.id) ?? zeroCounts(),
+      flags: flagsByApplicant.get(a.id) ?? [],
     };
   });
 

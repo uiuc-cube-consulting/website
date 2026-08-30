@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     // queue mixing two would put candidates nobody is deciding on right now in
     // front of the ones exec is actually working.
     const cycle = await resolveCycle(url.searchParams.get("cycle"));
-    const { applicants, reviews, demo } = await getSnapshot(cycle);
+    const { applicants, reviews, flags, demo } = await getSnapshot(cycle);
     // Only the written round. Candidates who have already been advanced are being
     // worked in the interview console now, and terminal ones are dealt with —
     // both would bury the decisions that are actually outstanding.
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     // wrote about them while deciding.
     const mine = excludeOwnApplications(email, active, (a) => a.email);
 
-    const rows = sortDecisionQueue(buildDecisionQueue(mine, reviews), order);
+    const rows = sortDecisionQueue(buildDecisionQueue(mine, reviews, undefined, flags), order);
     const visible = readyOnly ? rows.filter((r) => r.ready) : rows;
 
     return NextResponse.json({

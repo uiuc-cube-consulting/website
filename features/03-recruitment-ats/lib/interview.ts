@@ -7,7 +7,7 @@
 // `reviews` (unique on applicant + reviewer + kind).
 
 import type { InterviewRound } from "./rounds";
-import type { RubricCriterion, Stage } from "./types";
+import type { Flag, RubricCriterion, Stage } from "./types";
 
 /** Roles allowed to interview. Mirrors the reviewer roles in proxy.ts / store.ts. */
 export const INTERVIEWER_ROLES = ["exec", "project_manager", "senior_consultant", "returning_member"];
@@ -196,6 +196,17 @@ export type Candidate = {
   myRubrics: Record<InterviewKind, RubricEntry | null>;
   /** How many panelists have completed each rubric — a count only, no scores. */
   completed: Record<InterviewKind, number>;
+  /**
+   * Red/green flags filed on this person, so the board can show them beside the
+   * name like the written console and the decision queue do.
+   *
+   * Flags are club-wide by design: any member may file one, and every member who
+   * can see a candidate can see what was said about them. Carrying them here is
+   * what makes that true on the LAST screen where it matters — an interviewer
+   * walking into the room should not be the only person who never saw that two
+   * people raised a concern.
+   */
+  flags: Flag[];
 };
 
 export type Reviewer = { email: string; name?: string | null };

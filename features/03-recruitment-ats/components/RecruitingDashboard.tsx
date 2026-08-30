@@ -27,6 +27,7 @@ import {
 } from "@/features/03-recruitment-ats/lib/assignment";
 import { DISAGREEMENT_THRESHOLD } from "@/features/03-recruitment-ats/lib/decision";
 import { type Round } from "@/features/03-recruitment-ats/lib/rounds";
+import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 
 type Row = {
   applicant: {
@@ -472,9 +473,13 @@ export function RecruitingDashboard() {
                       className={`grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40 ${selectedId === r.applicant.id ? "bg-[var(--bg-cream)]/60" : ""}`}
                     >
                       <span className="min-w-0">
-                        <span className="block truncate font-medium text-[var(--bg-dark)]">
-                          {r.applicant.name}
-                          {r.hasReviewed && <span className="ml-2 text-[11px] text-[var(--gold-deep)]">✓ yours</span>}
+                        <span className="flex items-center gap-1.5 font-medium text-[var(--bg-dark)]">
+                          {/* The name truncates; the flags do not. A red flag is
+                              the one thing on this row that must survive a long
+                              name, so it sits outside the truncating span. */}
+                          <span className="truncate">{r.applicant.name}</span>
+                          <FlagBadge flags={r.flags} />
+                          {r.hasReviewed && <span className="shrink-0 text-[11px] text-[var(--gold-deep)]">✓ yours</span>}
                         </span>
                         <span className="block truncate text-[12px] text-[var(--muted)]">{r.applicant.year} · {r.applicant.major}</span>
                       </span>

@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RUBRIC, SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
 import { DISAGREEMENT_THRESHOLD, type DecisionRow, type QueueOrder, type QueueSummary } from "@/features/03-recruitment-ats/lib/decision";
+import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 
 type ApiResponse = { rows: DecisionRow[]; summary: QueueSummary; demo: boolean; error?: string };
 
@@ -135,7 +136,13 @@ export function DecisionQueue() {
                 className="flex w-full flex-wrap items-center gap-3 p-4 text-left"
               >
                 <div className="min-w-0">
-                  <p className="font-semibold text-[var(--bg-dark)]">{row.applicant.name}</p>
+                  <p className="flex items-center gap-1.5 font-semibold text-[var(--bg-dark)]">
+                    <span className="truncate">{row.applicant.name}</span>
+                    {/* Flags belong on THIS screen above all others: it is where
+                        the call is actually made, and a flag is the evidence the
+                        28-point rubric cannot express. */}
+                    <FlagBadge flags={row.flags} />
+                  </p>
                   <p className="truncate text-xs text-[var(--muted)]">
                     {row.applicant.email}
                     {row.applicant.year ? ` · ${row.applicant.year}` : ""}
