@@ -994,7 +994,13 @@ function ReroutePanel({ row, onChanged }: { row: Row; onChanged: () => Promise<v
     return () => { alive = false; };
   }, []);
 
-  async function send(body: Record<string, unknown>) {
+  /** `silent` suppresses the error message for an attempt whose refusal is
+   *  EXPECTED and about to be turned into a confirmation prompt — otherwise the
+   *  removal flow flashes a red error before asking the question. */
+  async function send(
+    body: Record<string, unknown>,
+    opts: { silent?: boolean } = {}
+  ): Promise<{ ok: boolean; error?: string; assigned?: string[] } | null> {
     setBusy(true);
     setMsg(null);
     try {
@@ -1005,22 +1011,53 @@ function ReroutePanel({ row, onChanged }: { row: Row; onChanged: () => Promise<v
       });
       const j = await r.json();
       if (j.ok) {
-        setMsg(`Now assigned: ${j.assigned.join(", ") || "nobody"}`);
+        setMsg(`Now assigned: ${j.assigned?.join(", ") || "nobody"}`);
         setAddTo("");
         setSwapFrom("");
         await onChanged();
-      } else {
+      } else if (!opts.silent) {
         setMsg(j.error || j.message || "Could not reroute.");
       }
+      return j;
     } catch {
-      setMsg("Could not reroute.");
+      if (!opts.silent) setMsg("Could not reroute.");
+      return null;
     } finally {
       setBusy(false);
     }
   }
 
+  /**
+   * Take a reviewer off this candidate.
+   *
+   * The API refuses a removal that drops below the two-reviewer minimum, which
+   * is the right default — that minimum is the fairness guarantee of the whole
+   * screen. But exec has legitimate reasons to override: somebody left the club
+   * mid-cycle, or was assigned to a candidate they turn out to know personally,
+   * and leaving a phantom assignee is worse than being briefly under-covered.
+   *
+   * So the refusal is surfaced as a question rather than a dead end: the server
+   * explains what the removal would cost, and exec confirms it deliberately
+   * before the retry carries `force`. Never forced on the first attempt — the
+   * confirmation is the point.
+   */
+  async function remove(email: string) {
+    const first = await send({ action: "remove", from: email }, { silent: true });
+    if (first?.ok) return;
+
+    const reason = first?.error ?? "That removal was refused.";
+    if (!window.confirm(`${reason}\n\nRemove ${email} anyway?`)) {
+      setMsg("Removal cancelled.");
+      return;
+    }
+    await send({ action: "remove", from: email, force: true });
+  }
+
   const assigned = row.assignedReviewers ?? [];
   const done = new Set(row.reviewedBy ?? []);
+  // Enough independent reads are already in — see computeCoverage, where the
+  // same rule empties `outstanding`.
+  const hasEnough = done.size >= MIN_REVIEWERS;
   // Never offer someone already on the candidate, or the candidate themselves.
   const available = pool
     .map((p) => p.email)
@@ -1042,15 +1079,33 @@ function ReroutePanel({ row, onChanged }: { row: Row; onChanged: () => Promise<v
         {assigned.map((email) => (
           <li key={email} className="flex items-center justify-between gap-2 text-xs">
             <span className={done.has(email) ? "text-[var(--bg-dark)]" : "text-[var(--muted)]"}>
-              {email} {done.has(email) ? "· reviewed" : "· pending"}
+              {email}{" "}
+              {done.has(email)
+                ? "· reviewed"
+                : hasEnough
+                  ? // Not "pending": the candidate already has enough reads, so
+                    // this person is not holding anything up and should not read
+                    // as a chore somebody still owes.
+                    "· not needed"
+                  : "· pending"}
             </span>
-            <button
-              onClick={() => setSwapFrom(swapFrom === email ? "" : email)}
-              disabled={busy}
-              className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] font-semibold hover:bg-white disabled:opacity-50"
-            >
-              {swapFrom === email ? "cancel" : "replace"}
-            </button>
+            <span className="flex shrink-0 gap-1">
+              <button
+                onClick={() => setSwapFrom(swapFrom === email ? "" : email)}
+                disabled={busy}
+                className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] font-semibold hover:bg-white disabled:opacity-50"
+              >
+                {swapFrom === email ? "cancel" : "replace"}
+              </button>
+              <button
+                onClick={() => remove(email)}
+                disabled={busy}
+                title={`Remove ${email} from this candidate`}
+                className="rounded-full border border-red-200 px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                remove
+              </button>
+            </span>
           </li>
         ))}
       </ul>

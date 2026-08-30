@@ -221,3 +221,55 @@ describe("suggestReviewers", () => {
     expect(out.map((o) => o.email)).not.toContain("r2@illinois.edu");
   });
 });
+
+describe("the minimum is a floor, not a quota", () => {
+  // Candidates get topped up to MIN reviewers, but exec can add a third — for a
+  // contested application, or because someone was rerouted. Once MIN independent
+  // reads are in, that candidate is decidable and the work on them is DONE,
+  // however many people happen to be assigned.
+  const applicants = [{ id: "a1", name: "Alice", email: "alice@illinois.edu", stage: "applied" }];
+  const threeAssigned = [
+    { applicant_id: "a1", reviewer_email: "r1@illinois.edu" },
+    { applicant_id: "a1", reviewer_email: "r2@illinois.edu" },
+    { applicant_id: "a1", reviewer_email: "r3@illinois.edu" },
+  ];
+
+  it("counts a candidate done at MIN reviews even with a third assignee", () => {
+    const rows = computeCoverage(applicants, threeAssigned, [
+      review("a1", "r1@illinois.edu"),
+      review("a1", "r2@illinois.edu"),
+    ]);
+    expect(rows[0].underReviewed).toBe(false);
+    // And nobody is left to chase. The third reviewer is not holding anything
+    // up, so listing them keeps a finished candidate looking outstanding
+    // forever — the reviewer has no reason to act, the item never clears, and a
+    // to-do list that never empties stops being read.
+    expect(rows[0].outstanding).toEqual([]);
+  });
+
+  it("still chases everyone while the candidate is short", () => {
+    const rows = computeCoverage(applicants, threeAssigned, [review("a1", "r1@illinois.edu")]);
+    expect(rows[0].underReviewed).toBe(true);
+    expect(rows[0].outstanding).toEqual(["r2@illinois.edu", "r3@illinois.edu"]);
+  });
+
+  it("keeps a three-assignee candidate out of the coverage gap list", () => {
+    const rows = computeCoverage(applicants, threeAssigned, [
+      review("a1", "r1@illinois.edu"),
+      review("a1", "r3@illinois.edu"),
+    ]);
+    const summary = summarizeCoverage(rows);
+    expect(summary.fullyReviewed).toBe(1);
+    expect(summary.underReviewed).toEqual([]);
+  });
+
+  it("counts a review from someone never assigned", () => {
+    // An exec override is still an eye on the candidate. Two reads is two reads.
+    const rows = computeCoverage(applicants, [threeAssigned[0]], [
+      review("a1", "r1@illinois.edu"),
+      review("a1", "exec@illinois.edu"),
+    ]);
+    expect(rows[0].underReviewed).toBe(false);
+    expect(rows[0].outstanding).toEqual([]);
+  });
+});

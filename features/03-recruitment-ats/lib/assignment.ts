@@ -119,6 +119,10 @@ export function computeCoverage(
     const assigned = [...(assignedBy.get(a.id) ?? [])].sort();
     const reviewed = [...(reviewedBy.get(a.id) ?? [])].sort();
     const reviewedSet = new Set(reviewed);
+    // MIN_REVIEWERS_PER_APPLICANT is a FLOOR, not a quota. Once that many
+    // independent reads are in, the candidate is decidable and the work on them
+    // is finished — whether they were assigned two reviewers or five.
+    const enough = reviewed.length >= MIN_REVIEWERS_PER_APPLICANT;
     return {
       applicant_id: a.id,
       name: a.name,
@@ -126,11 +130,16 @@ export function computeCoverage(
       stage: a.stage,
       assigned,
       reviewed,
-      outstanding: assigned.filter((e) => !reviewedSet.has(e)),
+      // Who to CHASE — which is nobody once the candidate has enough reads.
+      // A third assignee who has not submitted is not holding anything up, and
+      // listing them keeps a finished candidate looking outstanding forever:
+      // the reviewer has no reason to act, so the item never clears, and a
+      // to-do list that never empties stops being read at all.
+      outstanding: enough ? [] : assigned.filter((e) => !reviewedSet.has(e)),
       underAssigned: assigned.length < MIN_REVIEWERS_PER_APPLICANT,
       // A review counts wherever it came from — an exec override still counts as
       // an eye on the candidate, even though the reviewer was never assigned.
-      underReviewed: reviewed.length < MIN_REVIEWERS_PER_APPLICANT,
+      underReviewed: !enough,
     };
   });
 }
