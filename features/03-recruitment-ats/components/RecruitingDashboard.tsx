@@ -548,6 +548,29 @@ export function RecruitingDashboard() {
             <span className="text-xs tabular-nums text-[var(--muted)]">
               {visible.length} shown
             </span>
+            {/* Exec-only, matching the endpoint. A plain <a download> rather than
+                a fetch: the browser streams the file straight to disk under the
+                portal session, so the CSV never passes through client memory and
+                there is no blob URL left holding applicant data.
+
+                Carries the STAGE filter and nothing else. The search box and the
+                review filter are for finding someone on screen; an export is for
+                writing to a whole group ("everyone we rejected"), and silently
+                narrowing that file by a half-typed name is how the wrong people
+                get missed off a mailing. */}
+            {canManage && (
+              <a
+                href={`/api/recruitment/export${stageFilter !== "all" ? `?stage=${stageFilter}` : ""}`}
+                className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)]"
+                title={
+                  stageFilter === "all"
+                    ? "Download every applicant in this cycle as a spreadsheet"
+                    : `Download everyone at "${STAGE_LABEL[stageFilter]}" as a spreadsheet`
+                }
+              >
+                ↓ Export CSV
+              </a>
+            )}
           </div>
           <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
             <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
