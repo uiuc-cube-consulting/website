@@ -95,6 +95,21 @@ export type ProvisionOptions = {
    */
   repair?: boolean;
   /**
+   * Restrict the run to these artifact kinds. Defaults to all of ASSET_KINDS.
+   *
+   * Exists because the folder and the rubric docs answer to different schedules.
+   * A cohort is advanced to the first round before the interview questions for
+   * that cycle are settled, and a rubric doc created now is one every interviewer
+   * has to be told to ignore later — the ledger records it as done, so a later
+   * full run will NOT replace it. Provisioning `["folder", "resume"]` gets
+   * interviewers the resumes immediately and leaves the rubrics to a second run
+   * once the case is locked; that run creates only what is still missing.
+   *
+   * "folder" is implied whichever kinds are asked for — everything else is
+   * created inside it.
+   */
+  kinds?: readonly AssetKind[];
+  /**
    * Provision at most this many candidates in one call, returning `remaining` so
    * the caller can continue. Exists because a cohort does not fit in a serverless
    * request: ~8s of Drive/Docs work per candidate means 100 candidates is several
@@ -209,6 +224,11 @@ export async function provisionCandidateFolders(
   const cycleKey = normalizeCycle(opts.cycleKey) ?? (await getActiveCycle());
   const cycle = cycleFolderName(opts.cycle || cycleLabel(cycleKey));
 
+  // The folder is not optional: it is the parent of everything else, and the
+  // applicant row's `drive_folder_id` points at it.
+  const wanted = new Set<AssetKind>(opts.kinds?.length ? opts.kinds : ASSET_KINDS);
+  wanted.add("folder");
+
   // ── 1. Read the Form responses ─────────────────────────────────────────────
   const sheet = await readApplicantsFromSheet(sheetId, range);
   if (!sheet.ok) return { ok: false, error: sheet.error };
@@ -296,14 +316,20 @@ export async function provisionCandidateFolders(
    * without a single Drive round trip. A candidate who never uploaded a resume is
    * still "complete" — otherwise they would sit in the pending set forever and
    * `remaining` would never reach zero.
+   *
+   * Judged against `wanted`, not against every kind. A run scoped to folders and
+   * resumes must be able to finish: measuring it by the rubric docs it was told
+   * not to create would leave every candidate pending, `remaining` would never
+   * reach zero, and the console's keep-calling-until-done loop would spin through
+   * all 50 of its passes creating nothing.
    */
   const isComplete = (c: Candidate): boolean => {
     const have = ledger.get(c.id);
     if (!have) return false;
     for (const k of ["folder", "case_rubric", "behavioral_rubric", "notes"] as const) {
-      if (!have.has(k)) return false;
+      if (wanted.has(k) && !have.has(k)) return false;
     }
-    if (parseResumeId(c.resumeLink) && !have.has("resume")) return false;
+    if (wanted.has("resume") && parseResumeId(c.resumeLink) && !have.has("resume")) return false;
     return true;
   };
 
@@ -362,8 +388,10 @@ export async function provisionCandidateFolders(
     }
 
     // 5b. The resume, copied out of the Form's upload folder.
-    const resumeRow = await existing("resume");
-    if (resumeRow) {
+    const resumeRow = wanted.has("resume") ? await existing("resume") : null;
+    if (!wanted.has("resume")) {
+      /* not part of this run */
+    } else if (resumeRow) {
       out.skipped.push("resume");
     } else {
       const sourceId = parseResumeId(c.resumeLink);
@@ -427,6 +455,7 @@ export async function provisionCandidateFolders(
     ];
 
     for (const d of docs) {
+      if (!wanted.has(d.kind)) continue;
       if (await existing(d.kind)) {
         out.skipped.push(d.kind);
         continue;

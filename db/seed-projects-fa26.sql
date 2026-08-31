@@ -8,10 +8,10 @@
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BLOCK 1 (projects) and the PM/SC seats in BLOCK 2 are filled in. CONSULTANT
--- seats are not yet known — add them to BLOCK 2 and re-run.
+-- seats are known for Replit only — add the rest to BLOCK 2 and re-run.
 --
--- Safe to run right now: the grids come up empty (no consultants to rate) and the
--- reminder job skips every project until someone is there to be rated.
+-- Safe to run right now: a project with no consultants comes up as an empty grid
+-- and the reminder job skips it until someone is there to be rated.
 --
 -- Seats, which are per project and independent of members.role:
 --   'project_manager' / 'senior_consultant' → fill in the weekly grid
@@ -43,11 +43,11 @@ on conflict (lower(name), cohort) do update
       active    = excluded.active;
 
 -- ── BLOCK 2 · Rosters ────────────────────────────────────────────────────────
--- PM/SC seats are filled in from the assignment table. CONSULTANT seats are NOT
--- yet known — add them per project below and re-run.
+-- PM/SC seats are filled in from the assignment table. CONSULTANT seats are in
+-- for Replit; the other six are still unknown — add them below and re-run.
 --
--- Until consultants are added, each project's grid renders with no rows to rate
--- and the weekly reminder skips the project (nothing to chase). Nothing breaks.
+-- Until a project has consultants, its grid renders with no rows to rate and the
+-- weekly reminder skips it (nothing to chase). Nothing breaks.
 --
 -- Emails must match `members` exactly (db/seed-members-fa26.sql). Anyone
 -- misspelled is reported by Check 1 rather than silently skipped. One list, read
@@ -72,8 +72,9 @@ insert into roster values
 -- ── Replit ───────────────────────────────────────────────────────────────────
 insert into roster values
   ('Replit', 'chloeat2@illinois.edu', 'project_manager'),   -- Chloe Tam
-  ('Replit', 'kalip3@illinois.edu',   'senior_consultant'); -- Kali Patel
--- ('Replit', 'consultant@illinois.edu', 'consultant'),
+  ('Replit', 'kalip3@illinois.edu',   'senior_consultant'), -- Kali Patel
+  ('Replit', 'hnguy115@illinois.edu', 'consultant'),        -- Huyen Nguyen
+  ('Replit', 'ripp3@illinois.edu',    'consultant');        -- Malcom Ripp
 
 -- ── Wrike ────────────────────────────────────────────────────────────────────
 insert into roster values
