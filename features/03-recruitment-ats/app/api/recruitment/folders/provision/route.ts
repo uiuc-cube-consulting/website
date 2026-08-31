@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { provisionCandidateFolders } from "@/features/03-recruitment-ats/lib/provision-store";
+import {
+  provisionCandidateFolders,
+  ASSET_KINDS,
+  type AssetKind,
+} from "@/features/03-recruitment-ats/lib/provision-store";
 
 // Exec-only: read the Google Form response sheet and give every candidate a Drive
 // folder holding their resume, both interview rubrics, and a notes doc.
@@ -29,11 +33,28 @@ export async function POST(req: NextRequest) {
     rootFolderId?: string;
     repair?: boolean;
     limit?: number;
+    kinds?: unknown;
   } = {};
   try {
     body = await req.json();
   } catch {
     /* body is optional — fall back to env */
+  }
+
+  // Unrecognised kinds are dropped rather than defaulted away: a typo'd
+  // ["resumes"] must not silently become "provision everything", which would
+  // create the rubric docs the caller was trying to exclude.
+  let kinds: AssetKind[] | undefined;
+  if (Array.isArray(body.kinds)) {
+    kinds = body.kinds.filter((k): k is AssetKind =>
+      (ASSET_KINDS as readonly string[]).includes(k as string)
+    );
+    if (!kinds.length) {
+      return NextResponse.json(
+        { ok: false, error: `kinds must name at least one of: ${ASSET_KINDS.join(", ")}` },
+        { status: 400 }
+      );
+    }
   }
 
   const result = await provisionCandidateFolders({
@@ -43,6 +64,7 @@ export async function POST(req: NextRequest) {
     rootFolderId: body.rootFolderId,
     repair: Boolean(body.repair),
     limit: typeof body.limit === "number" ? body.limit : undefined,
+    kinds,
   });
 
   if (!result.ok && "demo" in result) {
