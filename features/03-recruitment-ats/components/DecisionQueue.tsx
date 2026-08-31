@@ -13,9 +13,10 @@
 // rubrics and notes that justify the call.
 
 import { useCallback, useEffect, useState } from "react";
-import { RUBRIC, SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
+import { SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
 import { DISAGREEMENT_THRESHOLD, type DecisionRow, type QueueOrder, type QueueSummary } from "@/features/03-recruitment-ats/lib/decision";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
+import { VerdictCards } from "@/features/03-recruitment-ats/components/VerdictCards";
 
 type ApiResponse = { rows: DecisionRow[]; summary: QueueSummary; demo: boolean; error?: string };
 
@@ -294,32 +295,10 @@ export function DecisionQueue() {
               {expanded && (
                 <div className="border-t border-[var(--border)] p-4">
                   {/* Both verdicts, side by side. The notes are the point — for a
-                      contested candidate the mean is actively misleading. */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {row.verdicts.map((v) => (
-                      <div key={v.reviewer_email} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="truncate text-xs font-semibold text-[var(--bg-dark)]">{v.reviewer_email}</p>
-                          <span className="text-xs font-semibold">{v.weighted_total} / {SCREEN_MAX_POINTS}</span>
-                        </div>
-                        <ul className="mt-2 space-y-0.5">
-                          {RUBRIC.map((c) => (
-                            <li key={c.key} className="flex justify-between text-[11px] text-[var(--muted)]">
-                              <span>{c.label}</span>
-                              <span className="font-medium text-[var(--bg-dark)]">
-                                {v.scores[c.key] ?? "—"}
-                                <span className="font-normal text-[var(--muted)]">/{c.max}</span>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                        {v.notes && <p className="mt-2 whitespace-pre-wrap text-xs text-[var(--bg-dark)]">{v.notes}</p>}
-                      </div>
-                    ))}
-                    {row.verdicts.length === 0 && (
-                      <p className="text-xs text-[var(--muted)]">No written reviews submitted yet.</p>
-                    )}
-                  </div>
+                      contested candidate the mean is actively misleading. Shared
+                      with the console's candidate panel, which shows the same
+                      rows back after the decision when somebody asks why. */}
+                  <VerdictCards verdicts={row.verdicts} />
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <button

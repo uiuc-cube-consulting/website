@@ -5,7 +5,7 @@ import { STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
 import { ROUND_STAGES } from "@/features/03-recruitment-ats/lib/rounds";
 import { canDecide } from "@/features/03-recruitment-ats/lib/access";
 import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
-import { SELF_ACCESS_DENIED, excludeOwnApplications } from "@/features/03-recruitment-ats/lib/self-access";
+import { SELF_ACCESS_DENIED, excludeOwnApplications, isOwnApplication } from "@/features/03-recruitment-ats/lib/self-access";
 import { isOwnApplicationId } from "@/features/03-recruitment-ats/lib/self-access-store";
 import {
   buildDecisionQueue,
@@ -77,6 +77,14 @@ export async function POST(req: NextRequest) {
  * candidate into the first round. The later two rounds are decided from the
  * interview console, in front of the rubrics that justify the call, rather than
  * from a second copy of this list.
+ *
+ * `?applicant_id=` asks a different question: ONE candidate's verdicts at ANY
+ * stage, including the ones this queue has already emptied out. The queue is a
+ * work list, so a candidate leaves it the moment they are rejected or advanced —
+ * which is exactly when the reads become the answer to "why?". A rejected
+ * applicant emails asking for feedback weeks later and the two rubrics that
+ * produced the call are the only honest thing to read from. Same unblinding,
+ * same exec-only gate, same self-access refusal; only the stage filter differs.
  */
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -89,6 +97,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const order = (url.searchParams.get("order") ?? "score") as QueueOrder;
   const readyOnly = url.searchParams.get("ready") === "1";
+  const applicantId = url.searchParams.get("applicant_id");
 
   try {
     // Scoped like the reviewer feed: decisions are made cohort by cohort, and a
@@ -96,6 +105,30 @@ export async function GET(req: NextRequest) {
     // front of the ones exec is actually working.
     const cycle = await resolveCycle(url.searchParams.get("cycle"));
     const { applicants, reviews, flags, demo } = await getSnapshot(cycle);
+
+    // One candidate, whatever stage they are at now. Deliberately NOT filtered to
+    // the written round: the whole point of this branch is the people the queue
+    // below has already dropped, so feedback can be given to somebody who was
+    // rejected a month ago. It exposes no verdict exec could not already read
+    // from the queue while the candidate was still in it — only for longer.
+    //
+    // Scoped to the resolved cycle like every other read here, so an id from one
+    // cohort cannot quietly pull a row out of another.
+    if (applicantId) {
+      const applicant = applicants.find((a) => a.id === applicantId);
+      if (!applicant) {
+        return NextResponse.json({ error: "No such candidate in this cycle" }, { status: 404 });
+      }
+      // The strongest case for the self-access rule in the whole app: this is the
+      // one payload that hands somebody both readers' marks and both sets of
+      // notes about a single person. No exec bypass (lib/self-access.ts).
+      if (isOwnApplication(email, applicant.email)) {
+        return NextResponse.json({ error: SELF_ACCESS_DENIED }, { status: 403 });
+      }
+      const [row] = buildDecisionQueue([applicant], reviews, undefined, flags);
+      return NextResponse.json({ row, cycle, demo });
+    }
+
     // Only the written round. Candidates who have already been advanced are being
     // worked in the interview console now, and terminal ones are dealt with —
     // both would bury the decisions that are actually outstanding.

@@ -460,6 +460,26 @@ describe("/api/recruitment/decisions", () => {
     expect(ids).toContain("app-bob");
     expect(JSON.stringify(body)).not.toContain("Case essay never lands an answer.");
   });
+
+  it.each(ROLES)("refuses %s the single-candidate verdict lookup on their own row", async (role) => {
+    // `?applicant_id=` is the feedback lookup: it reaches candidates the queue
+    // above has already dropped, at any stage. That reach is the point AND the
+    // risk — it is the one route that will happily fetch a rejected application
+    // by id, and Jane's own rejection from sp26 is exactly such a row.
+    signInAs(role);
+    const res = await decisionsGET(
+      new NextRequest(`${url}?cycle=sp26&applicant_id=app-jane-old`)
+    );
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(await res.json())).not.toContain("Case essay never lands an answer.");
+  });
+
+  it("still lets exec look up somebody else's verdicts for feedback", async () => {
+    signInAs("exec");
+    const res = await decisionsGET(new NextRequest(`${url}?applicant_id=app-bob`));
+    expect(res.status).toBe(200);
+    expect((await res.json()).row.applicant.id).toBe("app-bob");
+  });
 });
 
 // ── Interview rubrics ────────────────────────────────────────────────────────

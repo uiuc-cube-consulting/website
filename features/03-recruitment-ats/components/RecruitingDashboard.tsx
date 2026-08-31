@@ -25,9 +25,10 @@ import {
   MIN_REVIEWERS_PER_APPLICANT,
   resolveReviewerPool,
 } from "@/features/03-recruitment-ats/lib/assignment";
-import { DISAGREEMENT_THRESHOLD } from "@/features/03-recruitment-ats/lib/decision";
+import { DISAGREEMENT_THRESHOLD, type DecisionRow } from "@/features/03-recruitment-ats/lib/decision";
 import { type Round } from "@/features/03-recruitment-ats/lib/rounds";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
+import { VerdictCards } from "@/features/03-recruitment-ats/components/VerdictCards";
 
 type Row = {
   applicant: {
@@ -897,6 +898,17 @@ function ReviewPanel({
       <hr className="my-4 border-[var(--border)]" />
       <FlagPanel applicantId={a.id} flags={row.flags} onChanged={onChanged} />
 
+      {/* Only once they have LEFT the written round, and only for exec. Both
+          halves of that matter: showing the other reader's marks while scoring
+          is still open is precisely what blind review exists to prevent, and
+          `canManage` mirrors the endpoint, which refuses everyone else. */}
+      {canManage && row.round !== "written" && (
+        <>
+          <hr className="my-4 border-[var(--border)]" />
+          <WrittenVerdicts key={a.id} applicantId={a.id} name={a.name} />
+        </>
+      )}
+
       <hr className="my-4 border-[var(--border)]" />
       <div className="flex items-baseline justify-between gap-3">
         <p className="eyebrow">Your rubric</p>
@@ -1026,6 +1038,94 @@ function ReviewPanel({
       )}
       {toast && <p className="mt-3 text-sm text-[var(--gold-deep)]">{toast}</p>}
     </div>
+  );
+}
+
+/**
+ * What the two written readers actually said about a candidate who has already
+ * left the written round — both rubrics and both sets of notes, unblinded.
+ *
+ * This is the decision queue's expanded row, shown again after the fact. The
+ * queue is a work list: a candidate drops out of it the moment they are rejected
+ * or advanced, which is the moment the reads stop being a decision and start
+ * being a RECORD. Rejected applicants write in asking why, and until this existed
+ * the only person who could answer was whoever happened to remember reading them
+ * — the marks were still in the database with no surface left that showed them.
+ *
+ * Fetched here rather than folded into the reviewer feed on purpose. That feed
+ * goes to all ~33 reviewers and deliberately carries nobody's scores but your
+ * own; putting unblinded verdicts in it would hand every reviewer everyone
+ * else's marks, which is the one thing the blind screen is built to stop. So the
+ * data comes from the exec-only decisions route instead, one candidate at a time.
+ */
+function WrittenVerdicts({ applicantId, name }: { applicantId: string; name: string }) {
+  const [row, setRow] = useState<DecisionRow | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Aborted on unmount and on a change of candidate: clicking down a list of
+  // rejections fires a request per name, and without this a slow early one can
+  // land last and show the wrong person's notes under the right person's name.
+  //
+  // Nothing is cleared on the way in, because nothing has to be: the caller keys
+  // this component by applicant id, so a new candidate is a fresh mount with
+  // empty state rather than a stale one being reset.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/recruitment/decisions?applicant_id=${encodeURIComponent(applicantId)}`,
+          { signal: ctrl.signal, cache: "no-store" }
+        );
+        const j = await r.json();
+        if (ctrl.signal.aborted) return;
+        if (!r.ok) setError(j.error || "Could not load the written reviews.");
+        else setRow(j.row as DecisionRow);
+      } catch (e) {
+        if ((e as Error)?.name !== "AbortError") setError("Could not load the written reviews.");
+      }
+    })();
+    return () => ctrl.abort();
+  }, [applicantId]);
+
+  const first = name.split(" ")[0];
+
+  return (
+    <>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="eyebrow">What the readers said</p>
+        {row?.mean !== null && row?.mean !== undefined && (
+          <span className="text-sm font-semibold tabular-nums text-[var(--bg-dark)]">
+            {row.mean}
+            <span className="font-normal text-[var(--muted)]"> / {SCREEN_MAX_POINTS}</span>
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Both written rubrics, unblinded — what to read from if {first} asks for feedback.
+      </p>
+      {/* The same warning the decision queue carries, and it matters more here:
+          quoting the mean of a 25 and an 11 back to a candidate describes a
+          review that nobody actually wrote. */}
+      {row?.disagreement && (
+        <p className="mt-1 text-xs text-amber-700">
+          The two readers were {row.spread} points apart — read both, not the average.
+        </p>
+      )}
+      <div className="mt-3">
+        {error ? (
+          <p className="text-xs text-amber-700">{error}</p>
+        ) : !row ? (
+          <p className="text-xs text-[var(--muted)]">Loading the written reviews…</p>
+        ) : (
+          <VerdictCards
+            verdicts={row.verdicts}
+            columns="sm:grid-cols-2 lg:grid-cols-1"
+            empty={`Nobody submitted a written review of ${first} before they left the written round.`}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
