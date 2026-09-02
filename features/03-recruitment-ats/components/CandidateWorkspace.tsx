@@ -64,8 +64,18 @@ export function CandidateWorkspace({
 }) {
   const kinds = ROUND_KINDS[round];
   const [kind, setKind] = useState<InterviewKind>(kinds[0]);
-  // Exec may correct any rubric; everyone else only writes for candidates they're on.
-  const editable = candidate.assignedToMe || canManage;
+  // The first round is open: every member may score every candidate in it, panel
+  // or no panel. The panel there records who is SCHEDULED with whom, and a
+  // schedule written the day before should not decide whether a conversation that
+  // already happened can be written down — an interview is run by whoever is
+  // actually in the room.
+  //
+  // This mirrors `saveRubric`, which enforces the panel for the final round only.
+  // It has to: a form that looks writable but 403s on save is worse than one that
+  // is honestly read-only, and a form that is greyed out when the API would have
+  // accepted it silently loses interviews. The final round needs no extra check
+  // here because the route already limits it to exec, who always have canManage.
+  const editable = round === "first_round" || candidate.assignedToMe || canManage;
 
   return (
     <div className="space-y-5">
@@ -101,8 +111,8 @@ export function CandidateWorkspace({
 
       {!editable && (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-cream)]/60 px-5 py-3 text-sm text-[var(--bg-dark)]">
-          You&rsquo;re not on this candidate&rsquo;s {ROUND_LABEL[round].toLowerCase()} panel, so their
-          rubrics are read-only for you. You can still read the resume.
+          The final round is exec only, so this candidate&rsquo;s rubrics are read-only for you.
+          You can still read the resume.
         </div>
       )}
 
@@ -640,9 +650,10 @@ function PanelEditor({
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <p className="eyebrow">{ROUND_LABEL[round]} panel</p>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Whoever is listed here can fill in this candidate&rsquo;s {ROUND_LABEL[round].toLowerCase()}{" "}
-        rubrics — and only this candidate&rsquo;s, and only this round&rsquo;s. The other round&rsquo;s
-        panel is set separately and is unaffected.
+        {round === "first_round"
+          ? "Who is scheduled to interview this candidate. It's a schedule, not a permission — every member can score any first-round candidate whether or not they're listed here."
+          : "Whoever is listed here can fill in this candidate's final round rubrics — and only this candidate's, and only this round's."}{" "}
+        The other round&rsquo;s panel is set separately and is unaffected.
       </p>
       {pool.length === 0 ? (
         <p className="mt-3 text-sm text-[var(--muted)]">
