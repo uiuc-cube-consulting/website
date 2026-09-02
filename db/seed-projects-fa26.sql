@@ -8,10 +8,11 @@
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BLOCK 1 (projects) and the PM/SC seats in BLOCK 2 are filled in. CONSULTANT
--- seats are known for Replit only — add the rest to BLOCK 2 and re-run.
+-- seats are in for all seven, as given on 2026-09-01.
 --
--- Safe to run right now: a project with no consultants comes up as an empty grid
--- and the reminder job skips it until someone is there to be rated.
+-- One person is deliberately absent: Lakshya Agarwal is in the member seed but on
+-- no project, so nobody rates them and the last check below reports them on every
+-- run. Add a consultant row if that is an oversight rather than the intent.
 --
 -- Seats, which are per project and independent of members.role:
 --   'project_manager' / 'senior_consultant' → fill in the weekly grid
@@ -43,11 +44,10 @@ on conflict (lower(name), cohort) do update
       active    = excluded.active;
 
 -- ── BLOCK 2 · Rosters ────────────────────────────────────────────────────────
--- PM/SC seats are filled in from the assignment table. CONSULTANT seats are in
--- for Replit; the other six are still unknown — add them below and re-run.
---
--- Until a project has consultants, its grid renders with no rows to rate and the
--- weekly reminder skips it (nothing to chase). Nothing breaks.
+-- Every seat below is real: PM/SC from the assignment table, consultants as given
+-- on 2026-09-01. A project with zero consultants renders an empty grid and is
+-- skipped entirely by the weekly reminder (getReminderTargets drops it), so an
+-- accidental deletion here goes unnoticed — Check 4 is what catches it.
 --
 -- Emails must match `members` exactly (db/seed-members-fa26.sql). Anyone
 -- misspelled is reported by Check 1 rather than silently skipped. One list, read
@@ -58,16 +58,20 @@ create temp table roster (project_name text, email text, seat text);
 
 -- ── VerityXR ─────────────────────────────────────────────────────────────────
 insert into roster values
-  ('VerityXR', 'hiralp3@illinois.edu', 'project_manager'),   -- Hiral Palakurty
-  ('VerityXR', 'kn35@illinois.edu',    'senior_consultant'); -- Krithika Nekkanti
--- ('VerityXR', 'consultant@illinois.edu', 'consultant'),
+  ('VerityXR', 'hiralp3@illinois.edu',  'project_manager'),   -- Hiral Palakurty
+  ('VerityXR', 'kn35@illinois.edu',     'senior_consultant'), -- Krithika Nekkanti
+  ('VerityXR', 'aryaar3@illinois.edu',  'consultant'),        -- Aryaa Rawat
+  ('VerityXR', 'kvatsa2@illinois.edu',  'consultant'),        -- Krish Vatsa
+  ('VerityXR', 'rahilts2@illinois.edu', 'consultant');        -- Rahil Shah
 
 -- ── Deloitte ─────────────────────────────────────────────────────────────────
 insert into roster values
-  ('Deloitte', 'tz81@illinois.edu',    'project_manager'),   -- Tristan Zhang
-  ('Deloitte', 'msgong2@illinois.edu', 'senior_consultant'), -- Michael Gong
-  ('Deloitte', 'aadis2@illinois.edu',  'senior_consultant'); -- Aadi Shah
--- ('Deloitte', 'consultant@illinois.edu', 'consultant'),
+  ('Deloitte', 'tz81@illinois.edu',     'project_manager'),   -- Tristan Zhang
+  ('Deloitte', 'msgong2@illinois.edu',  'senior_consultant'), -- Michael Gong
+  ('Deloitte', 'aadis2@illinois.edu',   'senior_consultant'), -- Aadi Shah
+  ('Deloitte', 'ajle2@illinois.edu',    'consultant'),        -- Adrian Le
+  ('Deloitte', 'dchau319@illinois.edu', 'consultant'),        -- Diya Chaudhari
+  ('Deloitte', 'vivaanb2@illinois.edu', 'consultant');        -- Vivaan Bommareddi
 
 -- ── Replit ───────────────────────────────────────────────────────────────────
 insert into roster values
@@ -80,15 +84,17 @@ insert into roster values
 insert into roster values
   ('Wrike', 'batualp2@illinois.edu', 'project_manager'),   -- Batu Alp
   ('Wrike', 'aranjan6@illinois.edu', 'senior_consultant'), -- Aarushi Ranjan
-  ('Wrike', 'ayaanc2@illinois.edu',  'senior_consultant'); -- Ayaan Chawla
--- ('Wrike', 'consultant@illinois.edu', 'consultant'),
+  ('Wrike', 'ayaanc2@illinois.edu',  'senior_consultant'), -- Ayaan Chawla
+  ('Wrike', 'sinturi2@illinois.edu', 'consultant'),        -- Satviki Inturi
+  ('Wrike', 'taniyaa2@illinois.edu', 'consultant');        -- Taniya Agrawal
 
 -- ── Mando ────────────────────────────────────────────────────────────────────
 insert into roster values
-  ('Mando', 'advita2@illinois.edu', 'project_manager'),   -- Advit Arora
-  ('Mando', 'awanj1@illinois.edu',  'senior_consultant'), -- Anushka Wanjara
-  ('Mando', 'bdb6@illinois.edu',    'senior_consultant'); -- Benjamin Brown
--- ('Mando', 'consultant@illinois.edu', 'consultant'),
+  ('Mando', 'advita2@illinois.edu',  'project_manager'),   -- Advit Arora
+  ('Mando', 'awanj1@illinois.edu',   'senior_consultant'), -- Anushka Wanjara
+  ('Mando', 'bdb6@illinois.edu',     'senior_consultant'), -- Benjamin Brown
+  ('Mando', 'kkalra3@illinois.edu',  'consultant'),        -- Krish Kalra
+  ('Mando', 'nikhill2@illinois.edu', 'consultant');        -- Nikhil Lalwani
 
 -- ── VoiceOS ──────────────────────────────────────────────────────────────────
 -- The assignment table lists William as "1/2" — shared or half-time. Recorded as
@@ -96,8 +102,9 @@ insert into roster values
 -- SC and a dedicated one need the same access.
 insert into roster values
   ('VoiceOS', 'nutheti2@illinois.edu', 'project_manager'),   -- Veda Nutheti
-  ('VoiceOS', 'wchen236@illinois.edu', 'senior_consultant'); -- William Chen
--- ('VoiceOS', 'consultant@illinois.edu', 'consultant'),
+  ('VoiceOS', 'wchen236@illinois.edu', 'senior_consultant'), -- William Chen
+  ('VoiceOS', 'arjunrw2@illinois.edu', 'consultant'),        -- Arjun Wadhwa
+  ('VoiceOS', 'bryanz4@illinois.edu',  'consultant');        -- Bryan Zhang
 
 -- ── SolutionExec ─────────────────────────────────────────────────────────────
 -- Also called "GTM Shift" — one project, two names. SolutionExec is the one the
@@ -110,9 +117,10 @@ insert into roster values
 -- who is SC on Deloitte. Both are in db/seed-members-fa26.sql — run that file
 -- first, or this project's PM row is skipped by Check 1.
 insert into roster values
-  ('SolutionExec', 'aadik3@illinois.edu', 'project_manager'),   -- Aadi Kenchammana
-  ('SolutionExec', 'aaravg2@illinois.edu', 'senior_consultant'); -- Aarav Gupta
--- ('SolutionExec', 'consultant@illinois.edu', 'consultant'),
+  ('SolutionExec', 'aadik3@illinois.edu',   'project_manager'),   -- Aadi Kenchammana
+  ('SolutionExec', 'aaravg2@illinois.edu',  'senior_consultant'), -- Aarav Gupta
+  ('SolutionExec', 'elzheng2@illinois.edu', 'consultant'),        -- Eric Zheng
+  ('SolutionExec', 'gmonago2@illinois.edu', 'consultant');        -- Grace Monago
 
 -- ── Apply the roster ─────────────────────────────────────────────────────────
 insert into project_members (project_id, member_id, seat)
