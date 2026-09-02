@@ -4,6 +4,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
+import { canInterviewRole } from "@/features/03-recruitment-ats/lib/access";
 // export { auth as proxy } from "@/types/auth";
 
 export default auth((req) => {
@@ -48,11 +49,11 @@ export default auth((req) => {
   // are gated further inside the API routes (lib/access.ts), not here.
   // No role check on /portal/recruiting itself — any signed-in member passes.
 
-  // Interview panel: exec, PM, SC, returning members only. Separate from
-  // application visibility above — sitting a panel is staff work, not
-  // read access.
-  const interviewRoles = ["exec", "project_manager", "senior_consultant", "returning_member"];
-  if (pathname.startsWith("/portal/interview") && !interviewRoles.includes(session.user.role)) {
+  // Interview console: every member role, same as scoring itself. An interview is
+  // staffed from whoever is in the room, so the console cannot be narrower than
+  // the write it exists to perform. The final round is still exec-only, enforced
+  // per-round inside the routes (lib/rounds.ts) rather than by path here.
+  if (pathname.startsWith("/portal/interview") && !canInterviewRole(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 

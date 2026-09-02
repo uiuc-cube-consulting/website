@@ -6,14 +6,24 @@
 // of it for the candidate they're assigned, and that instance is their own row in
 // `reviews` (unique on applicant + reviewer + kind).
 
+import { ALL_MEMBER_ROLES, canInterviewRole } from "./access";
 import type { InterviewRound } from "./rounds";
 import { rubricMaxPoints, type Flag, type RubricCriterion, type Stage } from "./types";
 
-/** Roles allowed to interview. Mirrors the reviewer roles in proxy.ts / store.ts. */
-export const INTERVIEWER_ROLES = ["exec", "project_manager", "senior_consultant", "returning_member"];
+/**
+ * Roles allowed to interview.
+ *
+ * Re-exported from ./access rather than listed again here. This module used to
+ * keep its own copy, and when interview scoring was opened to every member the
+ * copy did not move: `canInterviewRole` said yes, this said no, and since this
+ * was the check the routes ran FIRST, the widening had no effect at all. That is
+ * the exact failure ./access.ts was written to end — one list, one predicate,
+ * every gate reading the same one.
+ */
+export const INTERVIEWER_ROLES = ALL_MEMBER_ROLES;
 
 export function canInterview(role?: string | null): boolean {
-  return Boolean(role && INTERVIEWER_ROLES.includes(role));
+  return canInterviewRole(role);
 }
 
 // ── Kinds ────────────────────────────────────────────────────────────────────

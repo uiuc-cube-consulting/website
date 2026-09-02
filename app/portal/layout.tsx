@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
+import { canInterviewRole } from "@/features/03-recruitment-ats/lib/access";
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 import { PortalMobileNav, type PortalNavLink } from "@/components/PortalMobileNav";
 
@@ -26,8 +27,8 @@ export default async function PortalLayout({
   const role = session?.user?.role;
   const isExec = role === "exec";
   const isLeadership = isExec || role === "project_manager" || role === "senior_consultant";
-  // Interviewing also includes returning members — matches canInterview() in the ATS.
-  const isInterviewer = isLeadership || role === "returning_member";
+  // Interviewing is open to every member — matches canInterviewRole() in the ATS.
+  const isInterviewer = canInterviewRole(role);
   // Recruiting visibility is a cycle-to-cycle exec toggle (lib/visibility.ts),
   // not a role — every member can see applications while it's open, and the
   // nav link (and the page itself) disappears for everyone but exec once closed.

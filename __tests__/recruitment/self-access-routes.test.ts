@@ -489,7 +489,33 @@ describe("POST /api/recruitment/interview/rubric", () => {
   // What an interviewer submits: the total off the paper case sheet, out of 15.
   const CASE_SCORES = { total: 11 };
 
-  it.each(["exec", "project_manager", "senior_consultant", "returning_member"] as const)(
+  /**
+   * The whole point of opening interviews up: a plain member, on no panel, can
+   * record a first-round score. This asserts it through the ROUTE rather than
+   * the predicate, because the predicate was never what blocked them — a second
+   * role list in interview.ts rejected the request several lines earlier, and a
+   * unit test on `canInterviewRole` alone would have passed the entire time the
+   * feature was broken.
+   */
+  it("lets a plain member score a first-round interview", async () => {
+    signInAs("member");
+    const res = await rubricPOST(
+      post(url, { applicant_id: "app-bob", kind: "case", scores: CASE_SCORES })
+    );
+    expect(res.status).toBe(200);
+    expect(rubricStub.saveRubric).toHaveBeenCalled();
+  });
+
+  it("still refuses a plain member the final round", async () => {
+    signInAs("member");
+    const res = await rubricPOST(
+      post(url, { applicant_id: "app-bob", kind: "final_case", scores: CASE_SCORES })
+    );
+    expect(res.status).toBe(403);
+    expect(rubricStub.saveRubric).not.toHaveBeenCalled();
+  });
+
+  it.each(["exec", "project_manager", "senior_consultant", "returning_member", "member"] as const)(
     "refuses %s scoring their own interview",
     async (role) => {
       // `saveRubric` gates on panel membership, but exec is handed `bypassPanel`,

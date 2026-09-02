@@ -66,7 +66,11 @@ const ROLES = ["exec", "project_manager", "senior_consultant", "returning_member
 type Role = (typeof ROLES)[number];
 
 const EXEC_ONLY: Role[] = ["exec"];
-const INTERVIEWERS: Role[] = ["exec", "project_manager", "senior_consultant", "returning_member"];
+/** Interviewing is open to every member role — an interview is staffed from
+ *  whoever is in the room. Screening, assignment and decisions stay narrower. */
+const INTERVIEWERS: Role[] = [...ROLES];
+/** The reviewer pool for the WRITTEN screen, which stays staff-only. */
+const SCREENERS: Role[] = ["exec", "project_manager", "senior_consultant", "returning_member"];
 
 function signInAs(role: Role | null) {
   mockSession = role ? { user: { email: "user@illinois.edu", role, memberId: "m1" } } : null;
@@ -197,16 +201,21 @@ describe("final round: GET /api/recruitment/interview?round=final_round", () => 
 // ── Tier ordering ────────────────────────────────────────────────────────────
 
 describe("tier invariants", () => {
-  it("exec-only is a strict subset of the interviewer tier", () => {
-    for (const r of EXEC_ONLY) expect(INTERVIEWERS).toContain(r);
-    expect(INTERVIEWERS.length).toBeGreaterThan(EXEC_ONLY.length);
+  it("nests the tiers: exec ⊂ screeners ⊂ interviewers", () => {
+    for (const r of EXEC_ONLY) expect(SCREENERS).toContain(r);
+    for (const r of SCREENERS) expect(INTERVIEWERS).toContain(r);
+    expect(SCREENERS.length).toBeGreaterThan(EXEC_ONLY.length);
+    expect(INTERVIEWERS.length).toBeGreaterThan(SCREENERS.length);
   });
 
-  it("a plain member is excluded from every STAFF surface (assign, decide, review, interview)", () => {
-    // Viewing (applicants pool, coverage, flags) is club-wide and covered
-    // separately below — these two lists are the reviewer/interviewer pool only.
+  it("lets a plain member interview, but not screen, assign or decide", () => {
+    // The asymmetry is the point. An interview is staffed from whoever is in the
+    // room, so refusing a member's score loses the interview. The written screen
+    // is assigned round-robin and its fairness depends on that assignment
+    // holding, so it stays staff-only.
+    expect(INTERVIEWERS).toContain("member");
+    expect(SCREENERS).not.toContain("member");
     expect(EXEC_ONLY).not.toContain("member");
-    expect(INTERVIEWERS).not.toContain("member");
   });
 });
 
