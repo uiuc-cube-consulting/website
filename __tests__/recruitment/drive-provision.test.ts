@@ -262,8 +262,29 @@ describe("isComplete / submittedTotal", () => {
     expect(isComplete("case", { total: -1 })).toBe(false);
   });
 
-  it("rejects a fractional total", () => {
-    expect(isComplete("case", { total: 11.5 })).toBe(false);
+  it("accepts a half point, which the behavioral sheet's averaging produces", () => {
+    // "Awarded Category Score (the average of both questions)" lands on .5 all
+    // the time; forcing a whole number would make the rounding rule the scorer's
+    // private choice.
+    expect(isComplete("case", { total: 11.5 })).toBe(true);
+    expect(submittedTotal("case", { total: 11.5 })).toBe(11.5);
+    expect(isComplete("behavioral", { total: 0.5 })).toBe(true);
+    expect(isComplete("behavioral", { total: 16.5 })).toBe(true);
+  });
+
+  it("rejects a finer slice than a half point", () => {
+    expect(isComplete("case", { total: 11.25 })).toBe(false);
+    expect(isComplete("case", { total: 0.1 })).toBe(false);
+    // Float noise did not come off a rubric, so it is not a score.
+    expect(isComplete("case", { total: 2.7000000000000002 })).toBe(false);
+  });
+
+  it("still holds the range at the edges with halves in play", () => {
+    expect(isComplete("case", { total: 15 })).toBe(true);
+    expect(isComplete("case", { total: 15.5 })).toBe(false);
+    expect(isComplete("case", { total: -0.5 })).toBe(false);
+    expect(isComplete("behavioral", { total: 17 })).toBe(true);
+    expect(isComplete("behavioral", { total: 17.5 })).toBe(false);
   });
 
   it("knows each rubric's maximum", () => {

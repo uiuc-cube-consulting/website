@@ -5,6 +5,7 @@ import {
   INTERVIEW_KINDS,
   rubricMax,
   SCORE_KEY,
+  submittedTotal,
   canInterview,
   isInterviewKind,
   isRecommendation,
@@ -84,18 +85,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "The final round is exec only" }, { status: 403 });
   }
 
-  // One number: the total off the paper rubric, a whole number in 0..max. Anything
-  // else the client sends is dropped rather than stored, so the row always matches
-  // what the code believes a review is.
+  // One number: the total off the paper rubric, in 0..max, on a half-point
+  // boundary. Anything else the client sends is dropped rather than stored, so
+  // the row always matches what the code believes a review is.
   //
-  // The raw value is tested rather than `Number(...)` of it: 0 is a real total on
-  // these sheets, and coercion turns null, "" and [] into exactly that — which
-  // would store an untouched form as the harshest possible review.
+  // Validated here with the same predicate the client uses, rather than trusting
+  // the input's `step` — `submittedTotal` returns null for anything off-boundary,
+  // out of range, or not a number at all. The raw value is tested rather than
+  // `Number(...)` of it: 0 is a real total on these sheets, and coercion turns
+  // null, "" and [] into exactly that, storing an untouched form as the harshest
+  // possible review.
   const max = rubricMax(body.kind);
-  const total = body.scores?.[SCORE_KEY];
-  if (typeof total !== "number" || !Number.isInteger(total) || total < 0 || total > max) {
+  const total = submittedTotal(body.kind, body.scores as Record<string, number> | undefined);
+  if (total === null) {
     return NextResponse.json(
-      { ok: false, error: `Score must be a whole number from 0 to ${max}` },
+      { ok: false, error: `Score must be between 0 and ${max}, in steps of 0.5` },
       { status: 400 }
     );
   }

@@ -557,6 +557,28 @@ export type RubricEntry = {
 /** The single key `reviews.scores` carries for an interview rubric. */
 export const SCORE_KEY = "total";
 
+/**
+ * The finest slice of a point an interviewer may award: a half.
+ *
+ * Halves are not a nicety here, they fall out of the rubric. The behavioral
+ * sheet's score column reads "the average of both questions", and the average of
+ * a 2 and a 1 is 1.5 — under whole numbers the interviewer has to round, and the
+ * sheet gives no rule for which way, so the same interview totals differently
+ * depending on who is holding the pen.
+ */
+export const SCORE_STEP = 0.5;
+
+/**
+ * A score that lands on a half-point boundary.
+ *
+ * `v * 2` is exact for any legitimate value because 0.5 is a dyadic rational, so
+ * this needs no epsilon — and a value that arrived with float noise (2.7000000000000002)
+ * fails, which is what we want: it did not come from a rubric.
+ */
+function isHalfStep(v: number): boolean {
+  return Number.isFinite(v) && Number.isInteger(v * 2);
+}
+
 /** The highest score this rubric can award: case 15, behavioral 17. */
 export function rubricMax(kind: InterviewKind): number {
   return rubricMaxPoints(INTERVIEW_RUBRICS[kind]);
@@ -568,13 +590,13 @@ export function submittedTotal(
   scores: Record<string, number> | null | undefined
 ): number | null {
   const v = scores?.[SCORE_KEY];
-  if (typeof v !== "number" || !Number.isInteger(v)) return null;
+  if (typeof v !== "number" || !isHalfStep(v)) return null;
   return v >= 0 && v <= rubricMax(kind) ? v : null;
 }
 
 /**
- * A rubric counts as complete once it carries a whole-number total within
- * 0..max.
+ * A rubric counts as complete once it carries a total within 0..max, on a
+ * half-point boundary.
  *
  * Not coerced, and deliberately so. `Number(null)` and `Number("")` are both 0,
  * and 0 is a real total on these sheets — every category "Unacceptable Answer" —

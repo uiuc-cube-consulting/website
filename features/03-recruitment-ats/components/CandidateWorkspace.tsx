@@ -16,6 +16,7 @@ import {
   RECOMMENDATIONS,
   ROUND_KINDS,
   SCORE_KEY,
+  SCORE_STEP,
   BEHAVIORAL_QUESTIONS,
   isComplete,
   rubricMax,
@@ -371,7 +372,7 @@ function RubricForm({
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--muted)]">
           Score {candidate.name.split(" ")[0]} on the {KIND_LABEL[kind]} rubric in their Drive
-          folder, then enter the total here.
+          folder, then enter the total here. Half points are allowed.
         </p>
         {othersDone > 0 && (
           <span className="shrink-0 text-xs text-[var(--muted)]">
@@ -391,7 +392,7 @@ function RubricForm({
             inputMode="numeric"
             min={0}
             max={maxPoints}
-            step={1}
+            step={SCORE_STEP}
             disabled={!editable}
             value={scores[SCORE_KEY] ?? ""}
             onChange={(e) => {
@@ -402,14 +403,16 @@ function RubricForm({
               // storing a zero, so a cleared field cannot submit as the harshest
               // possible review.
               if (raw === "") delete next[SCORE_KEY];
-              else next[SCORE_KEY] = Number.parseInt(raw, 10);
+              else next[SCORE_KEY] = Number.parseFloat(raw);
               set<Record<string, number>>(setScores)(next);
             }}
             className="h-11 w-24 rounded-lg border border-[var(--border)] bg-white px-3 text-lg font-semibold text-[var(--bg-dark)] focus:border-[var(--gold)] focus:outline-none disabled:opacity-50"
           />
           <span className="text-lg font-semibold text-[var(--muted)]">/ {maxPoints}</span>
           {scores[SCORE_KEY] !== undefined && total === null && (
-            <span className="text-xs text-amber-700">Must be a whole number from 0 to {maxPoints}.</span>
+            <span className="text-xs text-amber-700">
+              Must be between 0 and {maxPoints}, in steps of {SCORE_STEP}.
+            </span>
           )}
         </div>
       </div>

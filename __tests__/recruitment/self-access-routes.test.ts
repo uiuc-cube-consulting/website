@@ -506,6 +506,26 @@ describe("POST /api/recruitment/interview/rubric", () => {
     expect(rubricStub.saveRubric).toHaveBeenCalled();
   });
 
+  it("accepts a half point and stores it unrounded", async () => {
+    signInAs("member");
+    const res = await rubricPOST(
+      post(url, { applicant_id: "app-bob", kind: "case", scores: { total: 11.5 } })
+    );
+    expect(res.status).toBe(200);
+    expect(rubricStub.saveRubric).toHaveBeenCalledWith(
+      expect.objectContaining({ scores: { total: 11.5 } })
+    );
+  });
+
+  it("refuses a finer slice than a half point", async () => {
+    signInAs("member");
+    const res = await rubricPOST(
+      post(url, { applicant_id: "app-bob", kind: "case", scores: { total: 11.25 } })
+    );
+    expect(res.status).toBe(400);
+    expect(rubricStub.saveRubric).not.toHaveBeenCalled();
+  });
+
   it("still refuses a plain member the final round", async () => {
     signInAs("member");
     const res = await rubricPOST(
