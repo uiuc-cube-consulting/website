@@ -25,7 +25,13 @@ import {
   rubricDocRequests,
   notesDocRequests,
 } from "@/features/03-recruitment-ats/lib/rubric-doc";
-import { CASE_RUBRIC, BEHAVIORAL_RUBRIC } from "@/features/03-recruitment-ats/lib/interview";
+import {
+  CASE_RUBRIC,
+  BEHAVIORAL_RUBRIC,
+  BEHAVIORAL_QUESTIONS,
+  isComplete,
+} from "@/features/03-recruitment-ats/lib/interview";
+import { rubricMaxPoints, rubricTotal } from "@/features/03-recruitment-ats/lib/types";
 
 // ── form-resume ──────────────────────────────────────────────────────────────
 
@@ -210,8 +216,8 @@ describe("renderRubricBody", () => {
         const { range } = (r as { updateTextStyle: { range: { startIndex: number; endIndex: number } } }).updateTextStyle;
         return text.slice(range.startIndex - 1, range.endIndex - 1);
       });
-    expect(bolded).toContain("Score (1–5): ");
-    expect(bolded).toContain("Interviewer: ");
+    expect(bolded).toContain("Score (0–3): ");
+    expect(bolded).toContain("Interviewers: ");
     for (const b of bolded) expect(b).not.toContain("_");
   });
 });
@@ -222,5 +228,148 @@ describe("notesDocRequests", () => {
     const insert = reqs.find((r) => "insertText" in r) as { insertText: { text: string } };
     expect(insert.insertText.text).toContain("Interview Notes — Jane Doe");
     expect(insert.insertText.text.length).toBeLessThan(300);
+  });
+});
+
+// ── FA26 interview rubrics ───────────────────────────────────────────────────
+// These lock the numbers the printed sheets promise. The rubrics are a
+// transcription of a paper document, and a transcription is exactly the kind of
+// thing that drifts silently: a criterion dropped in a refactor still compiles,
+// still renders, and simply makes the interview worth fewer points than the sheet
+// in the interviewer's hand says it is.
+
+describe("rubric totals match the printed sheets", () => {
+  it("scores the case interview out of 15", () => {
+    expect(rubricMaxPoints(CASE_RUBRIC)).toBe(15);
+    expect(CASE_RUBRIC).toHaveLength(5);
+    for (const c of CASE_RUBRIC) expect(c.max).toBe(3);
+  });
+
+  it("scores the behavioral interview out of 17, with uneven ceilings", () => {
+    expect(rubricMaxPoints(BEHAVIORAL_RUBRIC)).toBe(17);
+    expect(BEHAVIORAL_RUBRIC).toHaveLength(6);
+    // The two categories the sheet marks "points are increased per box" are the
+    // whole reason the ceilings are per-criterion rather than one constant.
+    const max = Object.fromEntries(BEHAVIORAL_RUBRIC.map((c) => [c.key, c.max]));
+    expect(max).toEqual({
+      understanding: 2,
+      goals: 4,
+      adaptability: 2,
+      time_management: 2,
+      presentation: 2,
+      competence: 5,
+    });
+  });
+
+  it("sums a filled-in rubric as plain points", () => {
+    const perfect = Object.fromEntries(BEHAVIORAL_RUBRIC.map((c) => [c.key, c.max]));
+    expect(rubricTotal(BEHAVIORAL_RUBRIC, perfect)).toBe(17);
+    const zeroed = Object.fromEntries(BEHAVIORAL_RUBRIC.map((c) => [c.key, 0]));
+    expect(rubricTotal(BEHAVIORAL_RUBRIC, zeroed)).toBe(0);
+  });
+});
+
+describe("rubric levels", () => {
+  /**
+   * Every score a criterion accepts must be described by exactly one column. A gap
+   * means an interviewer can pick a number the sheet never explains; an overlap
+   * means two columns claim it.
+   */
+  it("covers 0..max exactly once per criterion", () => {
+    for (const rubric of [CASE_RUBRIC, BEHAVIORAL_RUBRIC]) {
+      for (const c of rubric) {
+        const covered: number[] = [];
+        for (const l of c.levels) {
+          expect(l.min).toBeLessThanOrEqual(l.max);
+          for (let n = l.min; n <= l.max; n++) covered.push(n);
+        }
+        expect(covered.sort((a, b) => a - b)).toEqual(
+          Array.from({ length: c.max + 1 }, (_, n) => n)
+        );
+      }
+    }
+  });
+
+  it("gives every level a written descriptor", () => {
+    for (const rubric of [CASE_RUBRIC, BEHAVIORAL_RUBRIC]) {
+      for (const c of rubric) for (const l of c.levels) expect(l.descriptor.length).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe("isComplete", () => {
+  const full = (r: typeof CASE_RUBRIC) => Object.fromEntries(r.map((c) => [c.key, 0]));
+
+  it("treats a zero as a real score, not a blank", () => {
+    // Every criterion "Unacceptable Answer" is a complete, very harsh review.
+    expect(isComplete("case", full(CASE_RUBRIC))).toBe(true);
+  });
+
+  it("rejects a criterion left unscored", () => {
+    const scores = full(CASE_RUBRIC);
+    delete (scores as Record<string, number>).math_question;
+    expect(isComplete("case", scores)).toBe(false);
+  });
+
+  it("rejects a score above that criterion's own ceiling", () => {
+    // 3 is a perfect Goals score on a 0-2 category and a mid one on Goals itself.
+    expect(isComplete("behavioral", { ...full(BEHAVIORAL_RUBRIC), goals: 3 })).toBe(true);
+    expect(isComplete("behavioral", { ...full(BEHAVIORAL_RUBRIC), presentation: 3 })).toBe(false);
+    expect(isComplete("behavioral", { ...full(BEHAVIORAL_RUBRIC), competence: 6 })).toBe(false);
+  });
+
+  it("rejects a non-integer and an uncoerced blank", () => {
+    expect(isComplete("case", { ...full(CASE_RUBRIC), demeanor: 2.5 })).toBe(false);
+    expect(isComplete("case", { ...full(CASE_RUBRIC), demeanor: null as unknown as number })).toBe(false);
+  });
+});
+
+describe("the generated doc mirrors the sheet", () => {
+  it("prints each criterion's own range and the rubric's total", () => {
+    const { text } = renderRubricBody(BEHAVIORAL_RUBRIC, { ...META, label: "Behavioral" });
+    expect(text).toContain("Score (0–4): "); // Goals
+    expect(text).toContain("Score (0–5): "); // Competence
+    expect(text).toContain("Score (0–2): "); // the rest
+    expect(text).toContain("/ 17");
+  });
+
+  it("carries every level description into the doc", () => {
+    const { text } = renderRubricBody(CASE_RUBRIC, META);
+    for (const c of CASE_RUBRIC) {
+      expect(text).toContain(c.label);
+      for (const l of c.levels) expect(text).toContain(l.descriptor);
+    }
+    expect(text).toContain("/ 15");
+  });
+
+  it("prints the question script on the behavioral sheet only", () => {
+    const behavioral = renderRubricBody(BEHAVIORAL_RUBRIC, {
+      ...META,
+      label: "Behavioral",
+      questions: BEHAVIORAL_QUESTIONS,
+    }).text;
+    for (const q of BEHAVIORAL_QUESTIONS) expect(behavioral).toContain(q.text);
+    expect(behavioral).toContain("Resume review");
+
+    const caseSheet = renderRubricBody(CASE_RUBRIC, META).text;
+    expect(caseSheet).not.toContain("Interview questions");
+  });
+
+  /** The same index invariant as above, on the longest body we generate. */
+  it("keeps styling ranges valid on the behavioral sheet with questions", () => {
+    const { text, requests } = renderRubricBody(BEHAVIORAL_RUBRIC, {
+      ...META,
+      label: "Behavioral",
+      questions: BEHAVIORAL_QUESTIONS,
+    });
+    const end = text.length + 1;
+    for (const r of requests) {
+      for (const v of Object.values(r) as { range?: { startIndex: number; endIndex: number } }[]) {
+        if (!v?.range) continue;
+        expect(v.range.startIndex).toBeGreaterThanOrEqual(1);
+        expect(v.range.endIndex).toBeLessThanOrEqual(end);
+        expect(v.range.startIndex).toBeLessThan(v.range.endIndex);
+      }
+    }
   });
 });

@@ -32,9 +32,11 @@ const STAGE_ORDER: Record<string, number> = Object.fromEntries(STAGES.map((s, i)
 // completeness is "every criterion has a value", never "every value is above
 // zero" — see isScreenComplete.
 //
-// This is deliberately a different shape from the interview rubrics in
-// ./interview.ts, which stay on a 1–5 anchored scale and average. The two rounds
-// score different things and their numbers are never mixed (see `aggregate`).
+// The interview rubrics in ./interview.ts now share this shape — points out of a
+// per-criterion ceiling — because the paper sheets they mirror are scored that
+// way too. The two rounds still score different things out of different totals
+// (28 written, 15 case, 17 behavioral) and their numbers are never mixed together
+// (see `aggregate`).
 export const RUBRIC = [
   {
     key: "essay_1",
@@ -88,8 +90,51 @@ export type PointCriterion = { key: string; label: string; max: number; anchor: 
 /** The best possible written application: 5 + 3 + 3 + 7 + 5 + 5 = 28. */
 export const SCREEN_MAX_POINTS: number = RUBRIC.reduce((a, c) => a + c.max, 0);
 
-/** Shape shared by the 1–5 anchored interview rubrics in `interview.ts`. */
-export type RubricCriterion = { key: string; label: string; weight: number; anchor: string };
+/**
+ * One column of the paper interview rubric — the band of scores a description
+ * earns.
+ *
+ * `min` and `max` are usually equal: on the case rubric each column is worth
+ * exactly one number. They differ where the paper rubric says "points are
+ * increased per box" and gives a range instead ("[3-4]", "[4-5]"), which is how
+ * the behavioral rubric makes Goals and Competence count for more than the
+ * categories beside them.
+ */
+export type RubricLevel = {
+  min: number;
+  max: number;
+  /** The column heading: "Exceeds Expectations", "Below Average", … */
+  label: string;
+  /** What that column describes, transcribed from the paper rubric. */
+  descriptor: string;
+};
+
+/**
+ * Shape shared by the interview rubrics in `interview.ts`.
+ *
+ * Points, not a normalised scale. Each criterion carries its own ceiling, for
+ * the same reason the written rubric above does: the behavioral rubric really is
+ * worth 5 points on Competence and 2 on Presentation, and saying so directly is
+ * both what the paper rubric does and what an interviewer expects to see. The
+ * total is a plain sum out of `rubricMaxPoints`, so a score in the portal and a
+ * score on the printed sheet are the same number.
+ *
+ * Zero is a real score here, exactly as on the written rubric — "Unacceptable
+ * Answer" is a column on both sheets, not the absence of one — so completeness
+ * is "every criterion has a value", never "every value is above zero".
+ */
+export type RubricCriterion = {
+  key: string;
+  label: string;
+  /** Highest score this criterion can earn. Not uniform across a rubric. */
+  max: number;
+  /** The sub-questions printed under the category name, if any. */
+  prompts?: readonly string[];
+  /** One-line summary, shown beside the score buttons where the grid won't fit. */
+  anchor: string;
+  /** The grid's columns, highest band first. */
+  levels: readonly RubricLevel[];
+};
 
 /**
  * A whole number within this criterion's 0..max range.
@@ -140,8 +185,9 @@ export type Review = {
   applicant_id: string;
   reviewer_email: string;
   scores: Scores;
-  /** Column name is historical. For a screen review this holds POINTS out of
-   *  SCREEN_MAX_POINTS; for an interview rubric it holds the 1–5 weighted mean. */
+  /** Column name is historical: nothing is weighted any more. For a screen review
+   *  this holds POINTS out of SCREEN_MAX_POINTS; for an interview rubric, points
+   *  out of that rubric's own total (case 15, behavioral 17). */
   weighted_total: number;
   notes?: string;
   /** Which rubric this row is an instance of, which is also which ROUND it
@@ -151,15 +197,30 @@ export type Review = {
   recommendation?: string | null;
 };
 
-/** Weighted average of an INTERVIEW rubric's criterion scores, on the 1–5 scale.
- *  The written-application rubric does not use this — it sums points instead. */
-export function weightedTotalFor(
+/** The best possible score on an interview rubric: case = 15, behavioral = 17. */
+export function rubricMaxPoints(rubric: readonly RubricCriterion[]): number {
+  return rubric.reduce((a, c) => a + c.max, 0);
+}
+
+/**
+ * One filled-in interview rubric's score: the plain sum of its criterion points,
+ * out of `rubricMaxPoints`.
+ *
+ * A sum rather than the weighted mean this used to compute. The paper rubrics
+ * total to /15 and /17 in the interviewer's hand, and a portal that reported the
+ * same interview as a 2.4 gave the panel two different numbers for one
+ * conversation. Out-of-range and missing values contribute 0 rather than
+ * throwing, so a half-filled draft still totals to something sensible; the API
+ * validates properly before anything is stored.
+ */
+export function rubricTotal(
   rubric: readonly RubricCriterion[],
   scores: Record<string, number>
 ): number {
-  const totalWeight = rubric.reduce((a, r) => a + r.weight, 0);
-  const sum = rubric.reduce((a, r) => a + (Number(scores[r.key]) || 0) * r.weight, 0);
-  return totalWeight ? Math.round((sum / totalWeight) * 100) / 100 : 0;
+  return rubric.reduce((a, c) => {
+    const v = Number(scores[c.key]);
+    return a + (Number.isFinite(v) && v >= 0 && v <= c.max ? v : 0);
+  }, 0);
 }
 
 /**
@@ -210,9 +271,9 @@ export function isScreenReview(r: Review): boolean {
  * Aggregate one applicant's WRITTEN-APPLICATION reviews: mean, spread, and
  * per-criterion means, all in points.
  *
- * Interview rubrics from the later rounds score different criteria on a 1–5
- * scale, so they are excluded here — averaging a 4.25 case rubric into a 28-point
- * written total would silently corrupt every number on this screen.
+ * Interview rubrics from the later rounds score different criteria out of
+ * different totals, so they are excluded here — averaging a 12/15 case rubric into
+ * a 28-point written total would silently corrupt every number on this screen.
  */
 export function aggregate(applicant: Applicant, reviews: Review[]): ApplicantAggregate {
   const rs = reviews.filter((r) => r.applicant_id === applicant.id && isScreenReview(r));

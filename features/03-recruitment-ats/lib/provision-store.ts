@@ -38,7 +38,7 @@ import {
   resumeFileName,
 } from "./folder-naming";
 import { rubricDocRequests, notesDocRequests, type RubricDocMeta } from "./rubric-doc";
-import { CASE_RUBRIC, BEHAVIORAL_RUBRIC } from "./interview";
+import { CASE_RUBRIC, BEHAVIORAL_RUBRIC, BEHAVIORAL_QUESTIONS } from "./interview";
 import { ROUND_STAGES } from "./rounds";
 import { cycleLabel, normalizeCycle } from "./cycle";
 import { getActiveCycle } from "./visibility";
@@ -445,7 +445,13 @@ export async function provisionCandidateFolders(
       {
         kind: "behavioral_rubric",
         title: docTitle("Behavioral Rubric", c.name),
-        requests: rubricDocRequests(BEHAVIORAL_RUBRIC, { ...meta, label: "Behavioral" }),
+        // The behavioral sheet carries the question script as well as the grid —
+        // the two are one document in the club's paper version.
+        requests: rubricDocRequests(BEHAVIORAL_RUBRIC, {
+          ...meta,
+          label: "Behavioral",
+          questions: BEHAVIORAL_QUESTIONS,
+        }),
       },
       {
         kind: "notes",

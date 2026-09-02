@@ -318,7 +318,7 @@ export async function submitReview(input: {
       kind: "screen",
       scores: input.scores,
       // Points out of SCREEN_MAX_POINTS. The column keeps its historical name;
-      // only interview rubrics still put a 1-5 weighted mean in it.
+      // only interview rubrics still put their own points total in it.
       weighted_total: screenTotal(input.scores),
       notes: input.notes ?? null,
     },

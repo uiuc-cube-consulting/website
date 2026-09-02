@@ -11,11 +11,15 @@
 //     in a Drive scope we would otherwise not need for created files.
 //
 // The doc is a paper fallback for the portal console, so it deliberately mirrors
-// the portal's rubric exactly: same criteria, same order, same written anchors,
-// same 1-5 scale, same four recommendation values.
+// the portal's rubric exactly: same criteria, same order, same level descriptions,
+// same per-criterion ceilings and total, same four recommendation values. Both
+// come from ./interview.ts, which is itself a transcription of the club's printed
+// FA26 sheets — so all three say the same thing by construction.
 
 import { RECOMMENDATIONS } from "./interview";
+import type { BehavioralQuestion } from "./interview";
 import type { RubricCriterion } from "./types";
+import { rubricMaxPoints } from "./types";
 
 /** A Docs API `batchUpdate` request. Structural typing keeps googleapis out of here. */
 export type DocsRequest = Record<string, unknown>;
@@ -27,6 +31,11 @@ export type RubricDocMeta = {
   subtitle?: string;
   /** e.g. "Case" / "Behavioral", used in the heading. */
   label: string;
+  /**
+   * The interview script, printed above the rubric. Only the behavioral sheet has
+   * one; the case sheet is scored against whatever case the panel runs.
+   */
+  questions?: readonly BehavioralQuestion[];
 };
 
 // ── Text assembly ────────────────────────────────────────────────────────────
@@ -91,38 +100,70 @@ export function renderRubricBody(
   meta: RubricDocMeta
 ): { text: string; requests: DocsRequest[] } {
   const b = new Body();
+  const maxPoints = rubricMaxPoints(rubric);
 
   b.heading(`${meta.label} Rubric — ${meta.candidateName}`);
   b.mutedLine(
     [meta.candidateEmail, meta.subtitle].filter(Boolean).join("  ·  ")
   );
   b.line();
-  b.labelled("Interviewer: ", WRITE_IN);
+  b.labelled("Interviewers: ", WRITE_IN);
   b.labelled("Date: ", WRITE_IN);
   b.line();
   b.mutedLine(
-    "Score each criterion 1–5 using the anchor as the standard. A 4 should mean " +
-      "the same thing to every interviewer — that is the whole point of the anchors. " +
-      "Scores entered here still need to be recorded in the portal."
+    `Score every category out of its own maximum — they are not all worth the same — ` +
+      `for a total out of ${maxPoints}. Zero is a real score ("Unacceptable Answer"), not a ` +
+      "blank, so leave nothing unmarked. Scores written here still need to be recorded in " +
+      "the portal."
   );
   b.line();
 
+  // The behavioral sheet is half script, half rubric: the questions come first,
+  // in the order they are asked, each tagged with the category it feeds.
+  if (meta.questions?.length) {
+    b.subheading("Interview questions");
+    let resumeHeaderShown = false;
+    for (const q of meta.questions) {
+      if (q.resumeReview && !resumeHeaderShown) {
+        b.mutedLine("Resume review — prepare these before the interview starts.");
+        resumeHeaderShown = true;
+      }
+      b.labelled(`${q.n}. `, q.text);
+      if (q.category) {
+        const cat = rubric.find((c) => c.key === q.category);
+        if (cat) b.mutedLine(`Scores: ${cat.label}`);
+      }
+      if (q.resumeReview) b.labelled("Question: ", WRITE_IN);
+      b.labelled("Notes: ", "");
+      b.line();
+    }
+    b.line();
+    b.subheading("Rubric");
+    b.line();
+  }
+
   for (const c of rubric) {
-    b.subheading(c.label);
+    b.subheading(`${c.label}  (out of ${c.max})`);
+    for (const q of c.prompts ?? []) b.mutedLine(q);
     b.line(c.anchor);
-    b.labelled("Score (1–5): ", WRITE_IN);
+    for (const l of c.levels) {
+      const band = l.min === l.max ? String(l.min) : `${l.min}–${l.max}`;
+      b.labelled(`${band} · ${l.label}: `, l.descriptor);
+    }
+    b.labelled(`Score (0–${c.max}): `, WRITE_IN);
     b.labelled("Notes: ", "");
     b.line();
     b.line();
   }
 
   b.subheading("Bottom line");
+  b.labelled("Total: ", `${WRITE_IN} / ${maxPoints}`);
   b.labelled(
     "Recommendation: ",
     RECOMMENDATIONS.map((r) => r.label).join("   /   ")
   );
   b.line();
-  b.labelled("Summary: ", "");
+  b.labelled("Additional comments — major red or green flags: ", "");
   b.line();
   b.line();
 

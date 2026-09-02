@@ -83,13 +83,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "The final round is exec only" }, { status: 403 });
   }
 
-  // Every criterion of the chosen rubric must carry a 1–5 score. Unknown keys are
-  // dropped rather than stored, so the row always matches the rubric in code.
+  // Every criterion must carry a whole number within ITS OWN 0..max range — the
+  // ceilings differ across the behavioral rubric (Competence 5, Presentation 2).
+  // Unknown keys are dropped rather than stored, so the row always matches the
+  // rubric in code.
+  //
+  // The raw value is tested rather than `Number(...)` of it: 0 is a real score on
+  // these sheets, and coercion turns null, "" and [] into exactly that, which
+  // would let an unscored criterion through as an "Unacceptable Answer".
   const scores: Record<string, number> = {};
   for (const c of INTERVIEW_RUBRICS[body.kind]) {
-    const v = Number(body.scores?.[c.key]);
-    if (!Number.isFinite(v) || v < 1 || v > 5) {
-      return NextResponse.json({ ok: false, error: `Score for "${c.label}" must be 1–5` }, { status: 400 });
+    const v = body.scores?.[c.key];
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > c.max) {
+      return NextResponse.json(
+        { ok: false, error: `Score for "${c.label}" must be a whole number from 0 to ${c.max}` },
+        { status: 400 }
+      );
     }
     scores[c.key] = v;
   }

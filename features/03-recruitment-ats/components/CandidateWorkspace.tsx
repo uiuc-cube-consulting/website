@@ -21,7 +21,7 @@ import {
   type Reviewer,
 } from "@/features/03-recruitment-ats/lib/interview";
 import { ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
-import type { Stage } from "@/features/03-recruitment-ats/lib/types";
+import { rubricMaxPoints, rubricTotal, type Stage } from "@/features/03-recruitment-ats/lib/types";
 
 const STAGE_LABEL: Record<string, string> = {
   applied: "Applied", screened: "Screened", interview: "First round",
@@ -233,6 +233,8 @@ function RubricForm({
 
   const rubric = INTERVIEW_RUBRICS[kind];
   const complete = isComplete(kind, scores);
+  const maxPoints = rubricMaxPoints(rubric);
+  const runningTotal = rubricTotal(rubric, scores);
   const othersDone = Math.max(0, candidate.completed[kind] - (existing && isComplete(kind, existing.scores) ? 1 : 0));
 
   function set<T>(setter: (v: T) => void) {
@@ -277,7 +279,8 @@ function RubricForm({
     <div className="mt-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--muted)]">
-          Score each 1–5. This is your copy for {candidate.name.split(" ")[0]} — the template stays untouched.
+          Same sheet as the paper rubric, out of {maxPoints}. This is your copy for{" "}
+          {candidate.name.split(" ")[0]} — the template stays untouched.
         </p>
         {othersDone > 0 && (
           <span className="shrink-0 text-xs text-[var(--muted)]">
@@ -289,17 +292,29 @@ function RubricForm({
       <div className="mt-4 space-y-4">
         {rubric.map((c) => (
           <div key={c.key}>
-            <span className="text-sm font-semibold text-[var(--bg-dark)]">{c.label}</span>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold text-[var(--bg-dark)]">{c.label}</span>
+              <span className="shrink-0 text-[11px] text-[var(--muted)]">out of {c.max}</span>
+            </div>
+            {c.prompts && (
+              <ul className="mt-0.5 space-y-0.5">
+                {c.prompts.map((q) => (
+                  <li key={q} className="text-[11px] leading-relaxed text-[var(--muted)]">
+                    {q}
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--muted)]">{c.anchor}</p>
-            <div className="mt-2 flex gap-1.5">
-              {[1, 2, 3, 4, 5].map((n) => (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Array.from({ length: c.max + 1 }, (_, n) => n).map((n) => (
                 <button
                   key={n}
                   type="button"
                   disabled={!editable}
                   onClick={() => set<Record<string, number>>(setScores)({ ...scores, [c.key]: n })}
                   className={`h-9 w-9 rounded-lg border text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                    Number(scores[c.key]) === n
+                    scores[c.key] === n
                       ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-dark)]"
                       : "border-[var(--border)] bg-white text-[var(--bg-dark)] hover:border-[var(--gold)]"
                   }`}
@@ -308,8 +323,31 @@ function RubricForm({
                 </button>
               ))}
             </div>
+            <details className="mt-1.5">
+              <summary className="cursor-pointer text-[11px] font-semibold text-[var(--muted)]">
+                What each score means
+              </summary>
+              <ul className="mt-1 space-y-1">
+                {c.levels.map((l) => (
+                  <li key={l.label} className="text-[11px] leading-relaxed text-[var(--muted)]">
+                    <span className="font-semibold text-[var(--bg-dark)]">
+                      {l.min === l.max ? l.min : `${l.min}–${l.max}`} · {l.label}
+                    </span>{" "}
+                    {l.descriptor}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </div>
         ))}
+      </div>
+
+      <div className="mt-4 flex items-baseline justify-between gap-3">
+        <span className="text-sm font-semibold text-[var(--bg-dark)]">Total</span>
+        <span className="text-sm font-semibold text-[var(--bg-dark)]">
+          {runningTotal} / {maxPoints}
+          {!complete && <span className="ml-2 text-[11px] font-normal text-[var(--muted)]">(incomplete)</span>}
+        </span>
       </div>
 
       <div className="mt-4">

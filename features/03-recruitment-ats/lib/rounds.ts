@@ -11,11 +11,12 @@
 //                 randomly assigned readers. Every applicant is here.
 //
 //   FIRST ROUND   The people the written round advanced. Case and behavioral
-//                 interviews, scored on the 1–5 rubrics in ./interview.ts, and the
-//                 point at which each candidate gets a provisioned Drive folder
-//                 holding their resume and both rubric docs. Provisioning is
-//                 deliberately not done for the whole applicant pool — a folder per
-//                 written applicant is hundreds of folders nobody opens.
+//                 interviews, scored on the points rubrics in ./interview.ts —
+//                 the case out of 15, the behavioral out of 17 — and the point at
+//                 which each candidate gets a provisioned Drive folder holding
+//                 their resume and both rubric docs. Provisioning is deliberately
+//                 not done for the whole applicant pool — a folder per written
+//                 applicant is hundreds of folders nobody opens.
 //
 //   FINAL ROUND   EXEC ONLY, in every direction: who appears on the board, whose
 //                 scores can be read, and who may write a rubric. A final-round
@@ -53,7 +54,7 @@ export const ROUND_LABEL: Record<Round, string> = {
 
 export const ROUND_BLURB: Record<Round, string> = {
   written: "Essays and resume, scored out of 28 points by two independent readers.",
-  first_round: "Case and behavioral interviews, with a Drive folder per candidate.",
+  first_round: "Case (out of 15) and behavioral (out of 17) interviews, with a Drive folder per candidate.",
   final_round: "Exec-only final interviews. Nobody outside exec sees this round.",
 };
 

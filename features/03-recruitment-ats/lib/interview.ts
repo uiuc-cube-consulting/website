@@ -55,59 +55,435 @@ export function isKindInRound(kind: InterviewKind, round: InterviewRound): boole
 }
 
 // ── Case rubric ──────────────────────────────────────────────────────────────
+// Transcribed from "FA26 Case Rubric" — the sheet interviewers hold in the room.
+// Five categories, each 0–3, totalling 15. The wording of every level is the
+// club's, kept verbatim rather than tidied: an anchor only does its job if the
+// printed sheet and the portal say exactly the same thing, and an interviewer who
+// spots a difference between the two has to stop and work out which one governs.
 export const CASE_RUBRIC: readonly RubricCriterion[] = [
   {
-    key: "structure",
-    label: "Structure",
-    weight: 1,
-    anchor: "Builds a tailored, non-overlapping framework and states it before diving in. 5 = the structure itself cracks the case; 3 = a sound but generic framework; 1 = unstructured, jumps to tactics.",
+    key: "demeanor",
+    label: "Demeanor",
+    max: 3,
+    anchor: "Relaxed, attentive and personable — listens, takes notes, composes their thoughts.",
+    levels: [
+      {
+        min: 3, max: 3, label: "Exceeds Expectations",
+        descriptor:
+          "You appear relaxed and personable: (you listen, take notes, compose your thoughts, " +
+          "and naturally convey your ideas)",
+      },
+      {
+        min: 2, max: 2, label: "Meets Expectations",
+        descriptor:
+          "You appear attentive and personable, and show deficit in one area but succeed in the " +
+          "rest (Is nervous, rush to speak, or struggle to outline ideas).",
+      },
+      {
+        min: 1, max: 1, label: "Below Average",
+        descriptor:
+          "You appear attentive and personable, but you show deficits in some of the following: " +
+          "(you are nervous, rush to speak, or struggle to outline ideas)",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "You appear flustered or unprepared: (you demonstrate a lack of listening skills, " +
+          "struggle to organize and communicate thoughts, feeling of awkwardness)",
+      },
+    ],
   },
   {
-    key: "quantitative",
-    label: "Quantitative",
-    weight: 1,
-    anchor: "Sets up the math cleanly, computes accurately, sanity-checks the result. 5 = fast and error-free with an instinct for magnitude; 3 = correct with prompting; 1 = setup or arithmetic breaks down.",
+    key: "problem_solving",
+    label: "Problem Solving",
+    max: 3,
+    anchor: "Formulates the problem out loud, prioritises the real issues, breaks it into logical parts.",
+    levels: [
+      {
+        min: 3, max: 3, label: "Exceeds Expectations",
+        descriptor:
+          "You formulate the problem out loud for the interviewer: (you describe and prioritize " +
+          "the relevant issues, break the problem down into logical components, and consider the " +
+          "implications of the case problem)",
+      },
+      {
+        min: 2, max: 2, label: "Meets Expectations",
+        descriptor:
+          "You formulate the problem out loud for the interviewer but seem to have some issues " +
+          "within your understanding.",
+      },
+      {
+        min: 1, max: 1, label: "Below Average",
+        descriptor:
+          "You formulate the problem but don't say it outloud to the interviewer. Seems to have " +
+          "some understanding of the issue.",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "You fail to formulate the problem (you demonstrate a lack of understanding of the " +
+          "problem resulting in faulty assumptions and irrelevant points)",
+      },
+    ],
   },
   {
-    key: "business_judgment",
-    label: "Business judgment",
-    weight: 1,
-    anchor: "Separates what drives the answer from what doesn't; recommendations are practical. 5 = surfaces the insight unprompted; 3 = reasonable once pointed at it; 1 = misreads what matters.",
+    key: "logic_and_communication",
+    label: "Logic and Communication",
+    max: 3,
+    anchor: "Communicates a logical process: clarifying questions, missing information, stated assumptions.",
+    levels: [
+      {
+        min: 3, max: 3, label: "Exceeds Expectations",
+        descriptor:
+          "You communicate a logical process for tackling the case problem: (you ask clarifying " +
+          "questions, describe missing information, and articulate assumptions, and suggest " +
+          "possible ways to collect missing data)",
+      },
+      {
+        min: 2, max: 2, label: "Meets Expectations",
+        descriptor:
+          "You communicate a logical process for tackling the case problem but need to be more " +
+          "clear or concise in your approach. (see the first column)",
+      },
+      {
+        min: 1, max: 1, label: "Below Average",
+        descriptor:
+          "You communicate a logical process for tackling the case problem but need to be more " +
+          "clear or concise in your approach. (see the first column)",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "You don't communicate a logical process: (you dont communicate your ideas clearly and " +
+          "concisely, your line of reasoning is not able to be followed)",
+      },
+    ],
   },
   {
-    key: "synthesis",
-    label: "Synthesis",
-    weight: 1,
-    anchor: "Closes top-down: recommendation first, then reasons, then risks. 5 = crisp and client-ready; 3 = complete but rambling; 1 = no clear answer given.",
+    key: "math_question",
+    label: "Math Question",
+    max: 3,
+    anchor: "Performs the appropriate calculations on the relevant information, with little guidance.",
+    levels: [
+      {
+        min: 3, max: 3, label: "Exceeds Expectations",
+        descriptor:
+          "You answer the questions correctly with little guidance: (you perform the appropriate " +
+          "calculations with relevant information)",
+      },
+      {
+        min: 2, max: 2, label: "Meets Expectations",
+        descriptor:
+          "You arrive at a solution but need guidance or have some miscalculations. " +
+          "(see the first column)",
+      },
+      {
+        min: 1, max: 1, label: "Below Average",
+        descriptor:
+          "You arrive at a solution but need guidance or have some miscalculations. Seems to " +
+          "struggle a lot. (see the first column)",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "You don't come close to the solution: (you seem confused, don't perform the " +
+          "appropriate calculations, solution is not relevant)",
+      },
+    ],
+  },
+  {
+    key: "final_case_analysis",
+    label: "Final Case Analysis",
+    max: 3,
+    anchor: "Closes with a logical, organised analysis that considers multiple perspectives, confidently but without arrogance.",
+    levels: [
+      {
+        min: 3, max: 3, label: "Exceeds Expectations",
+        descriptor:
+          "You provide a strong analysis: (you approach the problem with logic and organization, " +
+          "consider multiple perspectives, and you support your points with confidence and " +
+          "without arrogance)",
+      },
+      {
+        min: 2, max: 2, label: "Meets Expectations",
+        descriptor: "You provide a solid analysis but lack some essential points: (see first column)",
+      },
+      {
+        min: 1, max: 1, label: "Below Average",
+        descriptor: "You provide a analysis but lack most essential points: (see first column)",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "You provide a weak analysis: (you do not know how to explain your thinking in a " +
+          "logical and clear way, do not consider multiple perspectives and lack conviction or " +
+          "confidence)",
+      },
+    ],
   },
 ] as const;
 
 // ── Behavioral rubric ────────────────────────────────────────────────────────
+// Transcribed from "FA26 Behavioral Rubric". Six categories totalling 17, and
+// unlike the case rubric the categories are NOT worth the same: most cap at 2,
+// but Goals caps at 4 and Competence at 5 — the sheet marks both "points are
+// increased per box" and prints score ranges in place of single numbers. That is
+// the club deciding a candidate's trajectory and their resume carry more weight
+// than how they dressed, so the ceilings are part of the rubric's meaning and are
+// modelled directly rather than flattened into a uniform scale.
+//
+// Each category is judged against two sub-questions (`prompts`) and the awarded
+// score is the average of the two, as the sheet's score column says.
 export const BEHAVIORAL_RUBRIC: readonly RubricCriterion[] = [
   {
-    key: "motivation",
-    label: "Motivation & fit",
-    weight: 1,
-    anchor: "Specific, credible reasons for consulting and for CUBE. 5 = has clearly done the work to understand us; 3 = genuine but generic; 1 = could be reciting this for any club.",
+    key: "understanding",
+    label: "Understanding",
+    max: 2,
+    prompts: [
+      "Do they understand CUBE consulting and our core values?",
+      "Do they explain how they could benefit CUBE and how CUBE would benefit them?",
+    ],
+    anchor: "Understands the CUBE mission and consulting, and says why they fit with real reasons.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Deep understanding of CUBE mission. Explains why they would be a good fit for CUBE " +
+          "based on relevant experiences and personal qualities/values",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "General understanding of CUBE mission and field of consulting. Explains why they " +
+          "would be a good fit for CUBE.",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "No or wrong understanding of CUBE mission and field of consulting. Doesn't mention " +
+          "why they are a good fit for CUBE.",
+      },
+    ],
   },
   {
-    key: "leadership",
-    label: "Leadership & ownership",
-    weight: 1,
-    anchor: "Takes responsibility for outcomes, moves a group, handles conflict directly. 5 = concrete example where they owned the result; 3 = participated meaningfully; 1 = describes what the team did, not what they did.",
+    key: "goals",
+    label: "Goals",
+    max: 4,
+    prompts: [
+      "Do they have a clear commitment towards growth in our organization?",
+      "Do they express desire to go above what is asked of them?",
+    ],
+    anchor: "Wants to grow into CUBE over years, not semesters, and to improve the club as well as themselves.",
+    levels: [
+      {
+        min: 3, max: 4, label: "Exceeds Expectations",
+        descriptor:
+          "Clearly wants to grow into leadership positions and/or shows strong commitment beyond " +
+          "internships. Would stay in CUBE for 1+ years. Desire to improve themselves and CUBE " +
+          "in specific ways",
+      },
+      {
+        min: 1, max: 2, label: "Meets Expectations",
+        descriptor:
+          "Wants to remain in CUBE but is not fully confident in their path. Would likely stay " +
+          "in CUBE for a few semesters. Desire to improve themselves professionally/ in consulting",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "No good plan or their answers seem fake/ not aligned with their other answers. Seems " +
+          "only interested in CUBE for building resume. Would likely leave CUBE after one semester",
+      },
+    ],
   },
   {
-    key: "communication",
-    label: "Communication",
-    weight: 1,
-    anchor: "Concise, structured, and actually answers the question asked. 5 = you could put them in front of a client this semester; 3 = clear with some meandering; 1 = hard to follow.",
+    key: "adaptability",
+    label: "Adaptability",
+    max: 2,
+    prompts: [
+      "Do they understand how to work in a team / how to lead?",
+      "Do they provide examples showing flexibility within a team? What did they do to better the team?",
+    ],
+    anchor: "Understands flexibility and leadership, with examples naming their own contribution.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Gives in depth understanding of both flexibility and their own leadership. Gives " +
+          "examples that highlight both the role of good teamwork and their specific " +
+          "contributions/lessons learned",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Gives clear understanding of a productive team structure. Gives examples that " +
+          "highlight good teamwork practices and their contributions",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "Doesn't understand how teams work productively. Examples given do not demonstrate " +
+          "good leadership/teamwork",
+      },
+    ],
   },
   {
-    key: "teamwork",
-    label: "Teamwork & coachability",
-    weight: 1,
-    anchor: "Collaborative, takes feedback, gives credit. 5 = would visibly raise the people around them; 3 = pleasant and easy to work with; 1 = defensive or dismissive of others.",
+    key: "time_management",
+    label: "Time Management",
+    max: 2,
+    prompts: [
+      "How well do they manage time and set reasonable deadlines?",
+      "Do they provide specific examples of effective time management?",
+    ],
+    anchor: "Time management that fits CUBE's standards, with CUBE realistically in the schedule.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Gives a balanced understanding of time management that fits CUBE's standards. CUBE " +
+          "fits into schedule reasonably. Gives detailed, realistic and effective examples of " +
+          "time management and prioritization",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Gives a good sign of knowing how to manage time but might need guidance in the " +
+          "future. CUBE would not be a priority in applicant's schedule. Gives good but vague " +
+          "examples of time management and prioritization",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "Gives a concerning display of what time management should look like. Gives inadequate " +
+          "examples of time management. Likely would not have time for CUBE",
+      },
+    ],
   },
+  {
+    key: "presentation",
+    label: "Presentation",
+    max: 2,
+    prompts: [
+      "Are they able to remain confident under pressure?",
+      "Are they likeable in a professional setting?",
+    ],
+    anchor: "Confident body language and professional dress; someone you enjoyed talking to.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Open and confident body language (good eye contact, strong posture, etc). " +
+          "Professional dress. Was a pleasure to get to know and easy to talk to",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Reasonable body language, maybe a bit nervous. Somewhat appropriate dress. Was a nice " +
+          "person to talk to",
+      },
+      {
+        min: 0, max: 0, label: "Unacceptable Answer",
+        descriptor:
+          "Extremely annoying or otherwise inappropriate body language. Inappropriate dress. " +
+          "Clearly rude",
+      },
+    ],
+  },
+  {
+    key: "competence",
+    label: "Competence",
+    max: 5,
+    prompts: [
+      "Can they clearly organize and present their thoughts?",
+      "Can they think on the spot and adapt to challenging questions?",
+    ],
+    anchor:
+      "Scored on the resume-review questions: articulate and organised, with experience that " +
+      "sounds real and would carry over into CUBE.",
+    levels: [
+      {
+        min: 4, max: 5, label: "Exceeds Expectations",
+        descriptor:
+          "Exceptionally articulate, clear, organized speech. You are confident their experiences " +
+          "are real and would carry over into CUBE",
+      },
+      {
+        min: 2, max: 3, label: "Meets Expectations",
+        descriptor:
+          "Articulate, clear, throughout interview. Adequately answers questions and experience " +
+          "sounds real",
+      },
+      {
+        min: 0, max: 1, label: "Unacceptable Answer",
+        descriptor:
+          "Not articulate, clear, or organized. Trouble answering questions or not confident in " +
+          "their experiences",
+      },
+    ],
+  },
+] as const;
+
+/**
+ * The behavioral interview script, in the order it is asked.
+ *
+ * Carried here beside the rubric because the two only make sense together: each
+ * question names the category it feeds, and an interviewer scoring "Goals"
+ * without having asked question 4 is scoring a conversation that never happened.
+ * `category` is a rubric key, or null for the questions the sheet marks as
+ * unscored.
+ */
+export type BehavioralQuestion = {
+  n: number;
+  text: string;
+  category: string | null;
+  /** Interviewer prepares this one from the resume before the interview starts. */
+  resumeReview?: boolean;
+};
+
+export const BEHAVIORAL_QUESTIONS: readonly BehavioralQuestion[] = [
+  {
+    n: 1,
+    text: "Tell me about yourself and why you applied to CUBE. (Also ask any questions you may have about their resume)",
+    category: "understanding",
+  },
+  {
+    n: 2,
+    text: "Ask a question about a point on their resume that would demonstrate Business or Engineering ability.",
+    category: "competence",
+    resumeReview: true,
+  },
+  {
+    n: 3,
+    text: "Ask a question about a point on their resume that would demonstrate their Leadership qualities and abilities. Try to evaluate if they are committed in that activity or organization (can ask followup questions).",
+    category: "competence",
+    resumeReview: true,
+  },
+  {
+    n: 4,
+    text: "How do you envision your progression in our organization, how long are you planning to stay active, what positions would you like to have?",
+    category: "goals",
+  },
+  {
+    n: 5,
+    text: "Tell us about when you encountered a sudden change working on a project or team. How did that impact you and how did you adapt to the situation?",
+    category: "adaptability",
+  },
+  {
+    n: 6,
+    text: "What is your schedule looking like this semester and how do you plan to manage time? Provide us with an example of how you have handled time management.",
+    category: "time_management",
+  },
+  {
+    n: 7,
+    text: "Teach me a concept from one of your classes in 1 minute or less / FUN QUESTIONS",
+    category: "presentation",
+  },
+  {
+    n: 8,
+    text: "Do you have a specific leaning towards business projects or more technical projects? This is for internal use only, and you will not be scored on your answer.",
+    category: null,
+  },
+  { n: 9, text: "Do you have any questions for us?", category: null },
 ] as const;
 
 // Both rounds score the same two rubrics. The criteria that make a good case
@@ -152,11 +528,20 @@ export type RubricEntry = {
   updated_at?: string;
 };
 
-/** A rubric counts as complete only when every criterion has a 1–5 score. */
+/**
+ * A rubric counts as complete only when every criterion carries a whole number
+ * within its own 0..max range.
+ *
+ * Not coerced, and deliberately so — the same trap the written rubric documents.
+ * `Number(null)` and `Number("")` are both 0, and 0 is "Unacceptable Answer" on
+ * these sheets rather than "not yet scored", so coercing would let an untouched
+ * criterion pass as a filled-in zero and submit a half-written review as a harsh
+ * one.
+ */
 export function isComplete(kind: InterviewKind, scores: Record<string, number>): boolean {
   return INTERVIEW_RUBRICS[kind].every((c) => {
-    const v = Number(scores[c.key]);
-    return Number.isFinite(v) && v >= 1 && v <= 5;
+    const v = scores[c.key];
+    return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= c.max;
   });
 }
 

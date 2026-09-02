@@ -27,7 +27,7 @@ import { parseResumeId } from "./form-resume";
 import { readApplicantsFromSheet } from "./import";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
 import { excludeOwnApplications } from "./self-access";
-import { weightedTotalFor, type Flag, type Stage } from "./types";
+import { rubricTotal, type Flag, type Stage } from "./types";
 
 function db() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -324,7 +324,7 @@ export async function saveRubric(input: {
       reviewer_email: email,
       kind: input.kind,
       scores: input.scores,
-      weighted_total: weightedTotalFor(INTERVIEW_RUBRICS[input.kind], input.scores),
+      weighted_total: rubricTotal(INTERVIEW_RUBRICS[input.kind], input.scores),
       notes: input.notes ?? null,
       recommendation: input.recommendation ?? null,
     },
