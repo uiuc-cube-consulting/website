@@ -28,6 +28,8 @@ import {
   isComplete,
   submittedTotal,
   rubricMax,
+  panelStanding,
+  formatScore,
 } from "@/features/03-recruitment-ats/lib/interview";
 import { rubricMaxPoints } from "@/features/03-recruitment-ats/lib/types";
 
@@ -292,5 +294,62 @@ describe("isComplete / submittedTotal", () => {
     expect(rubricMax("behavioral")).toBe(17);
     expect(rubricMax("final_case")).toBe(15);
     expect(rubricMax("final_behavioral")).toBe(17);
+  });
+});
+
+// ── The panel's standing, as the interviews list shows it ────────────────────
+
+describe("panelStanding", () => {
+  const KINDS = ["case", "behavioral"] as const;
+  const score = (kind: "case" | "behavioral", total: number, reviewer = "a@x.edu") => ({
+    reviewer, kind, total, recommendation: null,
+  });
+
+  it("averages within a rubric and adds across the two", () => {
+    // Two people scored the case; that is one case score, not a doubled one.
+    const st = panelStanding(
+      [score("case", 11), score("case", 12, "b@x.edu"), score("behavioral", 14)],
+      KINDS
+    );
+    expect(st.perKind[0].mean).toBe(11.5);
+    expect(st.perKind[0].n).toBe(2);
+    expect(st.total).toBe(25.5);
+    expect(st.max).toBe(32);
+    expect(st.submissions).toBe(3);
+  });
+
+  it("withholds a total until every rubric has a score", () => {
+    // 12/32 for a candidate whose behavioral has not happened reads as a
+    // rejection rather than as half-finished work.
+    const st = panelStanding([score("case", 12)], KINDS);
+    expect(st.perKind[0].mean).toBe(12);
+    expect(st.perKind[1].mean).toBeNull();
+    expect(st.total).toBeNull();
+    expect(st.submissions).toBe(1);
+  });
+
+  it("reports nothing scored as nothing, not as zero", () => {
+    const st = panelStanding([], KINDS);
+    expect(st.submissions).toBe(0);
+    expect(st.total).toBeNull();
+    expect(st.perKind.every((p) => p.mean === null)).toBe(true);
+  });
+
+  it("carries half points through the average", () => {
+    const st = panelStanding([score("case", 11.5), score("behavioral", 14.5)], KINDS);
+    expect(st.total).toBe(26);
+  });
+
+  it("handles an undefined panelScores (a viewer who was sent none)", () => {
+    expect(panelStanding(undefined, KINDS).submissions).toBe(0);
+  });
+});
+
+describe("formatScore", () => {
+  it("drops trailing zeros without lying about the value", () => {
+    expect(formatScore(14)).toBe("14");
+    expect(formatScore(11.5)).toBe("11.5");
+    // A mean of three whole numbers is repeating; show it short, not as 11.666666666666666.
+    expect(formatScore(35 / 3)).toBe("11.67");
   });
 });

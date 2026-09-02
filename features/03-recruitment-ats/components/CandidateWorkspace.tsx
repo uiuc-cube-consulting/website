@@ -160,12 +160,10 @@ export function CandidateWorkspace({
   );
 }
 
-// ── Every panelist's score, for whoever runs the round ───────────────────────
-// The round in one place: who has scored, what they gave, and what they
-// recommended. `panelScores` is only ever populated for a viewer who may manage
-// the round (interview-store.ts), so this renders nothing for a panelist — their
-// own number stays the only one they see, which is what keeps two reads on the
-// same candidate independent.
+// ── Every interviewer's score ────────────────────────────────────────────────
+// The candidate in one place: who has scored, what they gave, and what they
+// recommended. Shown to everyone who can see the round — the first round is open
+// to all members and the final round is exec-only long before this renders.
 
 function PanelScores({
   candidate,

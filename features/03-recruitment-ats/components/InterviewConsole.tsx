@@ -18,6 +18,8 @@ import {
   KIND_LABEL,
   ROUND_KINDS,
   isComplete,
+  panelStanding,
+  formatScore,
   type Candidate,
   type InterviewBoard,
 } from "@/features/03-recruitment-ats/lib/interview";
@@ -181,9 +183,10 @@ export function InterviewConsole() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
           <span>Candidate</span>
           <span>Resume</span>
+          <span className="text-right">Score</span>
           <span>Your rubrics</span>
         </div>
         <ul className="divide-y divide-[var(--border)]">
@@ -200,7 +203,7 @@ export function InterviewConsole() {
             <li key={c.id}>
               <button
                 onClick={() => setSelectedId(c.id)}
-                className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40"
+                className="grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40"
               >
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5 font-medium text-[var(--bg-dark)]">
@@ -215,6 +218,29 @@ export function InterviewConsole() {
                 <span className={`text-xs font-semibold ${c.resume ? "text-[var(--gold-deep)]" : "text-[var(--muted)]"}`}>
                   {c.resume ? "✓" : "—"}
                 </span>
+                {(() => {
+                  const st = panelStanding(c.panelScores, ROUND_KINDS[data.round]);
+                  if (st.submissions === 0) {
+                    return <span className="text-right text-xs text-[var(--muted)]">—</span>;
+                  }
+                  return (
+                    <span
+                      className="text-right"
+                      title={st.perKind
+                        .map((p) => `${KIND_LABEL[p.kind]}: ${p.mean === null ? "not scored" : `${formatScore(p.mean)} / ${p.max}`}${p.n > 1 ? ` (mean of ${p.n})` : ""}`)
+                        .join("\n")}
+                    >
+                      <span className="block text-sm font-semibold text-[var(--bg-dark)]">
+                        {st.total === null ? "partial" : `${formatScore(st.total)} / ${st.max}`}
+                      </span>
+                      <span className="block text-[11px] text-[var(--muted)]">
+                        {st.perKind
+                          .map((p) => `${KIND_LABEL[p.kind][0]} ${p.mean === null ? "—" : formatScore(p.mean)}`)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  );
+                })()}
                 <span className="flex gap-1.5">
                   {ROUND_KINDS[data.round].map((k) => {
                     const entry = c.myRubrics[k];

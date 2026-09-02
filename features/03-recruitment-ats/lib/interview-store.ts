@@ -186,11 +186,15 @@ export async function getBoard(
 
   const mine = new Map<string, Record<InterviewKind, RubricEntry | null>>();
   const completed = new Map<string, Record<InterviewKind, number>>();
-  // Submitted totals, for the people who run the round. Gated on `canManage` for
-  // the same reason `myRubrics` only ever holds your own: a panelist who can see
-  // what their co-interviewer scored before writing their own number is no longer
-  // giving an independent read. Exec needs the opposite — the whole round in one
-  // place — and they are the ones deciding, not scoring blind.
+  // Submitted totals, for everyone who can see this round.
+  //
+  // Not gated further, because the gate is the ROUND. The first round is open to
+  // every member — they interview in it, so they read it — and the final round is
+  // exec-only before this function is ever called. Blind reads were the argument
+  // for hiding them, but that argument was already lost: two people interview a
+  // candidate together and talk afterwards. What hiding actually cost was the
+  // thing the club needs, one place to see where a candidate stands, so the
+  // scores are shown and `myRubrics` stays the only thing you can WRITE.
   const panelScores = new Map<string, PanelScore[]>();
   for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
     const kind = r.kind as InterviewKind;
@@ -202,16 +206,14 @@ export async function getBoard(
       c[kind] += 1;
       completed.set(r.applicant_id, c);
 
-      if (canManage) {
-        const list = panelScores.get(r.applicant_id) ?? [];
-        list.push({
-          reviewer: String(r.reviewer_email).toLowerCase(),
-          kind,
-          total,
-          recommendation: (r.recommendation as string | null) ?? null,
-        });
-        panelScores.set(r.applicant_id, list);
-      }
+      const list = panelScores.get(r.applicant_id) ?? [];
+      list.push({
+        reviewer: String(r.reviewer_email).toLowerCase(),
+        kind,
+        total,
+        recommendation: (r.recommendation as string | null) ?? null,
+      });
+      panelScores.set(r.applicant_id, list);
     }
     if (String(r.reviewer_email).toLowerCase() === viewer) {
       const m = mine.get(r.applicant_id) ?? emptyRubrics();
@@ -258,7 +260,7 @@ export async function getBoard(
       assignedToMe: panel.includes(viewer),
       myRubrics: mine.get(a.id) ?? emptyRubrics(),
       completed: completed.get(a.id) ?? zeroCounts(),
-      panelScores: canManage ? panelScores.get(a.id) ?? [] : undefined,
+      panelScores: panelScores.get(a.id) ?? [],
       flags: flagsByApplicant.get(a.id) ?? [],
     };
   });

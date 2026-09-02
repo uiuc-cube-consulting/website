@@ -644,8 +644,7 @@ export type Candidate = {
   myRubrics: Record<InterviewKind, RubricEntry | null>;
   /** How many panelists have completed each rubric — a count only, no scores. */
   completed: Record<InterviewKind, number>;
-  /** Every panelist's submitted total. Present only for exec; undefined otherwise,
-   *  so a panelist's client never receives another panelist's number at all. */
+  /** Every interviewer's submitted total for this candidate, in this round. */
   panelScores?: PanelScore[];
   /**
    * Red/green flags filed on this person, so the board can show them beside the
@@ -661,8 +660,9 @@ export type Candidate = {
 };
 
 /**
- * One panelist's submitted total for one rubric. Only ever sent to a viewer who
- * may manage the round — see the gate in interview-store.ts.
+ * One interviewer's submitted total for one rubric, as shown to everyone who can
+ * see the round. Reading a score is open; writing one is still only ever your own
+ * row (`myRubrics`).
  */
 export type PanelScore = {
   reviewer: string;
@@ -670,6 +670,47 @@ export type PanelScore = {
   total: number;
   recommendation: string | null;
 };
+
+/**
+ * The panel's standing on one candidate: the mean total per rubric, and the sum
+ * of those means out of the round's combined maximum.
+ *
+ * A MEAN per rubric rather than a sum across people — two interviewers scoring
+ * the same case produce one case score, not a doubled one — and the two rubrics
+ * are then ADDED, because they measure different things and their sheets total
+ * separately (15 + 17).
+ *
+ * `total` stays null until every rubric in the round has at least one score. A
+ * partial sum shown against the full maximum is actively misleading: a strong
+ * candidate with only the case in reads as 12/32, which looks like a rejection.
+ */
+export function panelStanding(
+  scores: readonly PanelScore[] | undefined,
+  kinds: readonly InterviewKind[]
+): {
+  perKind: { kind: InterviewKind; mean: number | null; n: number; max: number }[];
+  total: number | null;
+  max: number;
+  submissions: number;
+} {
+  const perKind = kinds.map((k) => {
+    const totals = (scores ?? []).filter((s) => s.kind === k).map((s) => s.total);
+    const mean = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : null;
+    return { kind: k, mean, n: totals.length, max: rubricMax(k) };
+  });
+  const scored = perKind.filter((p) => p.mean !== null);
+  return {
+    perKind,
+    total: scored.length === kinds.length ? scored.reduce((a, p) => a + (p.mean ?? 0), 0) : null,
+    max: perKind.reduce((a, p) => a + p.max, 0),
+    submissions: perKind.reduce((a, p) => a + p.n, 0),
+  };
+}
+
+/** 11.5 rather than 11.50, and 14 rather than 14.0. */
+export function formatScore(n: number): string {
+  return Number(n.toFixed(2)).toString();
+}
 
 export type Reviewer = { email: string; name?: string | null };
 
