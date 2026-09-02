@@ -3,8 +3,8 @@
 // never import from client code.
 //
 // Folders are a first-round artifact, not an application-time one. A folder holds
-// the resume plus the case and behavioral rubric docs, and those rubrics only mean
-// anything once a candidate is actually being interviewed. Provisioning the whole
+// the resume plus a copy of each of the two rubric sheets, and those rubrics only
+// mean anything once a candidate is actually being interviewed. Provisioning the whole
 // written pool would create hundreds of folders — one per applicant, most of them
 // for people who will never reach an interview — each with two rubric docs nobody
 // opens, at ~5 Drive calls apiece. So this run is scoped to candidates whose stage
@@ -33,24 +33,77 @@ import { importApplicants } from "./store";
 import { parseResumeId } from "./form-resume";
 import {
   candidateFolderName,
+  copyFileName,
   cycleFolderName,
   docTitle,
   resumeFileName,
 } from "./folder-naming";
-import { rubricDocRequests, notesDocRequests, type RubricDocMeta } from "./rubric-doc";
-import { CASE_RUBRIC, BEHAVIORAL_RUBRIC, BEHAVIORAL_QUESTIONS } from "./interview";
+import { notesDocRequests, type RubricDocMeta } from "./rubric-doc";
 import { ROUND_STAGES } from "./rounds";
 import { cycleLabel, normalizeCycle } from "./cycle";
 import { getActiveCycle } from "./visibility";
 import {
   driveWriteClients,
   ensureFolder,
-  copyResume,
+  copyInto,
   createDoc,
   fileMeta,
   stillExists,
+  type Clients,
   type DriveFile,
 } from "./drive-write";
+
+/**
+ * The two rubric sheets, copied per candidate from the club's master files in
+ * Drive.
+ *
+ * Copied rather than generated. The rubric is a document the club writes, revises
+ * between cycles and hands to interviewers on paper; the portal's job is to put a
+ * copy of THAT in each candidate's folder, not to re-typeset it. Generating them
+ * from criteria in code meant the sheet in the folder and the sheet exec actually
+ * uses were two documents that had to be kept in agreement by hand — and the copy
+ * always lost, because only one of them was the real one.
+ *
+ * The master ids are configuration, not constants: a new cycle means new masters,
+ * and swapping them should not need a deploy.
+ */
+const RUBRIC_TEMPLATES = [
+  { kind: "case_rubric", label: "Case Rubric", env: "RECRUITING_CASE_RUBRIC_FILE_ID" },
+  { kind: "behavioral_rubric", label: "Behavioral Rubric", env: "RECRUITING_BEHAVIORAL_RUBRIC_FILE_ID" },
+] as const satisfies readonly { kind: AssetKind; label: string; env: string }[];
+
+type TemplateInfo = { id: string; originalName: string | null };
+
+/**
+ * Resolve each configured master once per run and confirm it is readable.
+ *
+ * Once, not per candidate: the metadata is the same for all of them, and asking
+ * Drive 102 times for one unchanging answer is 102 chances to hit a rate limit.
+ * A master that is configured but unreadable is reported here rather than as the
+ * same failure repeated across every candidate in the cohort.
+ */
+async function resolveTemplates(
+  clients: Clients,
+  wanted: ReadonlySet<AssetKind>
+): Promise<{ ok: true; value: Partial<Record<AssetKind, TemplateInfo>> } | { ok: false; error: string }> {
+  const out: Partial<Record<AssetKind, TemplateInfo>> = {};
+  for (const t of RUBRIC_TEMPLATES) {
+    if (!wanted.has(t.kind)) continue;
+    const id = (process.env[t.env] || "").trim();
+    if (!id) {
+      return {
+        ok: false,
+        error:
+          `No ${t.label} master. Set ${t.env} to the Drive file id of the ${t.label} the club ` +
+          `hands interviewers, and make sure it lives in the recruiting shared drive.`,
+      };
+    }
+    const meta = await fileMeta(clients, id);
+    if (!meta.ok) return { ok: false, error: `${t.label} master (${t.env}): ${meta.error}` };
+    out[t.kind] = { id, originalName: meta.value.name || null };
+  }
+  return { ok: true, value: out };
+}
 
 function db() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -294,6 +347,9 @@ export async function provisionCandidateFolders(
   const cycleFolder = await ensureFolder(clients, cycle, rootFolderId);
   if (!cycleFolder.ok) return { ok: false, error: cycleFolder.error };
 
+  const templates = await resolveTemplates(clients, wanted);
+  if (!templates.ok) return { ok: false, error: templates.error };
+
   // ── 4. Existing ledger, so we only create what is missing ──────────────────
   const { data: ledgerRows, error: lErr } = await sb
     .from("candidate_drive_assets")
@@ -401,7 +457,7 @@ export async function provisionCandidateFolders(
       } else {
         const meta = await fileMeta(clients, sourceId);
         const original = meta.ok ? meta.value.name : null;
-        const copied = await copyResume(
+        const copied = await copyInto(
           clients,
           sourceId,
           folder.id,
@@ -429,50 +485,50 @@ export async function provisionCandidateFolders(
       }
     }
 
-    // 5c. Rubric docs + notes, generated from the rubrics in interview.ts.
-    const meta: RubricDocMeta = {
-      candidateName: c.name,
-      candidateEmail: c.email,
-      subtitle: subtitleFor(c),
-      label: "Case",
-    };
-    const docs: { kind: AssetKind; title: string; requests: ReturnType<typeof rubricDocRequests> }[] = [
-      {
-        kind: "case_rubric",
-        title: docTitle("Case Rubric", c.name),
-        requests: rubricDocRequests(CASE_RUBRIC, { ...meta, label: "Case" }),
-      },
-      {
-        kind: "behavioral_rubric",
-        title: docTitle("Behavioral Rubric", c.name),
-        // The behavioral sheet carries the question script as well as the grid —
-        // the two are one document in the club's paper version.
-        requests: rubricDocRequests(BEHAVIORAL_RUBRIC, {
-          ...meta,
-          label: "Behavioral",
-          questions: BEHAVIORAL_QUESTIONS,
-        }),
-      },
-      {
-        kind: "notes",
-        title: docTitle("Interview Notes", c.name),
-        requests: notesDocRequests({ ...meta, label: "Notes" }),
-      },
-    ];
+    // 5c. The two rubric sheets, each a copy of the club's master file.
+    for (const t of RUBRIC_TEMPLATES) {
+      if (!wanted.has(t.kind)) continue;
+      if (await existing(t.kind)) {
+        out.skipped.push(t.kind);
+        continue;
+      }
+      const template = templates.value[t.kind];
+      if (!template) continue; // unreachable: resolveTemplates fails the run first
+      const copied = await copyInto(
+        clients,
+        template.id,
+        folder.id,
+        copyFileName(t.label, c.name, template.originalName)
+      );
+      if (!copied.ok) {
+        out.errors.push(copied.error);
+        continue;
+      }
+      newLedger.push({ applicant_id: c.id, kind: t.kind, file_id: copied.value.id, web_link: copied.value.url });
+      out.created.push(t.kind);
+    }
 
-    for (const d of docs) {
-      if (!wanted.has(d.kind)) continue;
-      if (await existing(d.kind)) {
-        out.skipped.push(d.kind);
-        continue;
+    // 5d. The notes doc, which has no master — it is a blank page by design.
+    if (wanted.has("notes") && !(await existing("notes"))) {
+      const meta: RubricDocMeta = {
+        candidateName: c.name,
+        candidateEmail: c.email,
+        subtitle: subtitleFor(c),
+        label: "Notes",
+      };
+      const made = await createDoc(
+        clients,
+        docTitle("Interview Notes", c.name),
+        folder.id,
+        notesDocRequests(meta)
+      );
+      if (!made.ok) out.errors.push(made.error);
+      else {
+        newLedger.push({ applicant_id: c.id, kind: "notes", file_id: made.value.id, web_link: made.value.url });
+        out.created.push("notes");
       }
-      const made = await createDoc(clients, d.title, folder.id, d.requests);
-      if (!made.ok) {
-        out.errors.push(made.error);
-        continue;
-      }
-      newLedger.push({ applicant_id: c.id, kind: d.kind, file_id: made.value.id, web_link: made.value.url });
-      out.created.push(d.kind);
+    } else if (wanted.has("notes")) {
+      out.skipped.push("notes");
     }
 
     return out;

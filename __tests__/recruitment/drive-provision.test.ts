@@ -20,18 +20,16 @@ import {
   cycleFolderName,
   sanitize,
 } from "@/features/03-recruitment-ats/lib/folder-naming";
-import {
-  renderRubricBody,
-  rubricDocRequests,
-  notesDocRequests,
-} from "@/features/03-recruitment-ats/lib/rubric-doc";
+import { notesDocRequests } from "@/features/03-recruitment-ats/lib/rubric-doc";
 import {
   CASE_RUBRIC,
   BEHAVIORAL_RUBRIC,
   BEHAVIORAL_QUESTIONS,
   isComplete,
+  submittedTotal,
+  rubricMax,
 } from "@/features/03-recruitment-ats/lib/interview";
-import { rubricMaxPoints, rubricTotal } from "@/features/03-recruitment-ats/lib/types";
+import { rubricMaxPoints } from "@/features/03-recruitment-ats/lib/types";
 
 // ── form-resume ──────────────────────────────────────────────────────────────
 
@@ -143,6 +141,9 @@ describe("file and doc naming", () => {
 });
 
 // ── rubric-doc ───────────────────────────────────────────────────────────────
+// Only the notes page is generated now. The two rubric sheets are copies of the
+// club's master files, so there is no body of ours to assert on — what matters
+// about them is the copy, covered by the naming tests above.
 
 const META = {
   candidateName: "Jane Doe",
@@ -150,77 +151,6 @@ const META = {
   subtitle: "Junior · Statistics",
   label: "Case",
 };
-
-describe("renderRubricBody", () => {
-  it("carries every criterion and its anchor from the code rubric", () => {
-    const { text } = renderRubricBody(CASE_RUBRIC, META);
-    for (const c of CASE_RUBRIC) {
-      expect(text).toContain(c.label);
-      expect(text).toContain(c.anchor);
-    }
-  });
-
-  it("works for the behavioral rubric too", () => {
-    const { text } = renderRubricBody(BEHAVIORAL_RUBRIC, { ...META, label: "Behavioral" });
-    for (const c of BEHAVIORAL_RUBRIC) expect(text).toContain(c.anchor);
-    expect(text).toContain("Behavioral Rubric — Jane Doe");
-  });
-
-  it("names the candidate in the heading and identifies them", () => {
-    const { text } = renderRubricBody(CASE_RUBRIC, META);
-    expect(text).toContain("Case Rubric — Jane Doe");
-    expect(text).toContain("jdoe2@illinois.edu");
-    expect(text).toContain("Junior · Statistics");
-  });
-
-  it("offers all four recommendation values from interview.ts", () => {
-    const { text } = renderRubricBody(CASE_RUBRIC, META);
-    for (const label of ["Strong yes", "Yes", "No", "Strong no"]) {
-      expect(text).toContain(label);
-    }
-  });
-
-  it("inserts the text exactly once, before any styling request", () => {
-    const reqs = rubricDocRequests(CASE_RUBRIC, META);
-    const inserts = reqs.filter((r) => "insertText" in r);
-    expect(inserts).toHaveLength(1);
-    expect(reqs[0]).toHaveProperty("insertText");
-  });
-
-  /**
-   * The load-bearing invariant: Docs styling ranges are absolute indices into the
-   * document. If any range ran past the end of the inserted text, batchUpdate
-   * would fail at runtime with an opaque 400 — so assert it here instead.
-   */
-  it("keeps every styling range inside the inserted text", () => {
-    const { text, requests } = renderRubricBody(CASE_RUBRIC, META);
-    const end = text.length + 1;
-    const ranges = requests
-      .flatMap((r) => Object.values(r) as { range?: { startIndex: number; endIndex: number } }[])
-      .map((v) => v?.range)
-      .filter(Boolean) as { startIndex: number; endIndex: number }[];
-
-    expect(ranges.length).toBeGreaterThan(0);
-    for (const r of ranges) {
-      expect(r.startIndex).toBeGreaterThanOrEqual(1);
-      expect(r.endIndex).toBeLessThanOrEqual(end);
-      expect(r.startIndex).toBeLessThan(r.endIndex);
-    }
-  });
-
-  it("bolds exactly the label, not the write-in blank after it", () => {
-    const { text, requests } = renderRubricBody(CASE_RUBRIC, META);
-    const bolded = requests
-      .filter((r) => (r as { updateTextStyle?: { textStyle?: { bold?: boolean } } }).updateTextStyle?.textStyle?.bold)
-      .map((r) => {
-        const { range } = (r as { updateTextStyle: { range: { startIndex: number; endIndex: number } } }).updateTextStyle;
-        return text.slice(range.startIndex - 1, range.endIndex - 1);
-      });
-    expect(bolded).toContain("Score (0–3): ");
-    expect(bolded).toContain("Interviewers: ");
-    for (const b of bolded) expect(b).not.toContain("_");
-  });
-});
 
 describe("notesDocRequests", () => {
   it("produces a titled but otherwise blank page", () => {
@@ -261,11 +191,14 @@ describe("rubric totals match the printed sheets", () => {
     });
   });
 
-  it("sums a filled-in rubric as plain points", () => {
-    const perfect = Object.fromEntries(BEHAVIORAL_RUBRIC.map((c) => [c.key, c.max]));
-    expect(rubricTotal(BEHAVIORAL_RUBRIC, perfect)).toBe(17);
-    const zeroed = Object.fromEntries(BEHAVIORAL_RUBRIC.map((c) => [c.key, 0]));
-    expect(rubricTotal(BEHAVIORAL_RUBRIC, zeroed)).toBe(0);
+  it("keeps the question script aligned with the categories it feeds", () => {
+    // Each scored question names a real category; a typo here would silently
+    // drop the label the interviewer needs beside the question.
+    const keys = new Set(BEHAVIORAL_RUBRIC.map((c) => c.key));
+    for (const q of BEHAVIORAL_QUESTIONS) {
+      if (q.category) expect(keys).toContain(q.category);
+    }
+    expect(BEHAVIORAL_QUESTIONS).toHaveLength(9);
   });
 });
 
@@ -297,79 +230,46 @@ describe("rubric levels", () => {
   });
 });
 
-describe("isComplete", () => {
-  const full = (r: typeof CASE_RUBRIC) => Object.fromEntries(r.map((c) => [c.key, 0]));
+describe("isComplete / submittedTotal", () => {
+  // What an interviewer submits is the one number off the paper sheet, so
+  // completeness is a question about that number and nothing else.
 
-  it("treats a zero as a real score, not a blank", () => {
-    // Every criterion "Unacceptable Answer" is a complete, very harsh review.
-    expect(isComplete("case", full(CASE_RUBRIC))).toBe(true);
+  it("accepts a whole-number total inside the rubric's range", () => {
+    expect(isComplete("case", { total: 11 })).toBe(true);
+    expect(submittedTotal("case", { total: 11 })).toBe(11);
+    expect(isComplete("behavioral", { total: 17 })).toBe(true);
   });
 
-  it("rejects a criterion left unscored", () => {
-    const scores = full(CASE_RUBRIC);
-    delete (scores as Record<string, number>).math_question;
-    expect(isComplete("case", scores)).toBe(false);
+  it("treats zero as a real total, not a blank", () => {
+    // Every category unacceptable is a complete review, and a very harsh one.
+    expect(isComplete("case", { total: 0 })).toBe(true);
+    expect(submittedTotal("case", { total: 0 })).toBe(0);
   });
 
-  it("rejects a score above that criterion's own ceiling", () => {
-    // 3 is a perfect Goals score on a 0-2 category and a mid one on Goals itself.
-    expect(isComplete("behavioral", { ...full(BEHAVIORAL_RUBRIC), goals: 3 })).toBe(true);
-    expect(isComplete("behavioral", { ...full(BEHAVIORAL_RUBRIC), presentation: 3 })).toBe(false);
-    expect(isComplete("behavioral", { ...full(BEHAVIORAL_RUBRIC), competence: 6 })).toBe(false);
+  it("rejects an unscored rubric rather than coercing it to zero", () => {
+    expect(isComplete("case", {})).toBe(false);
+    expect(submittedTotal("case", {})).toBeNull();
+    expect(submittedTotal("case", null)).toBeNull();
+    expect(isComplete("case", { total: null as unknown as number })).toBe(false);
+    expect(isComplete("case", { total: "" as unknown as number })).toBe(false);
   });
 
-  it("rejects a non-integer and an uncoerced blank", () => {
-    expect(isComplete("case", { ...full(CASE_RUBRIC), demeanor: 2.5 })).toBe(false);
-    expect(isComplete("case", { ...full(CASE_RUBRIC), demeanor: null as unknown as number })).toBe(false);
-  });
-});
-
-describe("the generated doc mirrors the sheet", () => {
-  it("prints each criterion's own range and the rubric's total", () => {
-    const { text } = renderRubricBody(BEHAVIORAL_RUBRIC, { ...META, label: "Behavioral" });
-    expect(text).toContain("Score (0–4): "); // Goals
-    expect(text).toContain("Score (0–5): "); // Competence
-    expect(text).toContain("Score (0–2): "); // the rest
-    expect(text).toContain("/ 17");
+  it("rejects a total past the rubric's own ceiling", () => {
+    // 16 is impossible on the case sheet but ordinary on the behavioral one.
+    expect(isComplete("case", { total: 16 })).toBe(false);
+    expect(isComplete("behavioral", { total: 16 })).toBe(true);
+    expect(isComplete("behavioral", { total: 18 })).toBe(false);
+    expect(isComplete("case", { total: -1 })).toBe(false);
   });
 
-  it("carries every level description into the doc", () => {
-    const { text } = renderRubricBody(CASE_RUBRIC, META);
-    for (const c of CASE_RUBRIC) {
-      expect(text).toContain(c.label);
-      for (const l of c.levels) expect(text).toContain(l.descriptor);
-    }
-    expect(text).toContain("/ 15");
+  it("rejects a fractional total", () => {
+    expect(isComplete("case", { total: 11.5 })).toBe(false);
   });
 
-  it("prints the question script on the behavioral sheet only", () => {
-    const behavioral = renderRubricBody(BEHAVIORAL_RUBRIC, {
-      ...META,
-      label: "Behavioral",
-      questions: BEHAVIORAL_QUESTIONS,
-    }).text;
-    for (const q of BEHAVIORAL_QUESTIONS) expect(behavioral).toContain(q.text);
-    expect(behavioral).toContain("Resume review");
-
-    const caseSheet = renderRubricBody(CASE_RUBRIC, META).text;
-    expect(caseSheet).not.toContain("Interview questions");
-  });
-
-  /** The same index invariant as above, on the longest body we generate. */
-  it("keeps styling ranges valid on the behavioral sheet with questions", () => {
-    const { text, requests } = renderRubricBody(BEHAVIORAL_RUBRIC, {
-      ...META,
-      label: "Behavioral",
-      questions: BEHAVIORAL_QUESTIONS,
-    });
-    const end = text.length + 1;
-    for (const r of requests) {
-      for (const v of Object.values(r) as { range?: { startIndex: number; endIndex: number } }[]) {
-        if (!v?.range) continue;
-        expect(v.range.startIndex).toBeGreaterThanOrEqual(1);
-        expect(v.range.endIndex).toBeLessThanOrEqual(end);
-        expect(v.range.startIndex).toBeLessThan(v.range.endIndex);
-      }
-    }
+  it("knows each rubric's maximum", () => {
+    expect(rubricMax("case")).toBe(15);
+    expect(rubricMax("behavioral")).toBe(17);
+    expect(rubricMax("final_case")).toBe(15);
+    expect(rubricMax("final_behavioral")).toBe(17);
   });
 });

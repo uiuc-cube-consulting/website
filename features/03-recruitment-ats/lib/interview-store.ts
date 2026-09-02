@@ -13,9 +13,9 @@ import { DEMO_APPLICANTS, DEMO_FLAGS } from "./demo";
 import { fetchFileMeta, listResumeFiles } from "./drive";
 import {
   INTERVIEW_KINDS,
-  INTERVIEW_RUBRICS,
+  submittedTotal,
+  type PanelScore,
   ROUND_KINDS,
-  isComplete,
   roundOfKind,
   type Candidate,
   type InterviewKind,
@@ -27,7 +27,7 @@ import { parseResumeId } from "./form-resume";
 import { readApplicantsFromSheet } from "./import";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
 import { excludeOwnApplications } from "./self-access";
-import { rubricTotal, type Flag, type Stage } from "./types";
+import type { Flag, Stage } from "./types";
 
 function db() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -186,14 +186,32 @@ export async function getBoard(
 
   const mine = new Map<string, Record<InterviewKind, RubricEntry | null>>();
   const completed = new Map<string, Record<InterviewKind, number>>();
+  // Submitted totals, for the people who run the round. Gated on `canManage` for
+  // the same reason `myRubrics` only ever holds your own: a panelist who can see
+  // what their co-interviewer scored before writing their own number is no longer
+  // giving an independent read. Exec needs the opposite — the whole round in one
+  // place — and they are the ones deciding, not scoring blind.
+  const panelScores = new Map<string, PanelScore[]>();
   for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
     const kind = r.kind as InterviewKind;
     if (!kinds.includes(kind)) continue;
 
-    if (isComplete(kind, r.scores ?? {})) {
+    const total = submittedTotal(kind, r.scores ?? {});
+    if (total !== null) {
       const c = completed.get(r.applicant_id) ?? zeroCounts();
       c[kind] += 1;
       completed.set(r.applicant_id, c);
+
+      if (canManage) {
+        const list = panelScores.get(r.applicant_id) ?? [];
+        list.push({
+          reviewer: String(r.reviewer_email).toLowerCase(),
+          kind,
+          total,
+          recommendation: (r.recommendation as string | null) ?? null,
+        });
+        panelScores.set(r.applicant_id, list);
+      }
     }
     if (String(r.reviewer_email).toLowerCase() === viewer) {
       const m = mine.get(r.applicant_id) ?? emptyRubrics();
@@ -240,6 +258,7 @@ export async function getBoard(
       assignedToMe: panel.includes(viewer),
       myRubrics: mine.get(a.id) ?? emptyRubrics(),
       completed: completed.get(a.id) ?? zeroCounts(),
+      panelScores: canManage ? panelScores.get(a.id) ?? [] : undefined,
       flags: flagsByApplicant.get(a.id) ?? [],
     };
   });
@@ -324,7 +343,7 @@ export async function saveRubric(input: {
       reviewer_email: email,
       kind: input.kind,
       scores: input.scores,
-      weighted_total: rubricTotal(INTERVIEW_RUBRICS[input.kind], input.scores),
+      weighted_total: submittedTotal(input.kind, input.scores) ?? 0,
       notes: input.notes ?? null,
       recommendation: input.recommendation ?? null,
     },

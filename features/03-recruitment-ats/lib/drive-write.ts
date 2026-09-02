@@ -162,13 +162,17 @@ export async function fileMeta(
 }
 
 /**
- * Copy the Form's uploaded resume into the candidate's folder under a consistent
- * name. A copy, not a move: the original stays in the Form's "(File responses)"
- * folder, so the response sheet's link keeps working and the submission record is
- * left undisturbed. Because the destination is a shared drive, the copy is owned
- * by the drive and costs the service account no quota.
+ * Copy a Drive file into a candidate's folder under a consistent name.
+ *
+ * Used for both artifacts a candidate folder holds: the resume the Form
+ * collected, and each of the two rubric sheets. A copy, not a move, in both
+ * cases — the resume's original stays in the Form's "(File responses)" folder so
+ * the response sheet's link keeps working, and the rubric's original stays the
+ * master every other candidate is copied from. Because the destination is a
+ * shared drive, the copy is owned by the drive and costs the service account no
+ * quota.
  */
-export async function copyResume(
+export async function copyInto(
   clients: Clients,
   sourceFileId: string,
   destFolderId: string,
@@ -182,10 +186,10 @@ export async function copyResume(
       ...SHARED,
     });
     const id = res.data.id;
-    if (!id) return { ok: false, error: "Drive returned no id when copying the resume" };
+    if (!id) return { ok: false, error: `Drive returned no id when copying ${sourceFileId}` };
     return { ok: true, value: { id, name: res.data.name ?? newName, url: driveFileUrl(id) } };
   } catch (e) {
-    return fail(e, `Could not copy resume ${sourceFileId}`);
+    return fail(e, `Could not copy ${sourceFileId} into ${destFolderId}`);
   }
 }
 

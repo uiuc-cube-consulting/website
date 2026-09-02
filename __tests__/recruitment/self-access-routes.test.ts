@@ -486,14 +486,8 @@ describe("/api/recruitment/decisions", () => {
 
 describe("POST /api/recruitment/interview/rubric", () => {
   const url = "http://localhost/api/recruitment/interview/rubric";
-  // A full, valid FA26 case rubric: every criterion 0–3, totalling 11 of 15.
-  const CASE_SCORES = {
-    demeanor: 3,
-    problem_solving: 2,
-    logic_and_communication: 2,
-    math_question: 1,
-    final_case_analysis: 3,
-  };
+  // What an interviewer submits: the total off the paper case sheet, out of 15.
+  const CASE_SCORES = { total: 11 };
 
   it.each(["exec", "project_manager", "senior_consultant", "returning_member"] as const)(
     "refuses %s scoring their own interview",

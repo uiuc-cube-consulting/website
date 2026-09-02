@@ -23,12 +23,12 @@ import {
   driveWriteClients,
   ensureFolder,
   createDoc,
-  copyResume,
+  copyInto,
   fileMeta,
   stillExists,
   type Clients,
 } from "@/features/03-recruitment-ats/lib/drive-write";
-import { rubricDocRequests, notesDocRequests } from "@/features/03-recruitment-ats/lib/rubric-doc";
+import { notesDocRequests } from "@/features/03-recruitment-ats/lib/rubric-doc";
 import { CASE_RUBRIC, BEHAVIORAL_RUBRIC } from "@/features/03-recruitment-ats/lib/interview";
 
 const ROOT = process.env.RECRUITING_DRIVE_ROOT_FOLDER_ID;
@@ -95,20 +95,21 @@ d("live shared-drive smoke", () => {
     expect(second.value.id).toBe(first.value.id);
   });
 
-  it("writes both rubric docs — validates the Docs index arithmetic", async () => {
-    const cases = [
-      { title: "Smoke Case Rubric", reqs: rubricDocRequests(CASE_RUBRIC, META) },
-      { title: "Smoke Behavioral Rubric", reqs: rubricDocRequests(BEHAVIORAL_RUBRIC, { ...META, label: "Behavioral" }) },
-      { title: "Smoke Notes", reqs: notesDocRequests({ ...META, label: "Notes" }) },
-    ];
-    for (const c of cases) {
-      const res = await createDoc(clients, c.title, smokeFolderId!, c.reqs);
-      if (!res.ok) throw new Error(`${c.title}: ${res.error}`);
-      expect(res.value.id).toBeTruthy();
-    }
+  it("writes the notes doc — validates the Docs index arithmetic", async () => {
+    // The rubric sheets are copies of the club's masters now, so the notes page is
+    // the only body this app still generates and the only place the Docs index
+    // arithmetic can go wrong.
+    const res = await createDoc(
+      clients,
+      "Smoke Notes",
+      smokeFolderId!,
+      notesDocRequests({ ...META, label: "Notes" })
+    );
+    if (!res.ok) throw new Error(`Smoke Notes: ${res.error}`);
+    expect(res.value.id).toBeTruthy();
   });
 
-  it("reads back a rubric doc with its anchors intact", async () => {
+  it("reads back the notes doc with its heading intact", async () => {
     const auth = new google.auth.JWT({
       email: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!).client_email,
       key: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!).private_key,
@@ -118,7 +119,7 @@ d("live shared-drive smoke", () => {
     const docs = google.docs({ version: "v1", auth });
 
     const listed = await drive.files.list({
-      q: `'${smokeFolderId}' in parents and name = 'Smoke Case Rubric' and trashed = false`,
+      q: `'${smokeFolderId}' in parents and name = 'Smoke Notes' and trashed = false`,
       fields: "files(id)",
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,
@@ -132,10 +133,8 @@ d("live shared-drive smoke", () => {
       .map((e) => e.textRun?.content ?? "")
       .join("");
 
-    expect(text).toContain("Case Rubric — Smoke Test");
-    // Every criterion's written anchor must survive the round trip.
-    for (const c of CASE_RUBRIC) expect(text).toContain(c.anchor);
-    expect(text).toContain("Strong yes");
+    expect(text).toContain("Interview Notes — Smoke Test");
+    expect(text).toContain("Interviewers: ");
   });
 
   it("copies a real Form upload into the folder", async () => {
@@ -156,7 +155,7 @@ d("live shared-drive smoke", () => {
     const meta = await fileMeta(clients, source.id);
     if (!meta.ok) throw new Error(meta.error);
 
-    const copied = await copyResume(clients, source.id, smokeFolderId!, "Resume — Smoke Test.pdf");
+    const copied = await copyInto(clients, source.id, smokeFolderId!, "Resume — Smoke Test.pdf");
     if (!copied.ok) throw new Error(copied.error);
     expect(copied.value.id).toBeTruthy();
     expect(await stillExists(clients, copied.value.id)).toBe(true);

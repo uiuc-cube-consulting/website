@@ -15,13 +15,17 @@ import {
   KIND_LABEL,
   RECOMMENDATIONS,
   ROUND_KINDS,
+  SCORE_KEY,
+  BEHAVIORAL_QUESTIONS,
   isComplete,
+  rubricMax,
+  submittedTotal,
   type Candidate,
   type InterviewKind,
   type Reviewer,
 } from "@/features/03-recruitment-ats/lib/interview";
 import { ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
-import { rubricMaxPoints, rubricTotal, type Stage } from "@/features/03-recruitment-ats/lib/types";
+import type { Stage } from "@/features/03-recruitment-ats/lib/types";
 
 const STAGE_LABEL: Record<string, string> = {
   applied: "Applied", screened: "Screened", interview: "First round",
@@ -137,8 +141,82 @@ export function CandidateWorkspace({
             editable={editable}
             onChanged={onChanged}
           />
+
+          <PanelScores candidate={candidate} kinds={kinds} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Every panelist's score, for whoever runs the round ───────────────────────
+// The round in one place: who has scored, what they gave, and what they
+// recommended. `panelScores` is only ever populated for a viewer who may manage
+// the round (interview-store.ts), so this renders nothing for a panelist — their
+// own number stays the only one they see, which is what keeps two reads on the
+// same candidate independent.
+
+function PanelScores({
+  candidate,
+  kinds,
+}: {
+  candidate: Candidate;
+  kinds: readonly InterviewKind[];
+}) {
+  const scores = candidate.panelScores;
+  if (!scores) return null;
+
+  // One row per interviewer, their rubrics across the columns, so exec reads a
+  // person's whole view of the candidate on one line rather than hunting for
+  // their name twice.
+  const reviewers = [...new Set(scores.map((s) => s.reviewer))].sort();
+
+  return (
+    <div className="mt-5 border-t border-[var(--border)] pt-4">
+      <span className="text-sm font-semibold text-[var(--bg-dark)]">Panel scores</span>
+      {reviewers.length === 0 ? (
+        <p className="mt-1 text-xs text-[var(--muted)]">Nobody has submitted a score yet.</p>
+      ) : (
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full min-w-[22rem] text-left text-xs">
+            <thead>
+              <tr className="text-[var(--muted)]">
+                <th className="py-1 pr-3 font-medium">Interviewer</th>
+                {kinds.map((k) => (
+                  <th key={k} className="py-1 pr-3 font-medium">
+                    {KIND_LABEL[k]} / {rubricMax(k)}
+                  </th>
+                ))}
+                <th className="py-1 font-medium">Recommendation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviewers.map((email) => {
+                const rows = scores.filter((s) => s.reviewer === email);
+                // One interviewer can recommend once per rubric; show whichever
+                // they actually recorded rather than inventing a consensus.
+                const rec = rows.find((r) => r.recommendation)?.recommendation ?? null;
+                return (
+                  <tr key={email} className="border-t border-[var(--border)]">
+                    <td className="py-1.5 pr-3 text-[var(--bg-dark)]">{email}</td>
+                    {kinds.map((k) => {
+                      const hit = rows.find((r) => r.kind === k);
+                      return (
+                        <td key={k} className="py-1.5 pr-3 font-semibold text-[var(--bg-dark)]">
+                          {hit ? hit.total : <span className="font-normal text-[var(--muted)]">—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="py-1.5 text-[var(--muted)]">
+                      {RECOMMENDATIONS.find((r) => r.key === rec)?.label ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -233,8 +311,11 @@ function RubricForm({
 
   const rubric = INTERVIEW_RUBRICS[kind];
   const complete = isComplete(kind, scores);
-  const maxPoints = rubricMaxPoints(rubric);
-  const runningTotal = rubricTotal(rubric, scores);
+  const maxPoints = rubricMax(kind);
+  const total = submittedTotal(kind, scores);
+  // The behavioral sheet is half script, half grid; the case sheet is scored
+  // against whatever case the panel runs, so it has no fixed questions.
+  const questions = kind === "behavioral" || kind === "final_behavioral" ? BEHAVIORAL_QUESTIONS : null;
   const othersDone = Math.max(0, candidate.completed[kind] - (existing && isComplete(kind, existing.scores) ? 1 : 0));
 
   function set<T>(setter: (v: T) => void) {
@@ -279,8 +360,8 @@ function RubricForm({
     <div className="mt-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--muted)]">
-          Same sheet as the paper rubric, out of {maxPoints}. This is your copy for{" "}
-          {candidate.name.split(" ")[0]} — the template stays untouched.
+          Score {candidate.name.split(" ")[0]} on the {KIND_LABEL[kind]} rubric in their Drive
+          folder, then enter the total here.
         </p>
         {othersDone > 0 && (
           <span className="shrink-0 text-xs text-[var(--muted)]">
@@ -289,45 +370,79 @@ function RubricForm({
         )}
       </div>
 
-      <div className="mt-4 space-y-4">
-        {rubric.map((c) => (
-          <div key={c.key}>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-sm font-semibold text-[var(--bg-dark)]">{c.label}</span>
-              <span className="shrink-0 text-[11px] text-[var(--muted)]">out of {c.max}</span>
-            </div>
-            {c.prompts && (
-              <ul className="mt-0.5 space-y-0.5">
-                {c.prompts.map((q) => (
-                  <li key={q} className="text-[11px] leading-relaxed text-[var(--muted)]">
-                    {q}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--muted)]">{c.anchor}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {Array.from({ length: c.max + 1 }, (_, n) => n).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  disabled={!editable}
-                  onClick={() => set<Record<string, number>>(setScores)({ ...scores, [c.key]: n })}
-                  className={`h-9 w-9 rounded-lg border text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                    scores[c.key] === n
-                      ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-dark)]"
-                      : "border-[var(--border)] bg-white text-[var(--bg-dark)] hover:border-[var(--gold)]"
-                  }`}
-                >
-                  {n}
-                </button>
+      <div className="mt-4">
+        <label htmlFor={`total-${kind}`} className="text-sm font-semibold text-[var(--bg-dark)]">
+          Total score
+        </label>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            id={`total-${kind}`}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={maxPoints}
+            step={1}
+            disabled={!editable}
+            value={scores[SCORE_KEY] ?? ""}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const next = { ...scores };
+              // An empty box is "not scored yet", which is NOT the same as 0 —
+              // 0 is every category unacceptable. Delete the key rather than
+              // storing a zero, so a cleared field cannot submit as the harshest
+              // possible review.
+              if (raw === "") delete next[SCORE_KEY];
+              else next[SCORE_KEY] = Number.parseInt(raw, 10);
+              set<Record<string, number>>(setScores)(next);
+            }}
+            className="h-11 w-24 rounded-lg border border-[var(--border)] bg-white px-3 text-lg font-semibold text-[var(--bg-dark)] focus:border-[var(--gold)] focus:outline-none disabled:opacity-50"
+          />
+          <span className="text-lg font-semibold text-[var(--muted)]">/ {maxPoints}</span>
+          {scores[SCORE_KEY] !== undefined && total === null && (
+            <span className="text-xs text-amber-700">Must be a whole number from 0 to {maxPoints}.</span>
+          )}
+        </div>
+      </div>
+
+      <details className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-soft,#faf9f7)] p-3">
+        <summary className="cursor-pointer text-xs font-semibold text-[var(--bg-dark)]">
+          {KIND_LABEL[kind]} rubric — {rubric.length} categories, {maxPoints} points
+        </summary>
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">
+          The sheet in {candidate.name.split(" ")[0]}&rsquo;s Drive folder, for reference. Mark it
+          up there; only the total comes back here.
+        </p>
+        {questions && (
+          <div className="mt-3">
+            <span className="text-xs font-semibold text-[var(--bg-dark)]">Questions, in order</span>
+            <ol className="mt-1 space-y-1">
+              {questions.map((q) => (
+                <li key={q.n} className="text-[11px] leading-relaxed text-[var(--muted)]">
+                  <span className="font-semibold text-[var(--bg-dark)]">{q.n}.</span> {q.text}
+                  {q.category && (
+                    <span className="ml-1 italic">
+                      → {rubric.find((c) => c.key === q.category)?.label}
+                    </span>
+                  )}
+                </li>
               ))}
-            </div>
-            <details className="mt-1.5">
-              <summary className="cursor-pointer text-[11px] font-semibold text-[var(--muted)]">
-                What each score means
-              </summary>
-              <ul className="mt-1 space-y-1">
+            </ol>
+          </div>
+        )}
+
+        <div className="mt-3 space-y-3">
+          {rubric.map((c) => (
+            <div key={c.key}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-semibold text-[var(--bg-dark)]">{c.label}</span>
+                <span className="shrink-0 text-[11px] text-[var(--muted)]">out of {c.max}</span>
+              </div>
+              {c.prompts?.map((q) => (
+                <p key={q} className="text-[11px] leading-relaxed text-[var(--muted)]">
+                  {q}
+                </p>
+              ))}
+              <ul className="mt-1 space-y-0.5">
                 {c.levels.map((l) => (
                   <li key={l.label} className="text-[11px] leading-relaxed text-[var(--muted)]">
                     <span className="font-semibold text-[var(--bg-dark)]">
@@ -337,18 +452,10 @@ function RubricForm({
                   </li>
                 ))}
               </ul>
-            </details>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 flex items-baseline justify-between gap-3">
-        <span className="text-sm font-semibold text-[var(--bg-dark)]">Total</span>
-        <span className="text-sm font-semibold text-[var(--bg-dark)]">
-          {runningTotal} / {maxPoints}
-          {!complete && <span className="ml-2 text-[11px] font-normal text-[var(--muted)]">(incomplete)</span>}
-        </span>
-      </div>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <div className="mt-4">
         <span className="text-sm font-semibold text-[var(--bg-dark)]">Recommendation</span>

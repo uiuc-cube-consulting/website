@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { saveRubric } from "@/features/03-recruitment-ats/lib/interview-store";
 import {
   INTERVIEW_KINDS,
-  INTERVIEW_RUBRICS,
+  rubricMax,
+  SCORE_KEY,
   canInterview,
   isInterviewKind,
   isRecommendation,
@@ -83,25 +84,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "The final round is exec only" }, { status: 403 });
   }
 
-  // Every criterion must carry a whole number within ITS OWN 0..max range — the
-  // ceilings differ across the behavioral rubric (Competence 5, Presentation 2).
-  // Unknown keys are dropped rather than stored, so the row always matches the
-  // rubric in code.
+  // One number: the total off the paper rubric, a whole number in 0..max. Anything
+  // else the client sends is dropped rather than stored, so the row always matches
+  // what the code believes a review is.
   //
-  // The raw value is tested rather than `Number(...)` of it: 0 is a real score on
-  // these sheets, and coercion turns null, "" and [] into exactly that, which
-  // would let an unscored criterion through as an "Unacceptable Answer".
-  const scores: Record<string, number> = {};
-  for (const c of INTERVIEW_RUBRICS[body.kind]) {
-    const v = body.scores?.[c.key];
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > c.max) {
-      return NextResponse.json(
-        { ok: false, error: `Score for "${c.label}" must be a whole number from 0 to ${c.max}` },
-        { status: 400 }
-      );
-    }
-    scores[c.key] = v;
+  // The raw value is tested rather than `Number(...)` of it: 0 is a real total on
+  // these sheets, and coercion turns null, "" and [] into exactly that — which
+  // would store an untouched form as the harshest possible review.
+  const max = rubricMax(body.kind);
+  const total = body.scores?.[SCORE_KEY];
+  if (typeof total !== "number" || !Number.isInteger(total) || total < 0 || total > max) {
+    return NextResponse.json(
+      { ok: false, error: `Score must be a whole number from 0 to ${max}` },
+      { status: 400 }
+    );
   }
+  const scores: Record<string, number> = { [SCORE_KEY]: total };
 
   let recommendation: Recommendation | null = null;
   if (body.recommendation != null && body.recommendation !== "") {

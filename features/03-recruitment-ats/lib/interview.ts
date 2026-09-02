@@ -7,7 +7,7 @@
 // `reviews` (unique on applicant + reviewer + kind).
 
 import type { InterviewRound } from "./rounds";
-import type { Flag, RubricCriterion, Stage } from "./types";
+import { rubricMaxPoints, type Flag, type RubricCriterion, type Stage } from "./types";
 
 /** Roles allowed to interview. Mirrors the reviewer roles in proxy.ts / store.ts. */
 export const INTERVIEWER_ROLES = ["exec", "project_manager", "senior_consultant", "returning_member"];
@@ -521,6 +521,7 @@ export function isRecommendation(v: unknown): v is Recommendation {
 // ── The filled-in rubric an interviewer owns ─────────────────────────────────
 export type RubricEntry = {
   kind: InterviewKind;
+  /** Just `{ total }` — see SCORE_KEY. */
   scores: Record<string, number>;
   notes: string;
   recommendation: Recommendation | null;
@@ -528,21 +529,51 @@ export type RubricEntry = {
   updated_at?: string;
 };
 
+// ── What an interviewer submits ──────────────────────────────────────────────
+// One number: the total off the paper sheet.
+//
+// The scoring itself happens on the rubric in the candidate's Drive folder — that
+// PDF is the club's document, it is what interviewers mark up in the room, and it
+// is where the per-category judgements live. The portal deliberately does not ask
+// for those categories a second time. Re-keying five or six numbers that already
+// exist on paper is transcription work that earns nothing, and it invites the
+// worse failure: a portal total that disagrees with the sheet it was copied from.
+//
+// So the rubric is REFLECTED here — every category, ceiling and level description
+// is in CASE_RUBRIC / BEHAVIORAL_RUBRIC above and rendered next to the input, so
+// an interviewer can see exactly what they are scoring out of and what each band
+// means — but the thing that is STORED is the one number they wrote at the bottom.
+
+/** The single key `reviews.scores` carries for an interview rubric. */
+export const SCORE_KEY = "total";
+
+/** The highest score this rubric can award: case 15, behavioral 17. */
+export function rubricMax(kind: InterviewKind): number {
+  return rubricMaxPoints(INTERVIEW_RUBRICS[kind]);
+}
+
+/** The submitted total, or null when this rubric has not been scored yet. */
+export function submittedTotal(
+  kind: InterviewKind,
+  scores: Record<string, number> | null | undefined
+): number | null {
+  const v = scores?.[SCORE_KEY];
+  if (typeof v !== "number" || !Number.isInteger(v)) return null;
+  return v >= 0 && v <= rubricMax(kind) ? v : null;
+}
+
 /**
- * A rubric counts as complete only when every criterion carries a whole number
- * within its own 0..max range.
+ * A rubric counts as complete once it carries a whole-number total within
+ * 0..max.
  *
- * Not coerced, and deliberately so — the same trap the written rubric documents.
- * `Number(null)` and `Number("")` are both 0, and 0 is "Unacceptable Answer" on
- * these sheets rather than "not yet scored", so coercing would let an untouched
- * criterion pass as a filled-in zero and submit a half-written review as a harsh
- * one.
+ * Not coerced, and deliberately so. `Number(null)` and `Number("")` are both 0,
+ * and 0 is a real total on these sheets — every category "Unacceptable Answer" —
+ * rather than "not yet scored". Coercing would let an untouched form submit as a
+ * scored zero, which is the harshest possible review and indistinguishable from a
+ * blank one.
  */
 export function isComplete(kind: InterviewKind, scores: Record<string, number>): boolean {
-  return INTERVIEW_RUBRICS[kind].every((c) => {
-    const v = scores[c.key];
-    return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= c.max;
-  });
+  return submittedTotal(kind, scores) !== null;
 }
 
 // ── Wire format ──────────────────────────────────────────────────────────────
@@ -581,6 +612,9 @@ export type Candidate = {
   myRubrics: Record<InterviewKind, RubricEntry | null>;
   /** How many panelists have completed each rubric — a count only, no scores. */
   completed: Record<InterviewKind, number>;
+  /** Every panelist's submitted total. Present only for exec; undefined otherwise,
+   *  so a panelist's client never receives another panelist's number at all. */
+  panelScores?: PanelScore[];
   /**
    * Red/green flags filed on this person, so the board can show them beside the
    * name like the written console and the decision queue do.
@@ -592,6 +626,17 @@ export type Candidate = {
    * people raised a concern.
    */
   flags: Flag[];
+};
+
+/**
+ * One panelist's submitted total for one rubric. Only ever sent to a viewer who
+ * may manage the round — see the gate in interview-store.ts.
+ */
+export type PanelScore = {
+  reviewer: string;
+  kind: InterviewKind;
+  total: number;
+  recommendation: string | null;
 };
 
 export type Reviewer = { email: string; name?: string | null };

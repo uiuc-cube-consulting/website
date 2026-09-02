@@ -52,11 +52,25 @@ export function candidateFolderName(name: string, email: string): string {
   return n || e || "Unnamed candidate";
 }
 
-/** `Resume — Jane Doe.pdf`, preserving the original file's extension. */
-export function resumeFileName(name: string, originalName?: string | null): string {
+/**
+ * `Case Rubric — Jane Doe.pdf` — a copied file, named for the candidate and
+ * keeping the source file's extension.
+ *
+ * The extension comes from the source rather than being assumed: the rubric
+ * masters are PDFs today, but the club swaps them for Google Docs or .docx
+ * between cycles, and a copy called "…Rubric — Jane Doe.pdf" that is really a
+ * Doc is the kind of thing nobody notices until it will not open.
+ */
+export function copyFileName(label: string, name: string, originalName?: string | null): string {
   const n = clamp(sanitize(name), 80) || "Candidate";
   const ext = /\.([a-z0-9]{1,5})$/i.exec(String(originalName ?? ""))?.[1];
-  return ext ? `Resume — ${n}.${ext.toLowerCase()}` : `Resume — ${n}`;
+  const base = `${sanitize(label)} — ${n}`;
+  return ext ? `${base}.${ext.toLowerCase()}` : base;
+}
+
+/** `Resume — Jane Doe.pdf`, preserving the original file's extension. */
+export function resumeFileName(name: string, originalName?: string | null): string {
+  return copyFileName("Resume", name, originalName);
 }
 
 /** `Case Rubric — Jane Doe`. Google Docs carry no extension. */
