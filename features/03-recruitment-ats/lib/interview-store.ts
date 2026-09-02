@@ -310,9 +310,9 @@ export type WriteResult = { ok: boolean; demo?: boolean; error?: string; forbidd
  * because the first and final rounds use different kinds, so does the same
  * interviewer seeing the same candidate twice across the two rounds.
  *
- * The panel check is scoped to the round the KIND belongs to, not to the round
- * the caller claims: the body carries a kind, the round is derived from it, and
- * the two therefore cannot disagree.
+ * The panel check applies to the final round only, and is scoped to the round the
+ * KIND belongs to rather than the round the caller claims: the body carries a
+ * kind, the round is derived from it, and the two therefore cannot disagree.
  */
 export async function saveRubric(input: {
   applicant_id: string;
@@ -329,11 +329,22 @@ export async function saveRubric(input: {
 
   const round = roundOfKind(input.kind);
   const email = input.reviewer_email.toLowerCase();
-  if (!input.bypassPanel && !(await isOnPanel(input.applicant_id, email, round))) {
+  // The panel gates the FINAL round only. In the first round it records who is
+  // scheduled to interview whom, and any member may submit a score for any
+  // candidate — an interview happens with whoever is actually in the room, and a
+  // panel row written the day before should not be what decides whether that
+  // conversation can be recorded. The final round keeps the gate because it is a
+  // deliberately small room, and `canInterviewInRound` has already limited it to
+  // exec before this point.
+  if (
+    round === "final_round" &&
+    !input.bypassPanel &&
+    !(await isOnPanel(input.applicant_id, email, round))
+  ) {
     return {
       ok: false,
       forbidden: true,
-      error: `You are not on this candidate's ${round === "final_round" ? "final-round" : "first-round"} panel.`,
+      error: "You are not on this candidate's final-round panel.",
     };
   }
 

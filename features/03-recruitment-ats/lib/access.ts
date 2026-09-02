@@ -12,9 +12,10 @@
 // a security boundary. Anyone can call an API route directly, so every route must
 // re-check the role itself. These helpers are what it re-checks with.
 
-/** Roles that may score applicants, sit an interview panel, or otherwise act
- *  as recruiting staff — the reviewer/interviewer pool assignment is drawn
- *  from. Deliberately narrower than who may *view* the applicant pool. */
+/** Roles that may screen written applications or otherwise act as recruiting
+ *  staff — the pool screener assignment is drawn from. Deliberately narrower
+ *  than who may *view* the applicant pool, and than who may score an INTERVIEW
+ *  (see canInterviewRole). */
 export const RECRUITING_ROLES = [
   "exec",
   "project_manager",
@@ -57,9 +58,22 @@ export function canReview(role?: string | null): boolean {
   return has(RECRUITING_ROLES, role);
 }
 
-/** May sit on an interview panel and fill in case/behavioral rubrics. */
+/**
+ * May fill in a case/behavioral rubric.
+ *
+ * Every member role, deliberately wider than `canReview`. Interviews are staffed
+ * from whoever is in the room, and a club that asks a plain member to sit on a
+ * panel and then refuses their score has just lost that interview — the score
+ * ends up in somebody else's name or nowhere at all. The written screen stays
+ * narrower because it is assigned round-robin and its fairness depends on that
+ * assignment holding.
+ *
+ * This is the FLOOR, not the whole rule. The final round is exec-only on top of
+ * this (see canInterviewInRound in ./rounds.ts), and nobody may score their own
+ * application (see ./self-access.ts) whatever their role.
+ */
 export function canInterviewRole(role?: string | null): boolean {
-  return has(RECRUITING_ROLES, role);
+  return has(ALL_MEMBER_ROLES, role);
 }
 
 /**

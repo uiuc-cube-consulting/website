@@ -150,10 +150,12 @@ describe("visibleRounds", () => {
 });
 
 describe("canInterviewInRound", () => {
-  it("staffs the first round from the whole recruiting pool", () => {
+  it("opens the first round to every member with portal access", () => {
+    // Interviews are staffed from whoever is in the room, so a plain member may
+    // record a first-round score. The written screen stays narrower — it is
+    // assigned round-robin and its fairness depends on that holding.
     for (const role of ROLES) {
-      // A plain member is not recruiting staff, in any round.
-      expect(canInterviewInRound("first_round", role)).toBe(role !== "member");
+      expect(canInterviewInRound("first_round", role)).toBe(true);
     }
   });
 

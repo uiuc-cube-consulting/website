@@ -111,10 +111,10 @@ export function visibleRounds(role?: string | null): Round[] {
 /**
  * Whether a role may sit a panel and write rubrics in `round`.
  *
- * Strictly narrower than `canViewRound`: the first round is staffed from the
- * whole recruiting pool (PMs, SCs, returning members and exec), the final round
- * is exec and nobody else. Panel membership still gates the individual candidate
- * on top of this — this is the floor, not the whole rule.
+ * Strictly narrower than `canViewRound` for the final round only: the first round
+ * is open to every member of the club with portal access, the final round is exec
+ * and nobody else. Panel membership additionally gates the individual candidate in
+ * the FINAL round — in the first it only records who is scheduled with whom.
  */
 export function canInterviewInRound(round: InterviewRound, role?: string | null): boolean {
   return round === "final_round" ? isExec(role) : canInterviewRole(role);
