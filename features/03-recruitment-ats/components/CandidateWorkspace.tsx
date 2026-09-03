@@ -17,6 +17,9 @@ import {
   ROUND_KINDS,
   SCORE_KEY,
   SCORE_STEP,
+  panelStanding,
+  formatScore,
+  recommendationLabel,
   BEHAVIORAL_QUESTIONS,
   isComplete,
   rubricMax,
@@ -175,19 +178,34 @@ function PanelScores({
   const scores = candidate.panelScores;
   if (!scores) return null;
 
-  // One row per interviewer, their rubrics across the columns, so exec reads a
-  // person's whole view of the candidate on one line rather than hunting for
-  // their name twice.
+  // One row per interviewer, their rubrics across the columns, so a person's
+  // whole view of the candidate reads on one line.
   const reviewers = [...new Set(scores.map((s) => s.reviewer))].sort();
+  const standing = panelStanding(scores, kinds);
 
   return (
     <div className="mt-5 border-t border-[var(--border)] pt-4">
-      <span className="text-sm font-semibold text-[var(--bg-dark)]">Panel scores</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-sm font-semibold text-[var(--bg-dark)]">Panel scores</span>
+        {standing.submissions > 0 && (
+          <span className="text-xs text-[var(--muted)]">
+            {standing.total === null
+              ? "Both rubrics needed for a total"
+              : `${formatScore(standing.total)} / ${standing.max}`}
+            {standing.split && (
+              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                recommendations differ
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+
       {reviewers.length === 0 ? (
         <p className="mt-1 text-xs text-[var(--muted)]">Nobody has submitted a score yet.</p>
       ) : (
         <div className="mt-2 overflow-x-auto">
-          <table className="w-full min-w-[22rem] text-left text-xs">
+          <table className="w-full min-w-[24rem] text-left text-xs">
             <thead>
               <tr className="text-[var(--muted)]">
                 <th className="py-1 pr-3 font-medium">Interviewer</th>
@@ -196,29 +214,36 @@ function PanelScores({
                     {KIND_LABEL[k]} / {rubricMax(k)}
                   </th>
                 ))}
-                <th className="py-1 font-medium">Recommendation</th>
               </tr>
             </thead>
             <tbody>
               {reviewers.map((email) => {
                 const rows = scores.filter((s) => s.reviewer === email);
-                // One interviewer can recommend once per rubric; show whichever
-                // they actually recorded rather than inventing a consensus.
-                const rec = rows.find((r) => r.recommendation)?.recommendation ?? null;
+                // Each rubric carries its OWN recommendation. They are allowed to
+                // disagree — a candidate can crack the case and interview badly —
+                // and collapsing them to one value threw half the verdict away.
+                const recs = kinds.map((k) => rows.find((r) => r.kind === k)?.recommendation ?? null);
+                const disagrees = new Set(recs.filter(Boolean)).size > 1;
                 return (
-                  <tr key={email} className="border-t border-[var(--border)]">
-                    <td className="py-1.5 pr-3 text-[var(--bg-dark)]">{email}</td>
+                  <tr key={email} className="border-t border-[var(--border)] align-top">
+                    <td className="py-1.5 pr-3 text-[var(--bg-dark)]">
+                      {email}
+                      {disagrees && (
+                        <span className="ml-1.5 text-[11px] font-semibold text-amber-700">split</span>
+                      )}
+                    </td>
                     {kinds.map((k) => {
                       const hit = rows.find((r) => r.kind === k);
+                      if (!hit) return <td key={k} className="py-1.5 pr-3 text-[var(--muted)]">—</td>;
                       return (
-                        <td key={k} className="py-1.5 pr-3 font-semibold text-[var(--bg-dark)]">
-                          {hit ? hit.total : <span className="font-normal text-[var(--muted)]">—</span>}
+                        <td key={k} className="py-1.5 pr-3">
+                          <span className="font-semibold text-[var(--bg-dark)]">{formatScore(hit.total)}</span>
+                          <span className="block text-[11px] text-[var(--muted)]">
+                            {recommendationLabel(hit.recommendation)}
+                          </span>
                         </td>
                       );
                     })}
-                    <td className="py-1.5 text-[var(--muted)]">
-                      {RECOMMENDATIONS.find((r) => r.key === rec)?.label ?? "—"}
-                    </td>
                   </tr>
                 );
               })}

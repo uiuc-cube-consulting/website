@@ -30,6 +30,7 @@ import {
   rubricMax,
   panelStanding,
   formatScore,
+  recommendationLabel,
 } from "@/features/03-recruitment-ats/lib/interview";
 import { rubricMaxPoints } from "@/features/03-recruitment-ats/lib/types";
 
@@ -301,9 +302,12 @@ describe("isComplete / submittedTotal", () => {
 
 describe("panelStanding", () => {
   const KINDS = ["case", "behavioral"] as const;
-  const score = (kind: "case" | "behavioral", total: number, reviewer = "a@x.edu") => ({
-    reviewer, kind, total, recommendation: null,
-  });
+  const score = (
+    kind: "case" | "behavioral",
+    total: number,
+    reviewer = "a@x.edu",
+    recommendation: string | null = null
+  ) => ({ reviewer, kind, total, recommendation });
 
   it("averages within a rubric and adds across the two", () => {
     // Two people scored the case; that is one case score, not a doubled one.
@@ -351,5 +355,59 @@ describe("formatScore", () => {
     expect(formatScore(11.5)).toBe("11.5");
     // A mean of three whole numbers is repeating; show it short, not as 11.666666666666666.
     expect(formatScore(35 / 3)).toBe("11.67");
+  });
+});
+
+describe("recommendations that disagree", () => {
+  const KINDS = ["case", "behavioral"] as const;
+  const score = (
+    kind: "case" | "behavioral",
+    total: number,
+    reviewer = "a@x.edu",
+    recommendation: string | null = null
+  ) => ({ reviewer, kind, total, recommendation });
+
+  it("keeps each rubric's own verdict instead of collapsing them", () => {
+    // The case went well and the behavioral did not. Both halves have to survive
+    // — reporting one verdict for the pair throws away half the interview.
+    const st = panelStanding(
+      [score("case", 13, "a@x.edu", "yes"), score("behavioral", 6, "a@x.edu", "no")],
+      KINDS
+    );
+    expect(st.perKind[0].recs).toEqual(["yes"]);
+    expect(st.perKind[1].recs).toEqual(["no"]);
+    expect(st.split).toBe(true);
+    expect(st.total).toBe(19);
+  });
+
+  it("does not call it split when both rubrics agree", () => {
+    const st = panelStanding(
+      [score("case", 13, "a@x.edu", "yes"), score("behavioral", 15, "a@x.edu", "yes")],
+      KINDS
+    );
+    expect(st.split).toBe(false);
+    expect(st.perKind.every((p) => p.recs.length === 1)).toBe(true);
+  });
+
+  it("flags two interviewers disagreeing on the SAME rubric", () => {
+    const st = panelStanding(
+      [score("case", 13, "a@x.edu", "yes"), score("case", 5, "b@x.edu", "strong_no")],
+      KINDS
+    );
+    // Ordered best-to-worst by RECOMMENDATIONS, not by who submitted first.
+    expect(st.perKind[0].recs).toEqual(["yes", "strong_no"]);
+    expect(st.split).toBe(true);
+  });
+
+  it("is not split when nobody recorded a recommendation", () => {
+    const st = panelStanding([score("case", 13), score("behavioral", 15)], KINDS);
+    expect(st.split).toBe(false);
+    expect(st.perKind.every((p) => p.recs.length === 0)).toBe(true);
+  });
+
+  it("labels a recommendation, and an absent one", () => {
+    expect(recommendationLabel("strong_yes")).toBe("Strong yes");
+    expect(recommendationLabel(null)).toBe("—");
+    expect(recommendationLabel("nonsense")).toBe("—");
   });
 });

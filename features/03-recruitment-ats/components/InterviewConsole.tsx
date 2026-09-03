@@ -20,6 +20,7 @@ import {
   isComplete,
   panelStanding,
   formatScore,
+  recommendationLabel,
   type Candidate,
   type InterviewBoard,
 } from "@/features/03-recruitment-ats/lib/interview";
@@ -227,7 +228,11 @@ export function InterviewConsole() {
                     <span
                       className="text-right"
                       title={st.perKind
-                        .map((p) => `${KIND_LABEL[p.kind]}: ${p.mean === null ? "not scored" : `${formatScore(p.mean)} / ${p.max}`}${p.n > 1 ? ` (mean of ${p.n})` : ""}`)
+                        .map((p) => {
+                          const score = p.mean === null ? "not scored" : `${formatScore(p.mean)} / ${p.max}`;
+                          const verdict = p.recs.length ? ` — ${p.recs.map(recommendationLabel).join(" / ")}` : "";
+                          return `${KIND_LABEL[p.kind]}: ${score}${p.n > 1 ? ` (mean of ${p.n})` : ""}${verdict}`;
+                        })
                         .join("\n")}
                     >
                       <span className="block text-sm font-semibold text-[var(--bg-dark)]">
@@ -238,6 +243,20 @@ export function InterviewConsole() {
                           .map((p) => `${KIND_LABEL[p.kind][0]} ${p.mean === null ? "—" : formatScore(p.mean)}`)
                           .join(" · ")}
                       </span>
+                      {st.perKind.some((p) => p.recs.length > 0) && (
+                        <span
+                          className={`block text-[11px] ${
+                            st.split ? "font-semibold text-amber-700" : "text-[var(--muted)]"
+                          }`}
+                        >
+                          {st.perKind
+                            .filter((p) => p.recs.length > 0)
+                            .map((p) =>
+                              `${KIND_LABEL[p.kind][0]} ${p.recs.map(recommendationLabel).join("/")}`
+                            )
+                            .join(" · ")}
+                        </span>
+                      )}
                     </span>
                   );
                 })()}

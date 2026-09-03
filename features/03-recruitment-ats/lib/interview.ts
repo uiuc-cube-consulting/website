@@ -688,23 +688,50 @@ export function panelStanding(
   scores: readonly PanelScore[] | undefined,
   kinds: readonly InterviewKind[]
 ): {
-  perKind: { kind: InterviewKind; mean: number | null; n: number; max: number }[];
+  perKind: {
+    kind: InterviewKind;
+    mean: number | null;
+    n: number;
+    max: number;
+    /** Distinct recommendations recorded on THIS rubric, in RECOMMENDATIONS order. */
+    recs: Recommendation[];
+  }[];
   total: number | null;
   max: number;
   submissions: number;
+  /** True when the recommendations recorded do not all agree — across the two
+   *  rubrics, or between two interviewers on the same one. */
+  split: boolean;
 } {
   const perKind = kinds.map((k) => {
-    const totals = (scores ?? []).filter((s) => s.kind === k).map((s) => s.total);
+    const rows = (scores ?? []).filter((s) => s.kind === k);
+    const totals = rows.map((s) => s.total);
     const mean = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : null;
-    return { kind: k, mean, n: totals.length, max: rubricMax(k) };
+    const present = new Set(rows.map((r) => r.recommendation).filter(Boolean) as string[]);
+    return {
+      kind: k,
+      mean,
+      n: totals.length,
+      max: rubricMax(k),
+      // Ordered by RECOMMENDATIONS rather than by insertion, so "Strong yes /
+      // No" always reads best-to-worst regardless of who submitted first.
+      recs: RECOMMENDATIONS.filter((r) => present.has(r.key)).map((r) => r.key),
+    };
   });
   const scored = perKind.filter((p) => p.mean !== null);
+  const allRecs = new Set(perKind.flatMap((p) => p.recs));
   return {
     perKind,
     total: scored.length === kinds.length ? scored.reduce((a, p) => a + (p.mean ?? 0), 0) : null,
     max: perKind.reduce((a, p) => a + p.max, 0),
     submissions: perKind.reduce((a, p) => a + p.n, 0),
+    split: allRecs.size > 1,
   };
+}
+
+/** The human label for a recommendation key, or an em dash when unrecorded. */
+export function recommendationLabel(key: string | null | undefined): string {
+  return RECOMMENDATIONS.find((r) => r.key === key)?.label ?? "—";
 }
 
 /** 11.5 rather than 11.50, and 14 rather than 14.0. */
