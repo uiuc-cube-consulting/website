@@ -1,3 +1,3 @@
 // Route shim — real handler in the feature folder. `dynamic` declared locally.
-export { GET, POST } from "@/features/03-recruitment-ats/app/api/recruitment/flags/route";
+export { GET, POST, DELETE } from "@/features/03-recruitment-ats/app/api/recruitment/flags/route";
 export const dynamic = "force-dynamic";

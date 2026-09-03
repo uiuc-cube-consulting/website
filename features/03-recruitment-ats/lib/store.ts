@@ -15,7 +15,8 @@ import {
   type Review,
   type Scores,
   type Stage,
-  redactFlags,
+  presentFlags,
+  canRemoveFlag,
 } from "./types";
 
 // Members who can be assigned as recruitment reviewers (matches proxy.ts).
@@ -53,6 +54,38 @@ export type Snapshot = {
   demo: boolean;
 };
 
+// ── Reading flags while the removal migration may not have run ───────────────
+/**
+ * Flag reads hide removed rows by filtering on `removed_at`, a column that only
+ * exists once `db/flag-removal.sql` has been applied. Until then PostgREST
+ * answers the filter with 42703 and the read fails — which, on `getSnapshot`,
+ * means the entire recruiting console 500s rather than one annotation going
+ * missing.
+ *
+ * So the filter is attempted and then dropped if the column is not there yet.
+ * This is the same concession `submitFlag` makes for `attributed`, and it fails
+ * in the same direction: a deployment mid-migration shows every flag, including
+ * ones someone has removed, rather than showing none of anything. Visibly stale
+ * beats an outage on the surface the club screens applications with.
+ *
+ * Delete this once every deployment has the column — the filter then belongs
+ * inline, where it can't be silently skipped.
+ */
+type FlagRead = { data: unknown[] | null; error: { code?: string; message?: string } | null };
+type FlagQuery = PromiseLike<FlagRead> & { is(column: string, value: null): PromiseLike<FlagRead> };
+
+function missingRemovalColumn(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  // 42703 = undefined_column. The message check catches wrappers that drop the code.
+  return err.code === "42703" || /removed_at/i.test(err.message ?? "");
+}
+
+async function readLiveFlags(build: () => FlagQuery): Promise<FlagRead> {
+  const filtered = await build().is("removed_at", null);
+  if (!filtered.error || !missingRemovalColumn(filtered.error)) return filtered;
+  return build();
+}
+
 /**
  * Everything the console renders, for ONE recruiting cycle.
  *
@@ -71,7 +104,13 @@ export type Snapshot = {
  * two or three reviews each — the rows filtered out here are cheap; revisit if
  * `reviews` ever gets large enough for the transfer to matter.
  */
-export async function getSnapshot(cycle?: string, viewer?: string | null): Promise<Snapshot> {
+export async function getSnapshot(
+  cycle?: string,
+  viewer?: string | null,
+  /** The viewer's role, only so each flag can be stamped with whether THIS
+   *  reader may remove it. Omitted means "not exec", the safe direction. */
+  viewerRole?: string | null
+): Promise<Snapshot> {
   const want = normalizeCycle(cycle);
   const sb = db();
   if (!sb) {
@@ -96,7 +135,16 @@ export async function getSnapshot(cycle?: string, viewer?: string | null): Promi
     await Promise.all([
       applicantQuery,
       sb.from("reviews").select("*"),
-      sb.from("applicant_flags").select("*").order("created_at", { ascending: false }),
+      // Removed flags are excluded HERE, at the only read the console has, so
+      // no surface can render one by forgetting to filter. The rows stay in the
+      // table (db/flag-removal.sql) — they are just nobody's business again.
+      readLiveFlags(
+        () =>
+          sb
+            .from("applicant_flags")
+            .select("*")
+            .order("created_at", { ascending: false }) as unknown as FlagQuery
+      ),
     ]);
   if (aErr) throw aErr;
   if (rErr) throw rErr;
@@ -106,7 +154,7 @@ export async function getSnapshot(cycle?: string, viewer?: string | null): Promi
   const ids = new Set(rows.map((a) => a.id));
   // Redacted at the source, so no route can serve an un-redacted flag by
   // forgetting to call the helper on its way out.
-  const { linked, pending } = partitionFlags(redactFlags((flags ?? []) as Flag[], viewer));
+  const { linked, pending } = partitionFlags(presentFlags((flags ?? []) as Flag[], viewer, viewerRole));
   return {
     applicants: rows,
     reviews: want ? ((reviews ?? []) as Review[]).filter((r) => ids.has(r.applicant_id)) : ((reviews ?? []) as Review[]),
@@ -118,17 +166,21 @@ export async function getSnapshot(cycle?: string, viewer?: string | null): Promi
 
 /** Every flag still waiting for its applicant, newest first. */
 export async function getPendingFlags(
-  viewer?: string | null
+  viewer?: string | null,
+  viewerRole?: string | null
 ): Promise<{ flags: Flag[]; demo: boolean }> {
   const sb = db();
-  if (!sb) return { flags: redactFlags(DEMO_PENDING_FLAGS, viewer), demo: true };
-  const { data, error } = await sb
-    .from("applicant_flags")
-    .select("*")
-    .is("applicant_id", null)
-    .order("created_at", { ascending: false });
+  if (!sb) return { flags: presentFlags(DEMO_PENDING_FLAGS, viewer, viewerRole), demo: true };
+  const { data, error } = await readLiveFlags(
+    () =>
+      sb
+        .from("applicant_flags")
+        .select("*")
+        .is("applicant_id", null)
+        .order("created_at", { ascending: false }) as unknown as FlagQuery
+  );
   if (error) throw error;
-  return { flags: redactFlags((data ?? []) as Flag[], viewer), demo: false };
+  return { flags: presentFlags((data ?? []) as Flag[], viewer, viewerRole), demo: false };
 }
 
 /**
@@ -452,6 +504,64 @@ export async function submitFlag(input: {
     return { ok: false, error: error.message };
   }
   return { ok: true, linked: Boolean(applicantId) };
+}
+
+/**
+ * Take a flag down: hide it everywhere, keep the row.
+ *
+ * The permission check runs HERE rather than in the route, because it needs the
+ * unredacted `submitter_email` and this is the only place that has it. A route
+ * cannot check "is this yours" against a flag it has not fetched, and fetching it
+ * twice to find out is how the two copies drift apart.
+ *
+ * Idempotent by construction: the update is conditioned on the row still being
+ * live, so a double-click removes once and the second call reports
+ * `alreadyRemoved` instead of overwriting who took it down first.
+ */
+export async function removeFlag(input: {
+  id: string;
+  actor_email: string;
+  actor_role?: string | null;
+  reason?: string | null;
+}): Promise<WriteResult & { alreadyRemoved?: boolean; forbidden?: boolean }> {
+  const sb = db();
+  if (!sb) return { ok: false, demo: true };
+
+  const { data, error } = await sb
+    .from("applicant_flags")
+    .select("id, submitter_email, removed_at")
+    .eq("id", input.id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Unknown flag." };
+  if (data.removed_at) return { ok: true, alreadyRemoved: true };
+
+  if (!canRemoveFlag(data as Flag, input.actor_email, input.actor_role)) {
+    return { ok: false, forbidden: true, error: "You can only remove your own flags." };
+  }
+
+  const { data: updated, error: uErr } = await sb
+    .from("applicant_flags")
+    .update({
+      removed_at: new Date().toISOString(),
+      removed_by: normalizeSubject(input.actor_email),
+      removed_reason: input.reason?.trim() || null,
+    })
+    .eq("id", input.id)
+    // Whoever gets here first wins. Without this the loser of a race silently
+    // rewrites `removed_by`, and the audit trail names the wrong person.
+    .is("removed_at", null)
+    .select("id");
+  if (uErr) {
+    // The columns land with db/flag-removal.sql. Until it is run, say so plainly
+    // rather than reporting a Postgres error nobody in the portal can act on.
+    if (/removed_at|removed_by|removed_reason/i.test(uErr.message)) {
+      return { ok: false, error: "Flag removal isn't set up on this deployment yet (db/flag-removal.sql)." };
+    }
+    return { ok: false, error: uErr.message };
+  }
+  if (!updated?.length) return { ok: true, alreadyRemoved: true };
+  return { ok: true };
 }
 
 export async function setDecision(input: {

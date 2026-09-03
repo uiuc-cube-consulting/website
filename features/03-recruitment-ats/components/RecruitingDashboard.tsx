@@ -7,7 +7,6 @@
 // up and flag them — but they are filtered out by default and cannot be re-scored.
 // The later rounds are worked in /portal/interview instead.
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RUBRIC,
@@ -15,7 +14,6 @@ import {
   STAGES,
   isScreenComplete,
   screenTotal,
-  wasFiledBeforeApplying,
   type Flag,
   type RubricKey,
   type Scores,
@@ -28,6 +26,7 @@ import {
 import { DISAGREEMENT_THRESHOLD, type DecisionRow } from "@/features/03-recruitment-ats/lib/decision";
 import { type Round } from "@/features/03-recruitment-ats/lib/rounds";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
+import { FlagPanel } from "@/features/03-recruitment-ats/components/FlagPanel";
 import { VerdictCards } from "@/features/03-recruitment-ats/components/VerdictCards";
 
 type Row = {
@@ -1132,115 +1131,6 @@ function WrittenVerdicts({ applicantId, name }: { applicantId: string; name: str
 // ── Flags ────────────────────────────────────────────────────────────────────
 // Anyone signed in can flag an applicant red (concern) or green (endorsement)
 // with a required note. Append-only: no edit/delete surface.
-
-function FlagPanel({
-  applicantId,
-  flags,
-  onChanged,
-}: {
-  applicantId: string;
-  flags: Row["flags"];
-  onChanged: () => Promise<void> | void;
-}) {
-  const [color, setColor] = useState<"red" | "green">("red");
-  const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  async function submit() {
-    if (!description.trim()) return;
-    setBusy(true);
-    setToast(null);
-    try {
-      const r = await fetch("/api/recruitment/flags", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicant_id: applicantId, color, description: description.trim() }),
-      });
-      const res = await r.json();
-      if (res.ok) {
-        setDescription("");
-        await onChanged();
-      } else setToast(res.message || res.error || "Could not submit flag.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div>
-      <p className="eyebrow">Flags</p>
-      {flags.length > 0 && (
-        <ul className="mt-2 space-y-2">
-          {flags.map((f) => {
-            const early = wasFiledBeforeApplying(f);
-            return (
-              <li key={f.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${f.color === "red" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                    {f.color === "red" ? "Red flag" : "Green flag"}
-                  </span>
-                  {f.event && (
-                    <span className="rounded-full border border-[var(--border)] bg-white px-2 py-0.5 text-[11px] text-[var(--muted)]">
-                      {f.event}
-                    </span>
-                  )}
-                  {/* Filed at an event, before this application existed — so the
-                      note was written about the person, not about their answers. */}
-                  {early && (
-                    <span className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--gold-deep)]">
-                      Before applying
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-[var(--bg-dark)]">{f.description}</p>
-                <p className="mt-1 text-[11px] text-[var(--muted)]">
-                  — {f.submitter_email ?? "anonymous"}
-                  {early && ` · ${new Date(f.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <div className="mt-3 flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => setColor("red")}
-          className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${color === "red" ? "border-red-300 bg-red-100 text-red-700" : "border-[var(--border)] bg-white text-[var(--bg-dark)]"}`}
-        >
-          Red flag
-        </button>
-        <button
-          type="button"
-          onClick={() => setColor("green")}
-          className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${color === "green" ? "border-green-300 bg-green-100 text-green-700" : "border-[var(--border)] bg-white text-[var(--bg-dark)]"}`}
-        >
-          Green flag
-        </button>
-      </div>
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-        placeholder="What happened? (required)"
-        className="mt-2 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
-      />
-      <button onClick={submit} disabled={busy || !description.trim()} className="btn btn-gold-outline mt-2 text-xs px-4 py-2 disabled:opacity-50">
-        {busy ? "Submitting…" : "Submit flag"}
-      </button>
-      {toast && <p className="mt-2 text-sm text-[var(--gold-deep)]">{toast}</p>}
-      <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Someone who hasn&apos;t applied?{" "}
-        <Link href="/portal/flags" className="underline hover:text-[var(--gold-deep)]">
-          Flag them by email
-        </Link>{" "}
-        — it attaches when they apply.
-      </p>
-    </div>
-  );
-}
 
 /**
  * Exec reroutes one candidate's reviewers.

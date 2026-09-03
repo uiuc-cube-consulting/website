@@ -2,7 +2,9 @@
 -- Run AFTER schema.sql, once, in the Supabase SQL editor. Safe to re-run.
 --
 -- Any signed-in member can flag a person red (concern) or green (endorsement)
--- with a required note. Append-only: no edit/delete surface.
+-- with a required note. Append-only in the sense that matters: a flag is never
+-- edited, and `db/flag-removal.sql` added taking one down as a HIDE (removed_at)
+-- rather than a delete, so the row and its author survive the removal.
 --
 -- A flag is about a PERSON, keyed by email — not about an application row. That
 -- is the whole point: members flag people at info nights, coffee chats and

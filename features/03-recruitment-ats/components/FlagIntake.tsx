@@ -36,6 +36,10 @@ export function FlagIntake() {
   const [attributed, setAttributed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // Retracting one of your own pending flags. Two clicks, same as the profile
+  // panel — this list is dense and the rows are one line apart.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -131,6 +135,27 @@ export function FlagIntake() {
       setToast({ kind: "err", text: "Could not submit flag." });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setRemoving(id);
+    setToast(null);
+    try {
+      const r = await fetch(`/api/recruitment/flags?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const res = await r.json();
+      if (res.ok) {
+        setConfirming(null);
+        await load();
+      } else {
+        setToast({ kind: "err", text: res.message || res.error || "Could not remove flag." });
+      }
+    } catch {
+      setToast({ kind: "err", text: "Could not remove flag." });
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -314,10 +339,43 @@ export function FlagIntake() {
                   )}
                 </div>
                 <p className="mt-1.5 text-[var(--bg-dark)]">{f.description}</p>
-                <p className="mt-1 text-[11px] text-[var(--muted)]">
-                  — {f.submitter_email ? (f.submitter_email === viewer ? "you" : f.submitter_email) : "anonymous"} ·{" "}
-                  {when(f.created_at)}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] text-[var(--muted)]">
+                    — {f.submitter_email ? (f.submitter_email === viewer ? "you" : f.submitter_email) : "anonymous"} ·{" "}
+                    {when(f.created_at)}
+                  </p>
+                  {/* Server-decided: exec, or the person who filed it. An
+                      anonymous flag hides its author from everyone else, so the
+                      client could not work this out for itself. */}
+                  {f.removable && confirming !== f.id && (
+                    <button
+                      type="button"
+                      onClick={() => { setConfirming(f.id); setToast(null); }}
+                      className="text-[11px] font-medium text-[var(--muted)] underline underline-offset-2 hover:text-[var(--gold-deep)]"
+                    >
+                      Remove
+                    </button>
+                  )}
+                  {confirming === f.id && (
+                    <span className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => remove(f.id)}
+                        disabled={removing === f.id}
+                        className="rounded-full border border-red-300 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700 disabled:opacity-50"
+                      >
+                        {removing === f.id ? "Removing…" : "Yes, remove"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(null)}
+                        className="rounded-full border border-[var(--border)] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[var(--bg-dark)]"
+                      >
+                        Keep
+                      </button>
+                    </span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

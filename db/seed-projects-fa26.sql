@@ -26,22 +26,55 @@
 
 -- ── BLOCK 1 · Projects ───────────────────────────────────────────────────────
 -- starts_on MUST be the Monday of Week 1 — every "Week N" in the portal is
--- derived from it, and it is the only date the tracker needs. 2026-08-24 is a
--- Monday. `weeks` caps the semester so a finished project stops sending
--- reminders; change it per project if a cycle is shorter or longer.
+-- derived from it, and it is the only date the tracker needs. `weeks` caps the
+-- semester so a finished project stops sending reminders; change it per project
+-- if a cycle is shorter or longer.
+--
+-- WEEK 1 WAS DROPPED (2026-09-03). The semester originally started 2026-08-24,
+-- but consultants were not seated until 2026-08-31, so that first week had
+-- nobody to rate on any project — an empty column in every grid that no PM could
+-- ever have filled. Rather than carry it as a permanent gap, the semester now
+-- starts on the 31st and runs 11 weeks instead of 12.
+--
+-- The end date is unchanged either way: Aug 24 + 12 weeks and Aug 31 + 11 weeks
+-- both finish the week of Nov 9-15. Only the numbering moved down by one, so what
+-- the portal called Week 2 is now Week 1.
 insert into projects (name, client, cohort, starts_on, weeks, active) values
-  ('Deloitte',      'Deloitte',      'FA26', '2026-08-24', 12, true),
-  ('Replit',        'Replit',        'FA26', '2026-08-24', 12, true),
-  ('VoiceOS',       'VoiceOS',       'FA26', '2026-08-24', 12, true),
-  ('Mando',         'Mando',         'FA26', '2026-08-24', 12, true),
-  ('Wrike',         'Wrike',         'FA26', '2026-08-24', 12, true),
-  ('SolutionExec',  'SolutionExec',  'FA26', '2026-08-24', 12, true),  -- aka "GTM Shift", same project
-  ('VerityXR',      'VerityXR',      'FA26', '2026-08-24', 12, true)
+  ('Deloitte',      'Deloitte',      'FA26', '2026-08-31', 11, true),
+  ('Replit',        'Replit',        'FA26', '2026-08-31', 11, true),
+  ('VoiceOS',       'VoiceOS',       'FA26', '2026-08-31', 11, true),
+  ('Mando',         'Mando',         'FA26', '2026-08-31', 11, true),
+  ('Wrike',         'Wrike',         'FA26', '2026-08-31', 11, true),
+  ('SolutionExec',  'SolutionExec',  'FA26', '2026-08-31', 11, true),  -- aka "GTM Shift", same project
+  ('VerityXR',      'VerityXR',      'FA26', '2026-08-31', 11, true)
 on conflict (lower(name), cohort) do update
   set client    = excluded.client,
       starts_on = excluded.starts_on,
       weeks     = excluded.weeks,
       active    = excluded.active;
+
+-- ── BLOCK 1b · Renumber the reminder ledger ──────────────────────────────────
+-- Dropping week 1 shifts every week down by one, and `accountability_reminders`
+-- stores the OLD number. Left alone, the 17 people emailed about "week 2" on
+-- 2026-09-01 would be emailed again the moment that same week became week 1 —
+-- the ledger is what makes the job at-least-once instead of every-run.
+--
+-- Guarded so a re-run is a no-op: it only fires while a row still sits at the old
+-- numbering, which after the first run is nothing. Ratings need no such fix —
+-- there were none when the week was dropped, for the same reason it was dropped.
+update accountability_reminders r
+   set week = r.week - 1
+  from projects p
+ where p.id = r.project_id
+   and p.cohort = 'FA26'
+   and p.starts_on = '2026-08-31'
+   and r.week > 1
+   and not exists (
+     select 1 from accountability_reminders x
+      where x.project_id = r.project_id
+        and x.recipient_id = r.recipient_id
+        and x.week = r.week - 1
+   );
 
 -- ── BLOCK 2 · Rosters ────────────────────────────────────────────────────────
 -- Every seat below is real: PM/SC from the assignment table, consultants as given

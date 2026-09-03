@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
     // queue mixing two would put candidates nobody is deciding on right now in
     // front of the ones exec is actually working.
     const cycle = await resolveCycle(url.searchParams.get("cycle"));
-    const { applicants, reviews, flags, demo } = await getSnapshot(cycle, email);
+    const { applicants, reviews, flags, demo } = await getSnapshot(cycle, email, session?.user?.role);
 
     // One candidate, whatever stage they are at now. Deliberately NOT filtered to
     // the written round: the whole point of this branch is the people the queue

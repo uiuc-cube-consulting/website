@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
+import { FlagPanel } from "@/features/03-recruitment-ats/components/FlagPanel";
 import {
   INTERVIEW_RUBRICS,
   KIND_LABEL,
@@ -124,6 +125,26 @@ export function CandidateWorkspace({
         <PanelEditor candidate={candidate} round={round} pool={pool} demo={demo} onChanged={onChanged} />
       )}
       {canManage && <RoundDecision candidate={candidate} round={round} onChanged={onChanged} />}
+
+      {/* Beside the resume, not below the rubrics: what someone noticed about this
+          person at an info night is context for the conversation, and context is
+          only useful before you score. Below the fold it would be read after. */}
+      <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="eyebrow">Flags</p>
+          <p className="text-xs text-[var(--muted)]">
+            {candidate.flags.length === 0
+              ? "Nothing raised"
+              : `${candidate.flags.length} on this candidate`}
+          </p>
+        </div>
+        <FlagPanel
+          applicantId={candidate.id}
+          flags={candidate.flags}
+          onChanged={onChanged}
+          heading={false}
+        />
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <ResumePane candidate={candidate} />

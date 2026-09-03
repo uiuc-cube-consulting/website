@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   const stage = stageParam && VALID_STAGES.includes(stageParam) ? (stageParam as Stage) : null;
 
   try {
-    const { applicants, reviews, flags } = await getSnapshot(cycle, email);
+    const { applicants, reviews, flags } = await getSnapshot(cycle, email, session?.user?.role);
 
     // Your own application is not yours to read, and that does not stop being
     // true because the read is a file download (lib/self-access.ts). An exec who

@@ -30,6 +30,13 @@ jest.mock("@/features/03-recruitment-ats/lib/visibility", () => ({
 
 const stub = {
   submitFlag: jest.fn(async () => ({ ok: true, linked: false })),
+  removeFlag: jest.fn(async (): Promise<{
+    ok: boolean;
+    demo?: boolean;
+    forbidden?: boolean;
+    alreadyRemoved?: boolean;
+    error?: string;
+  }> => ({ ok: true })),
   // Annotated rather than inferred: an empty literal infers `never[]`, and every
   // redaction case below then fails to typecheck while still passing at runtime.
   getPendingFlags: jest.fn(async (): Promise<{ flags: Flag[]; demo: boolean }> => ({
@@ -40,6 +47,7 @@ const stub = {
 jest.mock("@/features/03-recruitment-ats/lib/store", () => ({
   submitFlag: (...a: unknown[]) => stub.submitFlag(...(a as [])),
   getPendingFlags: (...a: unknown[]) => stub.getPendingFlags(...(a as [])),
+  removeFlag: (...a: unknown[]) => stub.removeFlag(...(a as [])),
 }));
 
 // Only the DB-backed half is stubbed. `isOwnApplication` stays REAL, because the
@@ -55,12 +63,15 @@ import { NextRequest } from "next/server";
 import {
   POST as flagsPOST,
   GET as flagsGET,
+  DELETE as flagsDELETE,
 } from "@/features/03-recruitment-ats/app/api/recruitment/flags/route";
 import {
+  canRemoveFlag,
   isPendingFlag,
   normalizeSubject,
   partitionFlags,
   pendingFlagsFor,
+  presentFlags,
   wasFiledBeforeApplying,
   type Flag,
 } from "@/features/03-recruitment-ats/lib/types";
@@ -78,6 +89,13 @@ function flag(over: Partial<Flag> = {}): Flag {
   };
 }
 
+function del(id: string): NextRequest {
+  return new NextRequest(
+    `http://localhost/api/recruitment/flags?id=${encodeURIComponent(id)}`,
+    { method: "DELETE" }
+  );
+}
+
 function post(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/recruitment/flags", {
     method: "POST",
@@ -91,7 +109,9 @@ beforeEach(() => {
   recruitingVisible = true;
   stub.submitFlag.mockClear();
   stub.getPendingFlags.mockClear();
+  stub.removeFlag.mockClear();
   stub.submitFlag.mockResolvedValue({ ok: true, linked: false });
+  stub.removeFlag.mockResolvedValue({ ok: true });
   ownApplicationIds.clear();
 });
 
@@ -422,5 +442,132 @@ describe("flags about the viewer themselves", () => {
     const res = await flagsPOST(post({ applicant_id: "a1", color: "red", description: "Late." }));
     expect(res.status).toBe(200);
     expect(stub.submitFlag).toHaveBeenCalled();
+  });
+});
+
+// ── 6. Taking a flag down ────────────────────────────────────────────────────
+//
+// The table was append-only until removal existed, and the reason it was is still
+// the reason removal is narrow: a flag is one member's observation of another, so
+// "anyone who can file one can erase one" would make the whole record worthless.
+// What these pin down is the boundary — exec, or the author, and nobody else —
+// and the fact that it is decided where the author is actually known.
+
+describe("who may remove a flag", () => {
+  const mine = flag({ submitter_email: "member@illinois.edu" });
+  const theirs = flag({ submitter_email: "someone.else@illinois.edu" });
+
+  it("lets exec remove anyone's", () => {
+    expect(canRemoveFlag(theirs, "exec@cubeconsulting.org", "exec")).toBe(true);
+  });
+
+  it("lets a member retract their own", () => {
+    expect(canRemoveFlag(mine, "member@illinois.edu", "member")).toBe(true);
+  });
+
+  it("refuses a member somebody else's", () => {
+    // The case the whole rule exists for: erasing a concern raised about a friend.
+    expect(canRemoveFlag(theirs, "member@illinois.edu", "member")).toBe(false);
+  });
+
+  it("matches the author case- and space-insensitively", () => {
+    // Same normalisation as the match rule above; a flag filed from a differently
+    // cased address is still yours to retract.
+    expect(canRemoveFlag(flag({ submitter_email: "Member@Illinois.edu" }), " member@illinois.edu ", "member")).toBe(true);
+  });
+
+  it("refuses an already-removed flag to everyone, exec included", () => {
+    // Not a permission question but an idempotence one: a second removal would
+    // otherwise overwrite `removed_by` and misname who took it down.
+    const gone = flag({ submitter_email: "member@illinois.edu", removed_at: "2026-09-03T00:00:00Z" });
+    expect(canRemoveFlag(gone, "member@illinois.edu", "member")).toBe(false);
+    expect(canRemoveFlag(gone, "exec@cubeconsulting.org", "exec")).toBe(false);
+  });
+
+  it("refuses when the flag has no recorded author and the viewer is not exec", () => {
+    // A row predating `submitter_email`, or one whose author was cleared. Nobody
+    // owns it, so nobody but exec can take it down.
+    expect(canRemoveFlag(flag({ submitter_email: null }), "member@illinois.edu", "member")).toBe(false);
+  });
+});
+
+describe("presentFlags stamps removability before redacting", () => {
+  // The ordering is the point. `redactFlag` strips `submitter_email` from an
+  // anonymous flag, so a `removable` computed afterwards would always be false
+  // and members could never retract their own anonymous flags — the exact ones
+  // the anonymity default encourages them to file.
+  const anonymousMine = flag({ submitter_email: "member@illinois.edu", attributed: false });
+
+  it("marks an anonymous flag removable by its own author", () => {
+    const [seen] = presentFlags([anonymousMine], "member@illinois.edu", "member");
+    expect(seen.removable).toBe(true);
+  });
+
+  it("still withholds the author's name from everyone else", () => {
+    const [seen] = presentFlags([anonymousMine], "other@illinois.edu", "member");
+    expect(seen.submitter_email).toBeUndefined();
+    expect(seen.removable).toBe(false);
+  });
+
+  it("gives exec the button without publishing the name", () => {
+    // Exec may remove it, but the flag was filed anonymously and stays that way
+    // in the JSON: the power to take it down is not the power to see who filed it.
+    const [seen] = presentFlags([anonymousMine], "exec@cubeconsulting.org", "exec");
+    expect(seen.removable).toBe(true);
+    expect(seen.submitter_email).toBeUndefined();
+  });
+});
+
+describe("DELETE /api/recruitment/flags", () => {
+  it("passes the caller's identity and role to the store", async () => {
+    mockSession = { user: { email: "Member@Illinois.edu", role: "member" } };
+    const res = await flagsDELETE(del("flag-1"));
+    expect(res.status).toBe(200);
+    // Lowercased on the way in, matching how every other email in the ATS is
+    // stored and compared.
+    expect(stub.removeFlag).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "flag-1", actor_email: "member@illinois.edu", actor_role: "member" })
+    );
+  });
+
+  it("turns the store's refusal into a 403", async () => {
+    stub.removeFlag.mockResolvedValue({ ok: false, forbidden: true, error: "You can only remove your own flags." });
+    const res = await flagsDELETE(del("flag-1"));
+    expect(res.status).toBe(403);
+  });
+
+  it("404s an unknown flag", async () => {
+    stub.removeFlag.mockResolvedValue({ ok: false, error: "Unknown flag." });
+    expect((await flagsDELETE(del("nope"))).status).toBe(404);
+  });
+
+  it("reports a second removal as success", async () => {
+    // The flag is gone, which is what the caller asked for. A double-click must
+    // not surface an error for an outcome that already holds.
+    stub.removeFlag.mockResolvedValue({ ok: true, alreadyRemoved: true });
+    const res = await flagsDELETE(del("flag-1"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, alreadyRemoved: true });
+  });
+
+  it("requires an id", async () => {
+    const res = await flagsDELETE(
+      new NextRequest("http://localhost/api/recruitment/flags", { method: "DELETE" })
+    );
+    expect(res.status).toBe(400);
+    expect(stub.removeFlag).not.toHaveBeenCalled();
+  });
+
+  it("refuses a signed-out caller", async () => {
+    mockSession = null;
+    expect((await flagsDELETE(del("flag-1"))).status).toBe(401);
+    expect(stub.removeFlag).not.toHaveBeenCalled();
+  });
+
+  it("works while recruiting is closed", async () => {
+    // Same carve-out as filing by email: a flag filed at an August info night has
+    // to be retractable in August, and the console is shut for that whole window.
+    recruitingVisible = false;
+    expect((await flagsDELETE(del("flag-1"))).status).toBe(200);
   });
 });

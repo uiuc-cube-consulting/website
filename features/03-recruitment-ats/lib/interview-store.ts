@@ -27,7 +27,7 @@ import { parseResumeId } from "./form-resume";
 import { readApplicantsFromSheet } from "./import";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
 import { excludeOwnApplications } from "./self-access";
-import { redactFlags, type Flag, type Stage } from "./types";
+import { presentFlags, type Flag, type Stage } from "./types";
 
 function db() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -160,7 +160,11 @@ export async function getBoard(
     // Only flags already attached to an applicant. A PENDING flag is filed
     // against an email nobody has applied from, so it belongs to no candidate on
     // this board — it is claimed at application time, not matched here.
-    sb.from("applicant_flags").select("*").not("applicant_id", "is", null),
+    // `removed_at` only exists once db/flag-removal.sql has run. Here the filter
+    // can stay inline: this read already degrades to "no flags" on error rather
+    // than throwing, so a database without the column costs the board its
+    // annotations for one deploy instead of taking the interview console down.
+    sb.from("applicant_flags").select("*").not("applicant_id", "is", null).is("removed_at", null),
   ]);
 
   if (applicantsRes.error) throw applicantsRes.error;
@@ -169,7 +173,13 @@ export async function getBoard(
   // A flag that fails to load is a missing annotation, not a broken board — the
   // interview can go ahead without it, so this degrades rather than throws.
   const flagsByApplicant = new Map<string, Flag[]>();
-  for (const f of redactFlags(flagsRes.error ? [] : ((flagsRes.data ?? []) as Flag[]), viewer)) {
+  for (const f of presentFlags(
+    flagsRes.error ? [] : ((flagsRes.data ?? []) as Flag[]),
+    viewer,
+    // The route passes `canManage = role === "exec"`, so this is the exec bit by
+    // another name — the board never sees `role` itself.
+    canManage ? "exec" : null
+  )) {
     if (!f.applicant_id) continue;
     const cur = flagsByApplicant.get(f.applicant_id);
     if (cur) cur.push(f);

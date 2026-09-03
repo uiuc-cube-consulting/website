@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getPendingFlags, submitFlag } from "@/features/03-recruitment-ats/lib/store";
+import { getPendingFlags, removeFlag, submitFlag } from "@/features/03-recruitment-ats/lib/store";
 import { canFlag, isExec } from "@/features/03-recruitment-ats/lib/access";
 import { canViewRecruiting, getActiveCycle } from "@/features/03-recruitment-ats/lib/visibility";
 // Not SELF_ACCESS_DENIED: that wording is about withholding your application
@@ -8,7 +8,9 @@ import { canViewRecruiting, getActiveCycle } from "@/features/03-recruitment-ats
 import { isOwnApplication } from "@/features/03-recruitment-ats/lib/self-access";
 import { isOwnApplicationId } from "@/features/03-recruitment-ats/lib/self-access-store";
 
-// Auth-gated: any signed-in member can flag a person red or green. Append-only.
+// Auth-gated: any signed-in member can flag a person red or green. Removable by
+// exec, or by whoever filed it (DELETE below) — and "removed" means hidden, never
+// deleted, so taking a flag down is itself on the record. See db/flag-removal.sql.
 //
 // Two shapes of POST:
 //   { applicant_id, color, description }        — from a candidate's profile
@@ -144,7 +146,7 @@ export async function GET() {
   }
 
   try {
-    const { flags, demo } = await getPendingFlags(email);
+    const { flags, demo } = await getPendingFlags(email, session?.user?.role);
     // A pending flag names its subject by email, so the pool would otherwise
     // show a member what was written about them at an info night — a red flag
     // for no-showing a coffee chat, under the name of the teammate who filed it.
@@ -159,4 +161,56 @@ export async function GET() {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Take a flag down.
+ *
+ * Removal is `exec, or the person who filed it` — the rule lives in
+ * `canRemoveFlag` and is enforced inside `removeFlag`, which is the only code
+ * holding the unredacted submitter. This handler deliberately does NOT re-derive
+ * it: an anonymous flag arrives here with no author attached, so a check written
+ * at this level would either have to re-fetch the row or guess.
+ *
+ * Not gated on recruiting visibility, matching the POST above and for the same
+ * reason: a flag filed by email between cycles has to be retractable between
+ * cycles too, and the console is shut for that entire window. What the caller
+ * still cannot do is learn anything new — a flag id they were never shown returns
+ * the same refusal as one they may not remove.
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  const email = session?.user?.email?.toLowerCase();
+  if (!email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canFlag(session?.user?.role)) {
+    return NextResponse.json({ ok: false, error: "Recruiting access required" }, { status: 403 });
+  }
+
+  // Read from the query string rather than a body: a DELETE with a payload is
+  // legal but inconsistently handled by proxies and fetch wrappers, and the only
+  // required field is an id.
+  const id = req.nextUrl.searchParams.get("id")?.trim();
+  const reason = req.nextUrl.searchParams.get("reason")?.trim() || null;
+  if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+
+  const result = await removeFlag({
+    id,
+    actor_email: email,
+    actor_role: session?.user?.role,
+    reason,
+  });
+
+  if (result.demo) {
+    return NextResponse.json({ ok: false, demo: true, message: "Supabase not configured — flag not removed." });
+  }
+  if (result.forbidden) {
+    return NextResponse.json({ ok: false, error: result.error }, { status: 403 });
+  }
+  if (!result.ok) {
+    // "Unknown flag" is the caller's mistake, not the server's.
+    const status = result.error === "Unknown flag." ? 404 : 500;
+    return NextResponse.json({ ok: false, error: result.error }, { status });
+  }
+  // `alreadyRemoved` is a success: the flag is gone, which is what was asked for.
+  return NextResponse.json({ ok: true, alreadyRemoved: result.alreadyRemoved ?? false });
 }

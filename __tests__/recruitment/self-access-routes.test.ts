@@ -575,6 +575,11 @@ describe("POST /api/recruitment/interview/rubric", () => {
 // Lives in this file rather than cycle-store.test.ts because it is a ROUTE-level
 // assertion and needs the mocked store above; cycle-store.test.ts deliberately
 // runs against the real store on the demo path.
+//
+// The third argument is the viewer's ROLE, which `getSnapshot` needs only to
+// stamp each flag with whether this reader may remove it (see `presentFlags`).
+// It is asserted here because these are the calls that carry it: a route that
+// dropped it would silently hide the Remove button from every exec.
 
 describe("the console shows one cycle at a time", () => {
   const url = "http://localhost/api/recruitment/applicants";
@@ -582,7 +587,7 @@ describe("the console shows one cycle at a time", () => {
   it("defaults to the cycle recruiting is running", async () => {
     signInAs("member", "newcomer@illinois.edu");
     await applicantsGET();
-    expect(stub.getSnapshot).toHaveBeenCalledWith("fa26", "newcomer@illinois.edu");
+    expect(stub.getSnapshot).toHaveBeenCalledWith("fa26", "newcomer@illinois.edu", "member");
   });
 
   it("opens a past cohort on request", async () => {
@@ -590,14 +595,14 @@ describe("the console shows one cycle at a time", () => {
     // table each semester: last year's cohort stays readable.
     signInAs("exec", "newcomer@illinois.edu");
     await applicantsGET(new NextRequest(`${url}?cycle=sp26`));
-    expect(stub.getSnapshot).toHaveBeenCalledWith("sp26", "newcomer@illinois.edu");
+    expect(stub.getSnapshot).toHaveBeenCalledWith("sp26", "newcomer@illinois.edu", "exec");
   });
 
   it("falls back to the active cycle on a nonsense cycle", async () => {
     // A stale bookmark or a typo should show the current cohort, not a 400.
     signInAs("member", "newcomer@illinois.edu");
     await applicantsGET(new NextRequest(`${url}?cycle=garbage`));
-    expect(stub.getSnapshot).toHaveBeenCalledWith("fa26", "newcomer@illinois.edu");
+    expect(stub.getSnapshot).toHaveBeenCalledWith("fa26", "newcomer@illinois.edu", "member");
   });
 
   it("names the cohort and offers the others", async () => {
@@ -618,7 +623,7 @@ describe("the console shows one cycle at a time", () => {
     const res = await decisionsGET(
       new NextRequest("http://localhost/api/recruitment/decisions?cycle=sp26")
     );
-    expect(stub.getSnapshot).toHaveBeenCalledWith("sp26", "newcomer@illinois.edu");
+    expect(stub.getSnapshot).toHaveBeenCalledWith("sp26", "newcomer@illinois.edu", "exec");
     expect((await res.json()).cycle).toBe("sp26");
   });
 });

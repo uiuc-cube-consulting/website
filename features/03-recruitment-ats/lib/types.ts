@@ -359,7 +359,75 @@ export type Flag = {
   attributed?: boolean;
   color: "red" | "green";
   description: string;
+  /** Set when the flag was taken down. A removed flag is filtered out of every
+   *  read, so this is null on anything a member ever sees — it exists on the
+   *  type because the row it mirrors is kept rather than deleted. */
+  removed_at?: string | null;
+  /** Who took it down. See `db/flag-removal.sql`. */
+  removed_by?: string | null;
+  /**
+   * Whether THIS reader may remove it — decided on the server and sent, not
+   * computed in the component.
+   *
+   * It has to be: the rule is "exec, or the person who filed it", and the second
+   * half is unanswerable on the client for an anonymous flag, whose
+   * `submitter_email` was stripped by `redactFlag` on the way out. A UI that
+   * guessed would either hide the button on someone's own flag or offer one the
+   * API refuses. `presentFlags` computes it before redaction, where the name is
+   * still in hand.
+   */
+  removable?: boolean;
 };
+
+/**
+ * May `viewer` take this flag down?
+ *
+ * Exec, or whoever filed it. Deliberately not "anyone who can file one": a flag
+ * is one member's observation of another, and a club where any member can erase
+ * a concern raised about a friend has flags that mean nothing. Retracting your
+ * OWN is different in kind — it is unsaying something you said, which is why the
+ * submitter keeps that power over their own row and no one else's.
+ *
+ * Exec are included for the same reason they hold `canDecide`: somebody has to be
+ * able to take down a flag naming the wrong person, and it is already the role
+ * that can reject the candidate outright. `db/flag-removal.sql` keeps the row so
+ * that power leaves a trace.
+ *
+ * Pure, and takes the UNREDACTED flag — call it before `redactFlag`.
+ */
+export function canRemoveFlag(
+  flag: Flag,
+  viewer: string | null | undefined,
+  role: string | null | undefined
+): boolean {
+  if (flag.removed_at) return false;
+  if (role === "exec") return true;
+  const submitter = normalizeSubject(flag.submitter_email ?? "");
+  return Boolean(submitter) && submitter === normalizeSubject(viewer ?? "");
+}
+
+/**
+ * Redact a flag for a reader and stamp whether they may remove it, in one pass.
+ *
+ * The two steps are fused on purpose. `removable` must be computed while
+ * `submitter_email` is still present and serialised after it has been stripped,
+ * so a caller doing them separately has to get the order right; a caller doing
+ * this one gets it right by construction. Every surface that serves flags goes
+ * through here — `getSnapshot`, `getPendingFlags`, and the interview board.
+ */
+export function presentFlags(
+  flags: Flag[],
+  viewer: string | null | undefined,
+  role: string | null | undefined
+): Flag[] {
+  return flags.map((f) => ({ ...redactFlag(f, viewer), removable: canRemoveFlag(f, viewer, role) }));
+}
+
+/** True while the flag is live. Removed rows are filtered at every read, so this
+ *  is a guard for code holding raw rows rather than a display concern. */
+export function isLiveFlag(f: Flag): boolean {
+  return !f.removed_at;
+}
 
 /**
  * A flag as a reader may see it.
