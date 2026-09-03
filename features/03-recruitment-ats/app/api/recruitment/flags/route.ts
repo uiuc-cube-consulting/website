@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     event?: string;
     color?: string;
     description?: string;
+    attributed?: boolean;
   };
   try {
     body = await req.json();
@@ -88,6 +89,9 @@ export async function POST(req: NextRequest) {
     subject_name: body.subject_name ?? null,
     event: body.event ?? null,
     submitter_email: email,
+    // Opt IN, and read strictly: anything other than an explicit `true` files
+    // anonymously. A missing or malformed field must never publish a name.
+    attributed: body.attributed === true,
     color: body.color,
     description,
     // Which application a by-email flag attaches to. A flag filed today is an
@@ -140,7 +144,7 @@ export async function GET() {
   }
 
   try {
-    const { flags, demo } = await getPendingFlags();
+    const { flags, demo } = await getPendingFlags(email);
     // A pending flag names its subject by email, so the pool would otherwise
     // show a member what was written about them at an info night — a red flag
     // for no-showing a coffee chat, under the name of the teammate who filed it.

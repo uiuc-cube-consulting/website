@@ -27,7 +27,7 @@ import { parseResumeId } from "./form-resume";
 import { readApplicantsFromSheet } from "./import";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
 import { excludeOwnApplications } from "./self-access";
-import type { Flag, Stage } from "./types";
+import { redactFlags, type Flag, type Stage } from "./types";
 
 function db() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -169,7 +169,7 @@ export async function getBoard(
   // A flag that fails to load is a missing annotation, not a broken board — the
   // interview can go ahead without it, so this degrades rather than throws.
   const flagsByApplicant = new Map<string, Flag[]>();
-  for (const f of (flagsRes.error ? [] : ((flagsRes.data ?? []) as Flag[]))) {
+  for (const f of redactFlags(flagsRes.error ? [] : ((flagsRes.data ?? []) as Flag[]), viewer)) {
     if (!f.applicant_id) continue;
     const cur = flagsByApplicant.get(f.applicant_id);
     if (cur) cur.push(f);

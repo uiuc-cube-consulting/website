@@ -345,10 +345,52 @@ export type Flag = {
   event?: string | null;
   /** When the flag attached to an applicant. Null while pending. */
   linked_at?: string | null;
-  submitter_email: string;
+  /**
+   * Who filed it — present in the database always, but sent to a reader ONLY
+   * when the flag is attributed or when it is the reader's own. Absent means
+   * anonymous. See `redactFlag`.
+   */
+  submitter_email?: string | null;
+  /**
+   * The submitter chose to put their name to this one. Absent or false is
+   * anonymous, so a row written before the column existed reads as anonymous —
+   * the safe direction for a default to fall in.
+   */
+  attributed?: boolean;
   color: "red" | "green";
   description: string;
 };
+
+/**
+ * A flag as a reader may see it.
+ *
+ * Flags are anonymous unless the person filing one chose otherwise, and the name
+ * is stripped HERE — on the server, before the row is serialised — rather than
+ * hidden in the component that renders it. A name withheld in the UI but present
+ * in the JSON is not withheld; it is one devtools panel away, and the people most
+ * motivated to look are exactly the ones the anonymity protects against.
+ *
+ * The reader always keeps their OWN name, so the intake can still say which
+ * pending flags are yours. That leaks nothing: you already know what you filed.
+ *
+ * The database keeps `submitter_email` on every row regardless. Anonymous here
+ * means "not shown to members", not "unrecorded" — an exec chasing an abusive
+ * flag can still find it in Supabase, which is the one place that ought to
+ * require deliberately going and looking.
+ */
+export function redactFlag(flag: Flag, viewer: string | null | undefined): Flag {
+  const submitter = normalizeSubject(flag.submitter_email ?? "");
+  const mine = Boolean(submitter) && submitter === normalizeSubject(viewer ?? "");
+  if (flag.attributed || mine) return flag;
+  const { submitter_email: _withheld, ...rest } = flag;
+  return rest;
+}
+
+/** `redactFlag` over a list. A missing viewer redacts everything, which is the
+ *  direction a mistake here should fail in. */
+export function redactFlags(flags: Flag[], viewer: string | null | undefined): Flag[] {
+  return flags.map((f) => redactFlag(f, viewer));
+}
 
 /** The one canonical form of a flag subject. Matching is case-insensitive and
  *  whitespace-insensitive; everything else about an email is left alone. */

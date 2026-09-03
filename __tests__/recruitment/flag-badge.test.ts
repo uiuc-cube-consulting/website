@@ -106,3 +106,75 @@ describe("flags reach the decision queue", () => {
     expect(a1.flags).toHaveLength(2);
   });
 });
+
+// ── Anonymity ────────────────────────────────────────────────────────────────
+// Flags are anonymous so that a red flag someone is nervous about filing still
+// gets filed. The name is stripped on the SERVER, so these assert on the object
+// a reader receives rather than on what a component chooses to render.
+
+import { redactFlag, redactFlags } from "@/features/03-recruitment-ats/lib/types";
+
+const aFlag = (over: Partial<Flag> = {}): Flag => ({
+  id: "f1",
+  created_at: "2026-09-02T00:00:00Z",
+  applicant_id: "a1",
+  subject_email: "cand@illinois.edu",
+  submitter_email: "filer@illinois.edu",
+  color: "red",
+  description: "No-showed twice.",
+  ...over,
+});
+
+describe("redactFlag", () => {
+  it("withholds the submitter from everyone else", () => {
+    const out = redactFlag(aFlag(), "someone.else@illinois.edu");
+    expect(out.submitter_email).toBeUndefined();
+    // The key is absent, not blank — nothing downstream can print an empty byline.
+    expect("submitter_email" in out).toBe(false);
+    expect(out.description).toBe("No-showed twice.");
+  });
+
+  it("keeps your own name on your own flag", () => {
+    // You already know what you filed; the intake needs this to say "yours".
+    const out = redactFlag(aFlag(), "filer@illinois.edu");
+    expect(out.submitter_email).toBe("filer@illinois.edu");
+  });
+
+  it("matches your own flag case-insensitively", () => {
+    expect(redactFlag(aFlag(), "Filer@Illinois.edu").submitter_email).toBe("filer@illinois.edu");
+  });
+
+  it("keeps the name when the submitter asked to be named", () => {
+    const out = redactFlag(aFlag({ attributed: true }), "someone.else@illinois.edu");
+    expect(out.submitter_email).toBe("filer@illinois.edu");
+  });
+
+  it("treats a row with no `attributed` column as anonymous", () => {
+    // Rows written before db/flag-anonymity.sql have no such field. Absent must
+    // read as anonymous — the safe direction for a default to fall in.
+    const { attributed: _none, ...legacy } = aFlag({ attributed: undefined });
+    expect(redactFlag(legacy as Flag, "someone.else@illinois.edu").submitter_email).toBeUndefined();
+  });
+
+  it("redacts everything when there is no viewer", () => {
+    // A caller that forgets to thread the viewer through must lose names, never
+    // publish them.
+    expect(redactFlag(aFlag(), undefined).submitter_email).toBeUndefined();
+    expect(redactFlag(aFlag(), null).submitter_email).toBeUndefined();
+    expect(redactFlag(aFlag(), "").submitter_email).toBeUndefined();
+  });
+
+  it("does not treat a flag with no submitter as belonging to a blank viewer", () => {
+    const orphan = aFlag({ submitter_email: null });
+    expect(redactFlag(orphan, "").submitter_email).toBeUndefined();
+  });
+
+  it("redacts a list, keeping only your own", () => {
+    const out = redactFlags(
+      [aFlag({ id: "a" }), aFlag({ id: "b", submitter_email: "other@illinois.edu" })],
+      "filer@illinois.edu"
+    );
+    expect(out[0].submitter_email).toBe("filer@illinois.edu");
+    expect(out[1].submitter_email).toBeUndefined();
+  });
+});

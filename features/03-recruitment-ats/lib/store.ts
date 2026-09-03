@@ -15,6 +15,7 @@ import {
   type Review,
   type Scores,
   type Stage,
+  redactFlags,
 } from "./types";
 
 // Members who can be assigned as recruitment reviewers (matches proxy.ts).
@@ -70,7 +71,7 @@ export type Snapshot = {
  * two or three reviews each — the rows filtered out here are cheap; revisit if
  * `reviews` ever gets large enough for the transfer to matter.
  */
-export async function getSnapshot(cycle?: string): Promise<Snapshot> {
+export async function getSnapshot(cycle?: string, viewer?: string | null): Promise<Snapshot> {
   const want = normalizeCycle(cycle);
   const sb = db();
   if (!sb) {
@@ -103,7 +104,9 @@ export async function getSnapshot(cycle?: string): Promise<Snapshot> {
 
   const rows = (applicants ?? []) as Applicant[];
   const ids = new Set(rows.map((a) => a.id));
-  const { linked, pending } = partitionFlags((flags ?? []) as Flag[]);
+  // Redacted at the source, so no route can serve an un-redacted flag by
+  // forgetting to call the helper on its way out.
+  const { linked, pending } = partitionFlags(redactFlags((flags ?? []) as Flag[], viewer));
   return {
     applicants: rows,
     reviews: want ? ((reviews ?? []) as Review[]).filter((r) => ids.has(r.applicant_id)) : ((reviews ?? []) as Review[]),
@@ -114,16 +117,18 @@ export async function getSnapshot(cycle?: string): Promise<Snapshot> {
 }
 
 /** Every flag still waiting for its applicant, newest first. */
-export async function getPendingFlags(): Promise<{ flags: Flag[]; demo: boolean }> {
+export async function getPendingFlags(
+  viewer?: string | null
+): Promise<{ flags: Flag[]; demo: boolean }> {
   const sb = db();
-  if (!sb) return { flags: DEMO_PENDING_FLAGS, demo: true };
+  if (!sb) return { flags: redactFlags(DEMO_PENDING_FLAGS, viewer), demo: true };
   const { data, error } = await sb
     .from("applicant_flags")
     .select("*")
     .is("applicant_id", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return { flags: (data ?? []) as Flag[], demo: false };
+  return { flags: redactFlags((data ?? []) as Flag[], viewer), demo: false };
 }
 
 /**
@@ -345,6 +350,10 @@ export type FlagResult = WriteResult & {
    *  pool — either because it was filed from their profile, or because the email
    *  turned out to already be in the pipeline. */
   linked?: boolean;
+  /** The submitter asked to be named, but the database has no `attributed`
+   *  column yet, so the flag was filed anonymously. Tell them — they chose to
+   *  stand behind it and are entitled to know that it did not take. */
+  attributionUnavailable?: boolean;
 };
 
 /**
@@ -368,6 +377,8 @@ export async function submitFlag(input: {
   subject_name?: string | null;
   event?: string | null;
   submitter_email: string;
+  /** The submitter asked to put their name to it. Defaults to anonymous. */
+  attributed?: boolean;
   color: "red" | "green";
   description: string;
   /** Which cycle's application a by-email flag should attach to. Callers pass
@@ -413,7 +424,7 @@ export async function submitFlag(input: {
     applicantId = data?.id ?? null;
   }
 
-  const { error } = await sb.from("applicant_flags").insert({
+  const row: Record<string, unknown> = {
     applicant_id: applicantId,
     subject_email: subject,
     subject_name: input.subject_name?.trim() || null,
@@ -422,8 +433,24 @@ export async function submitFlag(input: {
     submitter_email: input.submitter_email,
     color: input.color,
     description: input.description,
-  });
-  if (error) return { ok: false, error: error.message };
+  };
+
+  // `attributed` is only sent when the submitter opted in, so a deployment whose
+  // database predates db/flag-anonymity.sql still files flags — it simply files
+  // every one of them anonymously. That is the right way for this to break: the
+  // failure mode of a missing column is MORE privacy, never a name published by
+  // someone who asked for it to be withheld.
+  const { error } = await sb
+    .from("applicant_flags")
+    .insert(input.attributed ? { ...row, attributed: true } : row);
+  if (error) {
+    if (input.attributed && /attributed/i.test(error.message)) {
+      const { error: retry } = await sb.from("applicant_flags").insert(row);
+      if (retry) return { ok: false, error: retry.message };
+      return { ok: true, linked: Boolean(applicantId), attributionUnavailable: true };
+    }
+    return { ok: false, error: error.message };
+  }
   return { ok: true, linked: Boolean(applicantId) };
 }
 

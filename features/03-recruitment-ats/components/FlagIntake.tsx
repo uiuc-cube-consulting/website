@@ -30,6 +30,10 @@ export function FlagIntake() {
   const [subjectName, setSubjectName] = useState("");
   const [event, setEvent] = useState("");
   const [description, setDescription] = useState("");
+  // Anonymous unless the submitter says otherwise. The default is the whole
+  // point: a red flag people are afraid to put their name to is a red flag that
+  // never gets filed.
+  const [attributed, setAttributed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -93,6 +97,7 @@ export function FlagIntake() {
           event: event.trim() || undefined,
           color,
           description: description.trim(),
+          attributed,
         }),
       });
       const res = await r.json();
@@ -105,13 +110,17 @@ export function FlagIntake() {
         setToast({
           kind: "ok",
           text:
-            res.linked === true
+            (res.attributionUnavailable
+              ? "Filed anonymously — this deployment can't record names on flags yet. "
+              : "") +
+            (res.linked === true
               ? "Flag recorded — this person has already applied, so it's on their profile now."
-              : "Flag recorded. It attaches to their application automatically — now if they've already applied, or whenever they do.",
+              : "Flag recorded. It attaches to their application automatically — now if they've already applied, or whenever they do."),
         });
         setSubjectEmail("");
         setSubjectName("");
         setDescription("");
+        setAttributed(false);
         // `event` is deliberately kept: you are usually filing several in a row
         // straight after the same info night.
         await load();
@@ -125,7 +134,7 @@ export function FlagIntake() {
     }
   }
 
-  const mine = pending.filter((f) => f.submitter_email.toLowerCase() === viewer);
+  const mine = pending.filter((f) => f.submitter_email?.toLowerCase() === viewer);
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
@@ -227,9 +236,22 @@ export function FlagIntake() {
         {!isSelf && alreadyFiled.length > 0 && (
           <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800">
             {alreadyFiled.length} flag{alreadyFiled.length === 1 ? "" : "s"} already pending on this
-            email{alreadyFiled.some((f) => f.submitter_email.toLowerCase() === viewer) ? ", including one of yours" : ""}. Filing another is fine — they stack.
+            email{alreadyFiled.some((f) => f.submitter_email?.toLowerCase() === viewer) ? ", including one of yours" : ""}. Filing another is fine — they stack.
           </p>
         )}
+
+      <label className="mt-3 flex items-start gap-2 text-xs text-[var(--muted)]">
+        <input
+          type="checkbox"
+          checked={attributed}
+          onChange={(e) => setAttributed(e.target.checked)}
+          className="mt-0.5 accent-[var(--gold)]"
+        />
+        <span>
+          Show my name on this flag. Off by default — flags are anonymous, so you can raise
+          something without it being attached to you.
+        </span>
+      </label>
 
         <button
           onClick={submit}
@@ -293,7 +315,8 @@ export function FlagIntake() {
                 </div>
                 <p className="mt-1.5 text-[var(--bg-dark)]">{f.description}</p>
                 <p className="mt-1 text-[11px] text-[var(--muted)]">
-                  — {f.submitter_email === viewer ? "you" : f.submitter_email} · {when(f.created_at)}
+                  — {f.submitter_email ? (f.submitter_email === viewer ? "you" : f.submitter_email) : "anonymous"} ·{" "}
+                  {when(f.created_at)}
                 </p>
               </li>
             ))}

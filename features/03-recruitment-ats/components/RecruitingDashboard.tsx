@@ -1195,7 +1195,7 @@ function FlagPanel({
                 </div>
                 <p className="mt-1 text-[var(--bg-dark)]">{f.description}</p>
                 <p className="mt-1 text-[11px] text-[var(--muted)]">
-                  — {f.submitter_email}
+                  — {f.submitter_email ?? "anonymous"}
                   {early && ` · ${new Date(f.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
                 </p>
               </li>

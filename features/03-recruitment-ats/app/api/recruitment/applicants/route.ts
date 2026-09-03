@@ -48,7 +48,7 @@ export async function GET(req?: NextRequest) {
     // describes nothing. `?cycle=` opens a past cohort — the point of storing a
     // cycle per application rather than clearing the table each semester.
     const cycle = await resolveCycle(req ? new URL(req.url).searchParams.get("cycle") : null);
-    const snapshot = await getSnapshot(cycle);
+    const snapshot = await getSnapshot(cycle, email);
     const { reviews, flags, demo } = snapshot;
     const exec = isExec(role);
     const roster = exec
