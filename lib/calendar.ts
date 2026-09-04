@@ -53,11 +53,21 @@ export type CalendarResult =
 
 export type FetchOptions = {
   calendarId?: string;
-  /** How far ahead to look. */
+  /** How far ahead to look. Ignored when `from`/`to` are given. */
   days?: number;
   maxResults?: number;
   /** Injectable for tests. */
   now?: Date;
+  /**
+   * An explicit window, for the month grid.
+   *
+   * The default window starts at `now`, which is right for an upcoming-events
+   * list and wrong for a calendar: opening the grid on the 20th would blank out
+   * the first three weeks of the month you are looking at. Passing `from`
+   * overrides that, and is the only way to see a day that has already happened.
+   */
+  from?: Date;
+  to?: Date;
 };
 
 /**
@@ -86,14 +96,18 @@ export async function fetchUpcomingEvents(opts: FetchOptions = {}): Promise<Cale
   }
 
   const now = opts.now ?? new Date();
-  const horizon = new Date(now);
-  horizon.setDate(horizon.getDate() + (opts.days ?? 120));
+  const timeMin = opts.from ?? now;
+  const timeMax = opts.to ?? (() => {
+    const horizon = new Date(timeMin);
+    horizon.setDate(horizon.getDate() + (opts.days ?? 120));
+    return horizon;
+  })();
 
   try {
     const res = await cal.events.list({
       calendarId,
-      timeMin: now.toISOString(),
-      timeMax: horizon.toISOString(),
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
       maxResults: opts.maxResults ?? 50,
