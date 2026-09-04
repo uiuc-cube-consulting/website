@@ -528,6 +528,19 @@ export function isRecommendation(v: unknown): v is Recommendation {
   return RECOMMENDATIONS.some((r) => r.key === v);
 }
 
+/**
+ * Which way a recommendation points: `1` for advance, `-1` for reject.
+ *
+ * The four keys are two calls at two intensities, and it is the CALL that
+ * matters when interviewers disagree. A strong yes beside a yes is two people
+ * agreeing with different enthusiasm; a yes beside a no is two people who
+ * watched the same interview and reached opposite conclusions, and only the
+ * second is a decision somebody still has to make.
+ */
+export function recommendationSide(rec: Recommendation): 1 | -1 {
+  return rec === "strong_yes" || rec === "yes" ? 1 : -1;
+}
+
 // ── The filled-in rubric an interviewer owns ─────────────────────────────────
 export type RubricEntry = {
   kind: InterviewKind;
@@ -727,6 +740,91 @@ export function panelStanding(
     submissions: perKind.reduce((a, p) => a + p.n, 0),
     split: allRecs.size > 1,
   };
+}
+
+// ── Ordering the board ───────────────────────────────────────────────────────
+
+export type BoardOrder = "name" | "score" | "split";
+
+/**
+ * How badly the panel disagrees about a candidate.
+ *
+ *   2  someone said yes and someone said no — the recommendations point in
+ *      opposite DIRECTIONS, across the two rubrics or between two interviewers
+ *      on the same one.
+ *   1  they differ only in degree: a strong yes beside a yes.
+ *   0  everyone recorded so far agrees, or only one person has.
+ *
+ * Two levels rather than one because they mean different things to the person
+ * working the list. A 2 is an unresolved decision — the notes have to be read,
+ * because the mean of a yes and a no is a number nobody argued for. A 1 is a
+ * shade of agreement and needs nothing.
+ */
+export function splitSeverity(recs: readonly Recommendation[]): 0 | 1 | 2 {
+  const distinct = new Set(recs);
+  if (distinct.size < 2) return 0;
+  const sides = new Set([...distinct].map(recommendationSide));
+  return sides.size > 1 ? 2 : 1;
+}
+
+/**
+ * Order the board for a human working through it.
+ *
+ * `name` is the default and stays PURELY alphabetical, because it is what the
+ * console is for most of the time: an interviewer with a name in their head
+ * looking it up. Anything that tiers the list — scored above unscored, say —
+ * makes that lookup a scan.
+ *
+ * The other two orders are the opposite job, done after the interviews: the exec
+ * deciding who advances. Both put the candidates with nothing recorded at the
+ * bottom, since neither question ("who scored highest", "who is contested") has
+ * an answer for them, and both fall back to name so the order is stable rather
+ * than whatever the rows arrived in.
+ *
+ * A candidate whose panel has filled in only one of the two rubrics sorts below
+ * every fully-scored one regardless of that single score, for the same reason
+ * `panelStanding` refuses to total them: half a rubric against the round's full
+ * maximum reads as a weak candidate, and ranking on it would place a strong one
+ * near the bottom.
+ */
+export function sortBoard(
+  candidates: readonly Candidate[],
+  kinds: readonly InterviewKind[],
+  order: BoardOrder = "name"
+): Candidate[] {
+  const byName = (a: Candidate, b: Candidate) => a.name.localeCompare(b.name);
+  const out = [...candidates];
+  if (order === "name") return out.sort(byName);
+
+  // Computed once per candidate rather than inside the comparator, which sees
+  // each row O(log n) times.
+  const standing = new Map(
+    candidates.map((c) => {
+      const st = panelStanding(c.panelScores, kinds);
+      return [c.id, { st, severity: splitSeverity(st.perKind.flatMap((p) => p.recs)) }];
+    })
+  );
+
+  out.sort((a, b) => {
+    const x = standing.get(a.id)!;
+    const y = standing.get(b.id)!;
+    if (order === "split") {
+      if (x.severity !== y.severity) return y.severity - x.severity;
+      // Within one severity, the further along the panel is, the more the row is
+      // worth looking at — a lone yes is not yet a disagreement waiting to happen.
+      if (x.st.submissions !== y.st.submissions) return y.st.submissions - x.st.submissions;
+      return byName(a, b);
+    }
+    // Score. Null totals are partials, not zeros, so they sink rather than
+    // sorting as the worst candidates in the round.
+    const xt = x.st.total;
+    const yt = y.st.total;
+    if (xt !== null && yt !== null && xt !== yt) return yt - xt;
+    if ((xt === null) !== (yt === null)) return xt === null ? 1 : -1;
+    if (x.st.submissions !== y.st.submissions) return y.st.submissions - x.st.submissions;
+    return byName(a, b);
+  });
+  return out;
 }
 
 /** The human label for a recommendation key, or an em dash when unrecorded. */

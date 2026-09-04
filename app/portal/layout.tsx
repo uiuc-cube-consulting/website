@@ -6,6 +6,7 @@ import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 import { canInterviewRole } from "@/features/03-recruitment-ats/lib/access";
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 import { PortalMobileNav, type PortalNavLink } from "@/components/PortalMobileNav";
+import { FeedbackWidget } from "@/features/06-portal-feedback/components/FeedbackWidget";
 
 export const metadata: Metadata = {
   title: "Member Portal",
@@ -120,6 +121,12 @@ export default async function PortalLayout({
       </header>
 
       <main className="flex-1">{children}</main>
+
+      {/* Feedback widget — mounted once here so it follows the member across
+          every portal page, and only for a signed-in one. The API route checks
+          the session itself; this condition is about not showing a button to
+          someone on /portal/sign-in who could not use it. */}
+      {email && <FeedbackWidget />}
 
       <footer className="border-t border-[var(--border)] bg-white">
         <div className="container-x py-5 text-xs text-[var(--muted)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">

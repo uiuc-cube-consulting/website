@@ -19,8 +19,10 @@ import {
   ROUND_KINDS,
   isComplete,
   panelStanding,
+  sortBoard,
   formatScore,
   recommendationLabel,
+  type BoardOrder,
   type Candidate,
   type InterviewBoard,
 } from "@/features/03-recruitment-ats/lib/interview";
@@ -50,6 +52,7 @@ export function InterviewConsole() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<Scope>("mine");
+  const [order, setOrder] = useState<BoardOrder>("name");
   const [round, setRound] = useState<InterviewRound>("first_round");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -97,14 +100,19 @@ export function InterviewConsole() {
   const results = useMemo(() => {
     if (!data) return [];
     const pool = scope === "mine" ? data.candidates.filter((c) => c.assignedToMe) : data.candidates;
+    const sorted = sortBoard(pool, ROUND_KINDS[data.round], order);
     const q = query.trim().toLowerCase();
-    if (!q) return pool;
-    return pool
+    if (!q) return sorted;
+    // While searching, match quality outranks the chosen order — Enter selects
+    // the top row, and that should be the name being typed, not the highest
+    // scorer who happens to match. `sort` is stable, so within one rank the
+    // list stays in the order chosen above.
+    return sorted
       .map((c) => ({ c, r: rank(c, q) }))
       .filter((x) => x.r >= 0)
-      .sort((a, b) => b.r - a.r || a.c.name.localeCompare(b.c.name))
+      .sort((a, b) => b.r - a.r)
       .map((x) => x.c);
-  }, [data, scope, query]);
+  }, [data, scope, query, order]);
 
   const selected = useMemo(
     () => data?.candidates.find((c) => c.id === selectedId) ?? null,
@@ -181,6 +189,19 @@ export function InterviewConsole() {
             All ({data.candidates.length})
           </button>
         </div>
+        {/* Same three orders as the written decision queue, in the same words.
+            This is the round after that one and often the same people working
+            it — a control that behaves differently here would be a trap. */}
+        <select
+          value={order}
+          onChange={(e) => setOrder(e.target.value as BoardOrder)}
+          aria-label="Sort candidates"
+          className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs"
+        >
+          <option value="name">By name</option>
+          <option value="score">Highest score first</option>
+          <option value="split">Most contested first</option>
+        </select>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
