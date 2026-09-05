@@ -11,6 +11,7 @@
 import {
   ROUND_KINDS,
   boardRows,
+  panelNotesFrom,
   recommendationSide,
   sortBoard,
   splitSeverity,
@@ -227,5 +228,79 @@ describe("boardRows", () => {
 
   it("ignores surrounding whitespace in the query", () => {
     expect(shown(boardRows(board, FIRST, "score", "  bo  "))).toEqual([[3, "b"]]);
+  });
+});
+
+// ── Panel notes ──────────────────────────────────────────────────────────────
+/**
+ * What the panel WROTE, as opposed to what it scored.
+ *
+ * The scores table says what the panel thought; the notes say why. The rule
+ * worth pinning is the one that is easy to get backwards: notes do not depend
+ * on a score, because the write-up happens straight after the room and the
+ * number gets transcribed off the paper rubric later. A filter keyed on the
+ * score would blank this section during exactly the window where it is the only
+ * thing anyone has.
+ */
+describe("panelNotesFrom", () => {
+  const row = (over: Partial<Parameters<typeof panelNotesFrom>[0][number]> = {}) => ({
+    reviewer_email: "R1@illinois.edu",
+    kind: "case",
+    scores: { total: 12 },
+    notes: "Drove the structure, lost the maths, recovered.",
+    recommendation: "yes",
+    created_at: "2026-09-04T18:00:00.000Z",
+    ...over,
+  });
+
+  it("carries a note, its score and its verdict", () => {
+    expect(panelNotesFrom([row()], FIRST)).toEqual([
+      {
+        reviewer: "r1@illinois.edu",
+        kind: "case",
+        notes: "Drove the structure, lost the maths, recovered.",
+        total: 12,
+        recommendation: "yes",
+        at: "2026-09-04T18:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("keeps the notes when the score has not been entered yet", () => {
+    // The hour after an interview: written up, not yet transcribed.
+    const [note] = panelNotesFrom([row({ scores: null, recommendation: null })], FIRST);
+    expect(note.notes).toContain("Drove the structure");
+    expect(note.total).toBeNull();
+  });
+
+  it("keeps them when the score is present but unusable", () => {
+    // Out of range for the case rubric (max 15), so `submittedTotal` refuses it
+    // — the note is still what the interviewer wrote.
+    expect(panelNotesFrom([row({ scores: { total: 99 } })], FIRST)[0].total).toBeNull();
+  });
+
+  it("drops a row that says nothing", () => {
+    expect(panelNotesFrom([row({ notes: "" })], FIRST)).toEqual([]);
+    expect(panelNotesFrom([row({ notes: "   \n  " })], FIRST)).toEqual([]);
+    expect(panelNotesFrom([row({ notes: null })], FIRST)).toEqual([]);
+  });
+
+  it("trims what it keeps", () => {
+    expect(panelNotesFrom([row({ notes: "  said it  " })], FIRST)[0].notes).toBe("said it");
+  });
+
+  it("normalises the reviewer, so one person is one column", () => {
+    const notes = panelNotesFrom([row(), row({ reviewer_email: "r1@ILLINOIS.edu" })], FIRST);
+    expect(new Set(notes.map((n) => n.reviewer)).size).toBe(1);
+  });
+
+  it("never lets one round's notes into another's board", () => {
+    // The final round is exec-only in every direction. A first-round note must
+    // not surface there, and a final-round note must never reach a first-round
+    // response — which is what the kind filter is for.
+    const finalNote = row({ kind: "final_case" });
+    expect(panelNotesFrom([finalNote], FIRST)).toEqual([]);
+    expect(panelNotesFrom([row()], ROUND_KINDS.final_round)).toEqual([]);
+    expect(panelNotesFrom([finalNote], ROUND_KINDS.final_round)).toHaveLength(1);
   });
 });

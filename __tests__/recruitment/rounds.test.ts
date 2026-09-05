@@ -12,6 +12,7 @@
 import {
   INTERVIEW_ROUNDS,
   ROUNDS,
+  ROUND_ADVANCE,
   ROUND_STAGES,
   canInterviewInRound,
   canViewRound,
@@ -19,6 +20,7 @@ import {
   isInRound,
   isInterviewRound,
   isRound,
+  ROUND_LABEL,
   roundOfStage,
   visibleRounds,
   type Round,
@@ -319,5 +321,43 @@ describe("isScreenComplete", () => {
       const scores = { ...full(1), [c.key as RubricKey]: c.max + 1 };
       expect(isScreenComplete(scores)).toBe(false);
     }
+  });
+});
+
+// ── Passing a round ──────────────────────────────────────────────────────────
+/**
+ * Where a candidate lands when an interview round passes them.
+ *
+ * Two surfaces now move people out of these rounds — the candidate workspace
+ * one at a time, and the board's select-all in a batch — and they read this
+ * same map. A first round that advanced to different places depending on which
+ * button was pressed would be a genuinely hard bug to see, because both paths
+ * look like they worked.
+ */
+describe("ROUND_ADVANCE", () => {
+  it("passes the first round into the final round, and the final round into an offer", () => {
+    expect(ROUND_ADVANCE.first_round.stage).toBe("final_round");
+    expect(ROUND_ADVANCE.final_round.stage).toBe("offer");
+  });
+
+  it("never advances a candidate into the round they are already in", () => {
+    // The failure this guards is a loop: a "pass" that leaves them on the same
+    // board, which reads as the click not having worked and gets pressed again.
+    for (const round of INTERVIEW_ROUNDS) {
+      expect(ROUND_STAGES[round]).not.toContain(ROUND_ADVANCE[round].stage);
+      expect(isInRound(ROUND_ADVANCE[round].stage, round)).toBe(false);
+    }
+  });
+
+  it("covers every interview round, so no board is left without a pass button", () => {
+    for (const round of INTERVIEW_ROUNDS) {
+      expect(ROUND_ADVANCE[round].label.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("names the destination it actually moves people to", () => {
+    // The label is what the confirm dialog says out loud before a batch of
+    // forty is moved, so it has to describe the stage rather than the button.
+    expect(ROUND_ADVANCE.first_round.label).toBe(ROUND_LABEL.final_round);
   });
 });

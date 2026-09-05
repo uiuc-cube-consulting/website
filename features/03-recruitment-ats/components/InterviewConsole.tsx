@@ -25,7 +25,12 @@ import {
   type BoardOrder,
   type InterviewBoard,
 } from "@/features/03-recruitment-ats/lib/interview";
-import { ROUND_BLURB, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
+import {
+  ROUND_ADVANCE,
+  ROUND_BLURB,
+  ROUND_LABEL,
+  type InterviewRound,
+} from "@/features/03-recruitment-ats/lib/rounds";
 import { CandidateWorkspace } from "./CandidateWorkspace";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 
@@ -39,6 +44,9 @@ export function InterviewConsole() {
   const [order, setOrder] = useState<BoardOrder>("name");
   const [round, setRound] = useState<InterviewRound>("first_round");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
@@ -76,6 +84,11 @@ export function InterviewConsole() {
     setError(null);
     setData(null);
     setQuery("");
+    // Nobody selected in one round is on the other's board. Carrying the set
+    // across would leave invisible candidates ticked, and the next bulk action
+    // would move people the exec cannot see.
+    setPicked(new Set());
+    setToast(null);
     setRound(next);
   }
 
@@ -88,6 +101,60 @@ export function InterviewConsole() {
     const pool = scope === "mine" ? data.candidates.filter((c) => c.assignedToMe) : data.candidates;
     return boardRows(pool, ROUND_KINDS[data.round], order, query);
   }, [data, scope, query, order]);
+
+  /**
+   * Apply one decision to everything ticked.
+   *
+   * Reuses the written round's bulk endpoint rather than growing a second one:
+   * the operation is identical — a set of applicant ids and a stage — and that
+   * route already owns the exec check, the self-application rule and the batch
+   * ceiling. A parallel implementation here would be a second place for those
+   * three to be got wrong.
+   *
+   * Confirmed by NAME, like the decision queue. "Advance 23?" is a number
+   * nobody can check; a list is something a human can scan for the one they did
+   * not mean to tick — which matters most for the rows the search box is
+   * currently hiding.
+   */
+  async function bulkDecide(stage: string, label: string) {
+    const ids = [...picked];
+    if (!ids.length || !data) return;
+
+    const names = data.candidates.filter((c) => picked.has(c.id)).map((c) => c.name);
+    const preview =
+      names.slice(0, 12).join(", ") + (names.length > 12 ? `, and ${names.length - 12} more` : "");
+    if (!window.confirm(`Move ${ids.length} to ${label}?\n\n${preview}`)) return;
+
+    setBulkBusy(true);
+    setToast(null);
+    try {
+      const r = await fetch("/api/recruitment/decisions/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicant_ids: ids, stage }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setToast(j.error || j.message || "Could not apply that decision.");
+        return;
+      }
+      const extra = [
+        j.skippedSelf ? `${j.skippedSelf} skipped (your own application)` : "",
+        j.notFound ? `${j.notFound} no longer existed` : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      setToast(`Moved ${j.updated} to ${label}.${extra ? ` ${extra}.` : ""}`);
+      setPicked(new Set());
+      // They leave this round's board on the refetch, which is the visible
+      // confirmation that the move landed.
+      await reload();
+    } catch {
+      setToast("Could not apply that decision.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   const selected = useMemo(
     () => data?.candidates.find((c) => c.id === selectedId) ?? null,
@@ -104,6 +171,12 @@ export function InterviewConsole() {
   }
   if (!data) return <div className="h-80 animate-pulse rounded-2xl bg-[var(--bg-cream)]" />;
 
+  // Only exec decides. The bulk endpoint refuses everyone else anyway, so this
+  // is about not offering a control that would 403 — the same reason the final
+  // round's tab is absent rather than disabled for a non-exec.
+  const selectable = data.canManage;
+  const advance = ROUND_ADVANCE[data.round];
+
   if (selected) {
     return (
       <CandidateWorkspace
@@ -112,6 +185,7 @@ export function InterviewConsole() {
         canManage={data.canManage}
         pool={data.pool}
         demo={data.demo}
+        viewer={data.viewer}
         onBack={() => setSelectedId(null)}
         onChanged={reload}
       />
@@ -179,8 +253,75 @@ export function InterviewConsole() {
         </select>
       </div>
 
+      {toast && (
+        <p className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm text-[var(--gold-deep)]">
+          {toast}
+        </p>
+      )}
+
+      {/* Appears only once something is ticked, so it never takes space from the
+          board it acts on. This is the surface where the cutoff actually gets
+          drawn: order by score, read down to the line, select from there. */}
+      {selectable && picked.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--gold)] bg-[var(--bg-cream)]/60 px-3 py-2">
+          <span className="text-sm font-semibold text-[var(--bg-dark)]">{picked.size} selected</span>
+          <button
+            onClick={() => bulkDecide(advance.stage, advance.label)}
+            disabled={bulkBusy}
+            className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)] disabled:opacity-50"
+          >
+            {bulkBusy ? "Working…" : `Pass → ${advance.label}`}
+          </button>
+          <button
+            onClick={() => bulkDecide("rejected", "Rejected")}
+            disabled={bulkBusy}
+            className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            Deny selected
+          </button>
+          <button
+            onClick={() => setPicked(new Set())}
+            disabled={bulkBusy}
+            className="ml-auto text-xs text-[var(--muted)] underline hover:text-[var(--bg-dark)]"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="grid grid-cols-[2.5rem_1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <div
+          className={`relative grid grid-cols-[2.5rem_1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] ${
+            selectable ? "pl-10 pr-4" : "px-4"
+          }`}
+        >
+          {/* The checkbox sits in the row's left padding rather than in a column
+              of its own, and absolutely rather than in the grid. A checkbox
+              nested inside the row's <button> would not be independently
+              clickable — ticking a candidate would also open them — and a real
+              sixth column would mean every row carrying its own grid, which is
+              how column alignment drifts. */}
+          {selectable && (
+            <label className="absolute left-3.5 top-1/2 -translate-y-1/2">
+              <input
+                type="checkbox"
+                aria-label={`Select all ${results.length} shown`}
+                className="accent-[var(--gold)]"
+                // Acts on what is SHOWN, so it respects the search box and the
+                // mine/all scope. Selecting people the board is currently
+                // hiding is exactly the mistake this must not enable.
+                checked={results.length > 0 && results.every((r) => picked.has(r.candidate.id))}
+                onChange={(e) => {
+                  const next = new Set(picked);
+                  for (const { candidate } of results) {
+                    if (e.target.checked) next.add(candidate.id);
+                    else next.delete(candidate.id);
+                  }
+                  setPicked(next);
+                }}
+              />
+            </label>
+          )}
           <span className="text-right" title="Position in the order chosen above">#</span>
           <span>Candidate</span>
           <span>Resume</span>
@@ -198,10 +339,28 @@ export function InterviewConsole() {
             </li>
           )}
           {results.map(({ candidate: c, position }) => (
-            <li key={c.id}>
+            <li key={c.id} className="relative">
+              {selectable && (
+                <label className="absolute left-3.5 top-1/2 z-10 -translate-y-1/2">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${c.name}`}
+                    className="accent-[var(--gold)]"
+                    checked={picked.has(c.id)}
+                    onChange={(e) => {
+                      const next = new Set(picked);
+                      if (e.target.checked) next.add(c.id);
+                      else next.delete(c.id);
+                      setPicked(next);
+                    }}
+                  />
+                </label>
+              )}
               <button
                 onClick={() => setSelectedId(c.id)}
-                className="grid w-full grid-cols-[2.5rem_1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40"
+                className={`grid w-full grid-cols-[2.5rem_1fr_auto_auto_auto] items-center gap-3 py-3 text-left hover:bg-[var(--bg-cream)]/40 ${
+                  selectable ? "pl-10 pr-4" : "px-4"
+                }`}
               >
                 {/* Tabular figures so the column stays a straight edge from 1
                     to 100 — this is a list people read down to find a line. */}

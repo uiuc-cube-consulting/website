@@ -109,6 +109,20 @@ export function visibleRounds(role?: string | null): Round[] {
 }
 
 /**
+ * Where a candidate goes when an interview round PASSES them, and what that
+ * destination is called.
+ *
+ * One definition, because two surfaces now move people out of these rounds —
+ * the candidate workspace one at a time, and the board's select-all in a batch
+ * — and a first round that advanced to different places depending on which
+ * button you pressed would be a genuinely difficult bug to see.
+ */
+export const ROUND_ADVANCE: Record<InterviewRound, { stage: Stage; label: string }> = {
+  first_round: { stage: "final_round", label: "Final round" },
+  final_round: { stage: "offer", label: "Offer" },
+};
+
+/**
  * Whether a role may sit a panel and write rubrics in `round`.
  *
  * Strictly narrower than `canViewRound` for the final round only: the first round

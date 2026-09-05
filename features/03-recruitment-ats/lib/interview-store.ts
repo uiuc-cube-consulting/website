@@ -14,6 +14,8 @@ import { fetchFileMeta, listResumeFiles } from "./drive";
 import {
   INTERVIEW_KINDS,
   submittedTotal,
+  panelNotesFrom,
+  type PanelNote,
   type PanelScore,
   ROUND_KINDS,
   roundOfKind,
@@ -206,6 +208,21 @@ export async function getBoard(
   // thing the club needs, one place to see where a candidate stands, so the
   // scores are shown and `myRubrics` stays the only thing you can WRITE.
   const panelScores = new Map<string, PanelScore[]>();
+  // And what they wrote. `panelNotesFrom` owns which rows count — notably that
+  // an unscored row still carries its notes — so that rule sits in the pure
+  // module with a test on it rather than inside this loop.
+  const panelNotes = new Map<string, PanelNote[]>();
+  const rowsByApplicant = new Map<string, ReviewRow[]>();
+  for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
+    const cur = rowsByApplicant.get(r.applicant_id);
+    if (cur) cur.push(r);
+    else rowsByApplicant.set(r.applicant_id, [r]);
+  }
+  for (const [applicantId, rows] of rowsByApplicant) {
+    const notes = panelNotesFrom(rows, kinds);
+    if (notes.length) panelNotes.set(applicantId, notes);
+  }
+
   for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
     const kind = r.kind as InterviewKind;
     if (!kinds.includes(kind)) continue;
@@ -271,6 +288,7 @@ export async function getBoard(
       myRubrics: mine.get(a.id) ?? emptyRubrics(),
       completed: completed.get(a.id) ?? zeroCounts(),
       panelScores: panelScores.get(a.id) ?? [],
+      panelNotes: panelNotes.get(a.id) ?? [],
       flags: flagsByApplicant.get(a.id) ?? [],
     };
   });

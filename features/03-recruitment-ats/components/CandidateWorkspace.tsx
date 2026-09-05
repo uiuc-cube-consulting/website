@@ -27,9 +27,10 @@ import {
   submittedTotal,
   type Candidate,
   type InterviewKind,
+  type PanelNote,
   type Reviewer,
 } from "@/features/03-recruitment-ats/lib/interview";
-import { ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
+import { ROUND_ADVANCE, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
 import type { Stage } from "@/features/03-recruitment-ats/lib/types";
 
 const STAGE_LABEL: Record<string, string> = {
@@ -38,24 +39,13 @@ const STAGE_LABEL: Record<string, string> = {
   rejected: "Rejected", withdrawn: "Withdrawn",
 };
 
-/**
- * Where a candidate goes when this round is done with them.
- *
- * The written round hands off in the exec decision queue; these two hand off here,
- * in front of the rubrics that justify the call, rather than in a third list that
- * would show the scores without the notes.
- */
-const NEXT_STAGE: Record<InterviewRound, { stage: Stage; label: string }> = {
-  first_round: { stage: "final_round", label: "Advance → Final round" },
-  final_round: { stage: "offer", label: "Advance → Offer" },
-};
-
 export function CandidateWorkspace({
   candidate,
   round,
   canManage,
   pool,
   demo,
+  viewer,
   onBack,
   onChanged,
 }: {
@@ -64,6 +54,8 @@ export function CandidateWorkspace({
   canManage: boolean;
   pool: Reviewer[];
   demo: boolean;
+  /** The signed-in interviewer, so their own notes can be marked as theirs. */
+  viewer: string;
   onBack: () => void;
   onChanged: () => Promise<void> | void;
 }) {
@@ -180,6 +172,113 @@ export function CandidateWorkspace({
           <PanelScores candidate={candidate} kinds={kinds} />
         </div>
       </div>
+
+      {/* Full width, and below the grid rather than squeezed into the rubric
+          column beside it: these are paragraphs, and a paragraph in a half
+          column at 12px is a paragraph nobody reads. */}
+      <PanelNotes candidate={candidate} kinds={kinds} viewer={viewer} />
+    </div>
+  );
+}
+
+// ── What the panel wrote ─────────────────────────────────────────────────────
+
+/**
+ * Every interviewer's notes on this candidate, in this round.
+ *
+ * The scores table above says WHAT the panel thought; this says why. Grouped by
+ * interviewer rather than by rubric, because a person's read of a candidate is
+ * one thought that happens to be split across two sheets, and interleaving two
+ * people's case notes makes both harder to follow.
+ *
+ * Notes from rounds other than this one are not here, and that is the same
+ * scoping every other part of the board follows — the response never carries
+ * another round's rubrics at all.
+ */
+function PanelNotes({
+  candidate,
+  kinds,
+  viewer,
+}: {
+  candidate: Candidate;
+  kinds: readonly InterviewKind[];
+  viewer: string;
+}) {
+  const notes = candidate.panelNotes ?? [];
+
+  // Yours first, then everyone else alphabetically. Not vanity: yours is the one
+  // block you are checking rather than reading, and a stable place for it makes
+  // that a glance instead of a search.
+  const me = viewer.toLowerCase();
+  const reviewers = [...new Set(notes.map((n) => n.reviewer))].sort((a, b) => {
+    if ((a === me) !== (b === me)) return a === me ? -1 : 1;
+    return a.localeCompare(b);
+  });
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="eyebrow">What the panel wrote</p>
+        <p className="text-xs text-[var(--muted)]">
+          {notes.length === 0
+            ? "Nothing written yet"
+            : `${notes.length} note${notes.length === 1 ? "" : "s"} from ${reviewers.length} interviewer${reviewers.length === 1 ? "" : "s"}`}
+        </p>
+      </div>
+
+      {notes.length === 0 ? (
+        <p className="mt-3 text-sm text-[var(--muted)]">
+          Notes an interviewer saves on their rubric show up here for everyone working this round —
+          including notes written before the score off the paper sheet has been entered.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-4">
+          {reviewers.map((email) => {
+            const theirs = notes.filter((n) => n.reviewer === email);
+            return (
+              <div key={email} className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/30 p-4">
+                <p className="text-sm font-semibold text-[var(--bg-dark)]">
+                  {email}
+                  {email === me && (
+                    <span className="ml-2 text-[11px] font-semibold text-[var(--gold-deep)]">you</span>
+                  )}
+                </p>
+                <div className="mt-2.5 space-y-3">
+                  {kinds
+                    .map((k) => theirs.find((n) => n.kind === k))
+                    .filter((n): n is PanelNote => Boolean(n))
+                    .map((n) => (
+                      <div key={n.kind}>
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                          <span>{KIND_LABEL[n.kind]}</span>
+                          <span className="text-[var(--bg-dark)]">
+                            {/* A note with no number yet is the normal state in
+                                the hour after an interview, not an error. Say
+                                which it is rather than printing a bare dash. */}
+                            {n.total === null
+                              ? "score not entered yet"
+                              : `${formatScore(n.total)} / ${rubricMax(n.kind)}`}
+                          </span>
+                          {n.recommendation && (
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-[var(--bg-dark)]">
+                              {recommendationLabel(n.recommendation)}
+                            </span>
+                          )}
+                        </p>
+                        {/* `whitespace-pre-wrap` so the interviewer's own line
+                            breaks survive — these are typed as lists as often
+                            as prose. */}
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-[var(--fg)]">
+                          {n.notes}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -547,6 +646,14 @@ function RubricForm({
         }
         className="mt-4 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)] disabled:bg-[var(--bg-cream)]/40"
       />
+      {editable && (
+        // Said at the point of writing, not discovered afterwards. Notes are
+        // read by everyone working this round, and someone who assumed they
+        // were private has been misled by the interface rather than by anyone.
+        <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+          Everyone working this round can read these, under &ldquo;What the panel wrote&rdquo;.
+        </p>
+      )}
 
       {editable && (
         <button onClick={save} disabled={busy || !complete || !dirty} className="btn btn-gold mt-3 w-full disabled:opacity-50">
@@ -586,7 +693,7 @@ function RoundDecision({
 }) {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const next = NEXT_STAGE[round];
+  const next = ROUND_ADVANCE[round];
 
   async function decide(stage: Stage, label: string) {
     setBusy(true);
@@ -624,7 +731,7 @@ function RoundDecision({
           disabled={busy}
           className="btn btn-gold text-xs px-3 py-1.5 disabled:opacity-50"
         >
-          {next.label}
+          Advance → {next.label}
         </button>
         <button
           onClick={() => decide("rejected", "Rejected")}

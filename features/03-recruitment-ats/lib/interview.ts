@@ -625,9 +625,12 @@ export function isComplete(kind: InterviewKind, scores: Record<string, number>):
 // The exact shape GET /api/recruitment/interview returns. Declared here (the pure
 // module) so the server layer and the client components can't drift apart.
 //
-// Note what is absent: the Drive file id, and any other interviewer's scores or
-// notes. The client addresses a resume by APPLICANT id, and only ever sees its own
-// rubrics — the same blind-ish rule the application-screen feed follows.
+// Note what is absent: the Drive file id. The client addresses a resume by
+// APPLICANT id, and `myRubrics` — the only thing it may WRITE — is still only
+// ever the viewer's own row.
+//
+// What is deliberately NOT absent any more: the rest of the panel's scores and
+// notes. Both are carried, for everyone who can see the round. See `panelNotes`.
 
 export type ResumeInfo = {
   name: string | null;
@@ -660,6 +663,22 @@ export type Candidate = {
   /** Every interviewer's submitted total for this candidate, in this round. */
   panelScores?: PanelScore[];
   /**
+   * What every interviewer WROTE about this candidate in this round.
+   *
+   * Carried for the same reason the scores are, and the argument is the same
+   * one: two people interview a candidate together and then talk about them in
+   * the hallway. Hiding the notes never made the room blind, it only meant the
+   * third person — the exec deciding, the interviewer taking the final round
+   * after someone else took the first — had the number without the sentence
+   * that explains it. A 9/15 with "froze on the maths but recovered and drove
+   * the recommendation" is a different candidate from a bare 9/15.
+   *
+   * Not gated beyond the round, because the ROUND is the gate: the first round
+   * is open to every member who can see recruiting, the final round is exec and
+   * nobody else, and that check happens before this is ever assembled.
+   */
+  panelNotes?: PanelNote[];
+  /**
    * Red/green flags filed on this person, so the board can show them beside the
    * name like the written console and the decision queue do.
    *
@@ -683,6 +702,82 @@ export type PanelScore = {
   total: number;
   recommendation: string | null;
 };
+
+/**
+ * One interviewer's written notes on one rubric.
+ *
+ * Separate from `PanelScore` rather than a field on it, because notes and a
+ * score do not arrive together. Somebody writes up the conversation straight
+ * after the room and fills the total in later off the paper sheet — those notes
+ * are the most useful thing on the screen in the hours between, and a shape
+ * that could only carry them alongside a submitted total would throw them away
+ * exactly then. `total` is null in that window, and says so.
+ */
+export type PanelNote = {
+  reviewer: string;
+  kind: InterviewKind;
+  notes: string;
+  /** Null until they have entered the number from the sheet. */
+  total: number | null;
+  recommendation: string | null;
+  /** When the row was written, for ordering and for "is this from today". */
+  at?: string | null;
+};
+
+/** The shape `panelNotesFrom` reads. A review row, however it was fetched. */
+export type NoteSource = {
+  reviewer_email: string;
+  kind: string;
+  scores?: Record<string, number> | null;
+  notes?: string | null;
+  recommendation?: string | null;
+  created_at?: string | null;
+};
+
+/**
+ * Turn review rows into the notes the console shows, dropping the ones that say
+ * nothing.
+ *
+ * Two rules, and both are the reason this is a function rather than three lines
+ * inside the store's loop:
+ *
+ *   · A row with no submitted score STILL yields a note. Scores and notes do
+ *     not arrive together — the write-up happens straight after the room, the
+ *     number gets transcribed off the paper sheet later — and a filter keyed on
+ *     the score would throw the notes away exactly in the window where they are
+ *     the only thing anyone has.
+ *
+ *   · A row whose notes are blank or whitespace yields nothing. Every rubric
+ *     row has a notes column; most of them are empty, and an interviewer listed
+ *     under "what the panel wrote" with nothing under their name reads as a
+ *     failure to load rather than as a choice not to write.
+ *
+ * Rows outside `kinds` are dropped, which is what keeps one round's notes out
+ * of another round's board.
+ */
+export function panelNotesFrom(
+  rows: readonly NoteSource[],
+  kinds: readonly InterviewKind[]
+): PanelNote[] {
+  const out: PanelNote[] = [];
+  for (const row of rows) {
+    const kind = row.kind as InterviewKind;
+    if (!kinds.includes(kind)) continue;
+
+    const notes = (row.notes ?? "").trim();
+    if (!notes) continue;
+
+    out.push({
+      reviewer: String(row.reviewer_email).toLowerCase(),
+      kind,
+      notes,
+      total: submittedTotal(kind, row.scores ?? {}),
+      recommendation: row.recommendation ?? null,
+      at: row.created_at ?? null,
+    });
+  }
+  return out;
+}
 
 /**
  * The panel's standing on one candidate: the mean total per rubric, and the sum

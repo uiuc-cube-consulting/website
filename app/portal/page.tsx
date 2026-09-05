@@ -6,6 +6,8 @@ import { CalendarEmbed } from "@/components/portal/CalendarEmbed";
 import { PointsLookup } from "@/components/portal/PointsLookup";
 import { ResourcesGrid } from "@/components/portal/ResourcesGrid";
 import { PORTAL_RESOURCES, SITE } from "@/lib/content";
+import { AnonymousNoteDialog } from "@/features/06-portal-feedback/components/AnonymousNoteDialog";
+import { anonymousRecipients } from "@/features/06-portal-feedback/lib/anonymous-email";
 
 const QUICK_LINKS = [
   {
@@ -113,12 +115,19 @@ export default async function PortalDashboard() {
             <p className="font-display font-bold text-[var(--bg-dark)]">Need something not listed?</p>
             <p className="mt-1 text-sm text-[var(--muted)]">
               Reach out to the exec board — we&rsquo;ll point you to the right person or resource.
+              Or send something without your name on it.
             </p>
           </div>
         </div>
-        <a href={`mailto:${SITE.email}`} className="btn btn-gold text-xs px-4 py-2 self-start md:self-auto">
-          Email the board
-        </a>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          {/* The two ways to reach exec, side by side, because the choice
+              between them is the point: one is a normal email from you, the
+              other arrives with nothing on it that says who sent it. */}
+          <a href={`mailto:${SITE.email}`} className="btn btn-gold text-xs px-4 py-2">
+            Email the board
+          </a>
+          <AnonymousNoteDialog recipients={anonymousRecipients()} />
+        </div>
       </section>
     </div>
   );
