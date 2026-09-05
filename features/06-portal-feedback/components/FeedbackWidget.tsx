@@ -7,6 +7,16 @@
 // and a GitHub issue appears in the website repo signed with their name and
 // email — no forwarding a screenshot to someone who then has to describe it
 // again in a tracker.
+//
+// One checkbox lifts the signature: "Send this anonymously" files the same
+// issue with no name, email or role on it. This is the portal's anonymous
+// feedback form, and it deliberately is not a separate page — the thing that
+// makes a report worth acting on is the page path, the viewport and the
+// picture, all of which this widget already has and a standalone form would
+// ask someone to type from memory. It rides along on every portal screen, so
+// "somewhere to say something without your name on it" is always one click
+// away, whether that something is a broken table or an opinion about how the
+// club is being run.
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
@@ -21,7 +31,10 @@ import {
 } from "@/features/06-portal-feedback/lib/capture";
 import { MAX_DESCRIPTION, type FeedbackKind } from "@/features/06-portal-feedback/lib/types";
 
-type Filed = { number: number; url: string };
+// `anonymous` is remembered from the response rather than from the checkbox:
+// the server decides what actually reached GitHub, and the confirmation makes a
+// promise about someone's name that had better be the server's answer.
+type Filed = { number: number; url: string; anonymous: boolean };
 
 export function FeedbackWidget() {
   const pathname = usePathname();
@@ -30,6 +43,7 @@ export function FeedbackWidget() {
   const [kind, setKind] = useState<FeedbackKind>("bug");
   const [description, setDescription] = useState("");
   const [shot, setShot] = useState<Shot | null>(null);
+  const [anonymous, setAnonymous] = useState(false);
 
   const [busy, setBusy] = useState(false);
   // While a screen share is being picked, the widget hides itself — otherwise
@@ -53,6 +67,10 @@ export function FeedbackWidget() {
   const fileRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
+  // `anonymous` is deliberately NOT cleared. "Send another" after an anonymous
+  // report almost always means another of the same, and the direction a sticky
+  // toggle can be wrong in matters: it withholds a name nobody asked to publish
+  // rather than publishing one somebody expected to be withheld.
   const reset = useCallback(() => {
     setDescription("");
     setShot(null);
@@ -143,6 +161,7 @@ export function FeedbackWidget() {
           page_path: pathname,
           screenshot: shot?.dataUrl ?? null,
           viewport: `${window.innerWidth}×${window.innerHeight}`,
+          anonymous,
         }),
       });
       const json = await res.json();
@@ -150,7 +169,7 @@ export function FeedbackWidget() {
         setError(json.error || "Couldn't file that. Try again in a moment.");
         return;
       }
-      setFiled(json.issue as Filed);
+      setFiled({ ...(json.issue as { number: number; url: string }), anonymous: json.anonymous === true });
       setDescription("");
       setShot(null);
     } catch {
@@ -205,8 +224,10 @@ export function FeedbackWidget() {
           <p className="flex items-start gap-2 text-sm text-[var(--fg)]">
             <Check className="w-4 h-4 mt-0.5 shrink-0 text-green-600" aria-hidden />
             <span>
-              Opened as issue <strong>#{filed.number}</strong>. It&apos;s tagged with your name and
-              email so we can follow up.
+              Opened as issue <strong>#{filed.number}</strong>.{" "}
+              {filed.anonymous
+                ? "Your name, email and role are not on it — check the issue if you want to be sure."
+                : "It’s tagged with your name and email so we can follow up."}
             </span>
           </p>
           <a
@@ -341,6 +362,45 @@ export function FeedbackWidget() {
               </div>
             )}
 
+            {/* The anonymity control. Last in the panel on purpose: it is a
+                decision about the thing you have just written, and it reads
+                better after the writing than before it. */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 px-3 py-2.5">
+              <label className="flex items-start gap-2 text-[12px] text-[var(--fg)]">
+                <input
+                  type="checkbox"
+                  checked={anonymous}
+                  onChange={(e) => setAnonymous(e.target.checked)}
+                  className="mt-0.5 accent-[var(--gold)]"
+                />
+                <span className="font-semibold">Send this anonymously</span>
+              </label>
+              <p className="mt-1.5 pl-6 text-[11px] leading-relaxed text-[var(--muted)]">
+                {anonymous ? (
+                  <>
+                    The public issue won&rsquo;t carry your name, email or role. Nobody can reply to
+                    you, so say what you need said in the text. The portal still records who filed
+                    it — this hides you from the internet, not from an exec chasing something
+                    abusive.
+                  </>
+                ) : (
+                  <>
+                    Off: the issue is signed with your name and email, in a{" "}
+                    <span className="font-semibold">public</span> repo, so we can follow up.
+                  </>
+                )}
+              </p>
+              {/* A picture of the portal has the reporter's own name in the
+                  header — the sign-out row shows it on every page. Worth saying
+                  out loud to someone who just asked not to be named. */}
+              {anonymous && shot && (
+                <p className="mt-1.5 pl-6 text-[11px] leading-relaxed text-amber-800">
+                  Heads up: your screenshot probably shows your name in the portal header. Exec can
+                  open it. Remove it if that matters.
+                </p>
+              )}
+            </div>
+
             {error && (
               <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
                 <CircleAlert className="w-4 h-4 mt-px shrink-0" aria-hidden />
@@ -350,11 +410,12 @@ export function FeedbackWidget() {
           </div>
 
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border)]">
-            {/* Shown, not just sent: the report carries the page and the
-                member's name into a PUBLIC issue, and they should be able to
-                see that before they press the button. */}
+            {/* Shown, not just sent: the report carries the page and — unless
+                they said otherwise — the member's name into a PUBLIC issue, and
+                they should be able to see both before they press the button. */}
             <span className="text-[11px] text-[var(--muted)] truncate" title={pathname}>
               Filed against <code className="font-mono">{pathname}</code>
+              {anonymous && <span className="font-semibold"> · anonymously</span>}
             </span>
             <button
               type="button"

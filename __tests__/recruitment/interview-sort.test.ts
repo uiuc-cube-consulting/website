@@ -10,6 +10,7 @@
 
 import {
   ROUND_KINDS,
+  boardRows,
   recommendationSide,
   sortBoard,
   splitSeverity,
@@ -161,5 +162,70 @@ describe("sortBoard", () => {
     ]);
     const stale = candidate("j", "Jo", bothRubrics(15, 17, ["strong_yes", "strong_yes"]));
     expect(ids(sortBoard([stale, strong], ROUND_KINDS.final_round, "score"))).toEqual(["i", "j"]);
+  });
+});
+
+// ── Numbering ────────────────────────────────────────────────────────────────
+/**
+ * The numbers down the left of the console.
+ *
+ * They exist to make a cutoff visible: order by score, read down, and the line
+ * you stop at has a number on it. That only works if a position means "place in
+ * the board" and keeps meaning it — which is why these are asserted through the
+ * search filter, the one operation that could quietly renumber the list under
+ * someone mid-decision.
+ */
+describe("boardRows", () => {
+  const ada = candidate("a", "Ada Zheng", bothRubrics(12, 12, ["yes", "yes"])); // 24 / 32
+  const bo = candidate("b", "Bo Adams", bothRubrics(8, 8, ["yes", "yes"])); //    16 / 32
+  const cy = candidate("c", "Cy Jordan", bothRubrics(14, 14, ["yes", "yes"])); // 28 / 32
+  const board = [ada, bo, cy];
+
+  const shown = (rows: ReturnType<typeof boardRows>) =>
+    rows.map((r) => [r.position, r.candidate.id] as const);
+
+  it("numbers the board from 1, in the order on screen", () => {
+    expect(shown(boardRows(board, FIRST, "name", ""))).toEqual([
+      [1, "a"],
+      [2, "b"],
+      [3, "c"],
+    ]);
+    // Highest score first: Cy 28, Ada 24, Bo 16 — and #1 is now the top scorer.
+    expect(shown(boardRows(board, FIRST, "score", ""))).toEqual([
+      [1, "c"],
+      [2, "a"],
+      [3, "b"],
+    ]);
+  });
+
+  it("keeps a candidate's board position when a search narrows the list", () => {
+    // Bo is third by score. Searching for him must not make him #1 — the number
+    // is where he stands in the round, not where he stands among the matches.
+    expect(shown(boardRows(board, FIRST, "score", "bo"))).toEqual([[3, "b"]]);
+  });
+
+  it("orders matches by how well they match, numbers and all", () => {
+    // "jordan" is Cy's surname and Ada's nothing; only Cy comes back, at his
+    // own position.
+    expect(shown(boardRows(board, FIRST, "score", "jordan"))).toEqual([[1, "c"]]);
+    // A query matching two puts the better match first while both keep their
+    // numbers: "ada" is a full-name prefix for Ada (#2) and a surname for Bo (#3).
+    expect(shown(boardRows(board, FIRST, "score", "ada"))).toEqual([
+      [2, "a"],
+      [3, "b"],
+    ]);
+  });
+
+  it("numbers the pool it is given — the scope filter is the caller's job", () => {
+    expect(shown(boardRows([bo], FIRST, "score", ""))).toEqual([[1, "b"]]);
+  });
+
+  it("returns nothing, rather than a stray number, when nothing matches", () => {
+    expect(boardRows(board, FIRST, "name", "nobody")).toEqual([]);
+    expect(boardRows([], FIRST, "score", "")).toEqual([]);
+  });
+
+  it("ignores surrounding whitespace in the query", () => {
+    expect(shown(boardRows(board, FIRST, "score", "  bo  "))).toEqual([[3, "b"]]);
   });
 });

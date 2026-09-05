@@ -28,6 +28,12 @@ import {
 // There is no role check beyond authentication. Reporting that a page is broken
 // is not a privileged act, and narrowing it to leadership would silence exactly
 // the members who use the portal most and build it least.
+//
+// A report may be filed ANONYMOUSLY (`anonymous: true`), which withholds the
+// name and role from the public issue — and from there only. The session is
+// still required, the row still names the member, and the hourly ceiling still
+// counts against their address: the widget writes to a public tracker, so an
+// unauthenticated or uncounted path would be a spam cannon, not a kindness.
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +70,7 @@ export async function POST(req: NextRequest) {
     page_path?: unknown;
     screenshot?: unknown;
     viewport?: unknown;
+    anonymous?: unknown;
   };
   try {
     body = await req.json();
@@ -95,6 +102,12 @@ export async function POST(req: NextRequest) {
   const rawViewport = typeof body.viewport === "string" ? body.viewport.trim() : "";
   const viewport = /^\d{2,5}×\d{2,5}$/.test(rawViewport) ? rawViewport : null;
 
+  // Strictly `=== true`. Anything else — absent, "false", 0, a stray null —
+  // means signed, so a client that garbles this field publishes a name the
+  // member expected to be published rather than silently withholding one they
+  // did not ask to withhold. The widget sends a real boolean.
+  const anonymous = body.anonymous === true;
+
   let shot: DecodedScreenshot | null = null;
   if (typeof body.screenshot === "string" && body.screenshot.length > 0) {
     const decoded = decodeScreenshot(body.screenshot);
@@ -124,6 +137,7 @@ export async function POST(req: NextRequest) {
     description,
     page_path: pagePath,
     viewport,
+    anonymous,
   });
 
   // From here on nothing is allowed to abort the submission. Storage is where
@@ -133,18 +147,24 @@ export async function POST(req: NextRequest) {
   let shotUrl: string | null = null;
   let shotNote: string | null = null;
 
+  // "Ask the reporter" is only advice someone can act on when there is a
+  // reporter named on the issue.
+  const lostShot = anonymous
+    ? "A screenshot was captured but couldn't be stored, and this report is anonymous — there is nobody to ask for it."
+    : "A screenshot was captured but couldn't be stored. Ask the reporter to send it directly.";
+
   if (shot) {
     if (!record.ok) {
       shotNote = record.demo
         ? "A screenshot was captured but this deployment has no Supabase storage configured, so it wasn't saved."
-        : "A screenshot was captured but couldn't be stored. Ask the reporter to send it directly.";
+        : lostShot;
     } else {
       const saved = await saveScreenshot(record.id, shot.bytes, shot.mime);
       if (saved.ok) {
         shotUrl = screenshotUrl(portalBaseUrl(req), record.id, shot.mime);
       } else {
         console.error("[feedback] screenshot upload failed:", saved.error);
-        shotNote = "A screenshot was captured but couldn't be stored. Ask the reporter to send it directly.";
+        shotNote = lostShot;
       }
     }
   }
@@ -162,6 +182,7 @@ export async function POST(req: NextRequest) {
       viewport,
       screenshotUrl: shotUrl,
       screenshotNote: shotNote,
+      anonymous,
     }),
   });
 
@@ -185,5 +206,9 @@ export async function POST(req: NextRequest) {
     ok: true,
     issue: { number: issue.number, url: issue.url, repo: feedbackRepo() },
     screenshotSaved: Boolean(shotUrl),
+    // Echoed rather than assumed by the widget: the confirmation tells the
+    // member what actually happened to their name, and that answer belongs to
+    // the server that wrote the issue.
+    anonymous,
   });
 }

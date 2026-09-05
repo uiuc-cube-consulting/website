@@ -24,6 +24,18 @@ export type FeedbackSubmission = {
   screenshot: string | null;
   /** "1512×982" — cheap, and half of "it looks broken" reports are a width. */
   viewport?: string;
+  /**
+   * File it without the reporter's name or email on the public issue.
+   *
+   * Absent or false is the normal, signed path — a bug report you can ask a
+   * follow-up question about is worth more than one you can't. This is the
+   * opposite default from a flag (`applicant_flags.attributed`) on purpose:
+   * a flag is about a person, and this is about a page.
+   *
+   * "Anonymous" is a statement about the GITHUB ISSUE, which is public. The
+   * portal's own row still records who filed it — see db/anonymous.sql.
+   */
+  anonymous?: boolean;
 };
 
 export const MAX_DESCRIPTION = 4000;

@@ -17,13 +17,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KIND_LABEL,
   ROUND_KINDS,
+  boardRows,
   isComplete,
   panelStanding,
-  sortBoard,
   formatScore,
   recommendationLabel,
   type BoardOrder,
-  type Candidate,
   type InterviewBoard,
 } from "@/features/03-recruitment-ats/lib/interview";
 import { ROUND_BLURB, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
@@ -31,21 +30,6 @@ import { CandidateWorkspace } from "./CandidateWorkspace";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 
 type Scope = "mine" | "all";
-
-/**
- * Rank a candidate against the query. Higher is better; -1 means "don't show".
- * Full-name prefix beats a first/last-name prefix, which beats a loose substring —
- * so typing "jo" puts Jordan above someone whose email merely contains "jo".
- */
-function rank(c: Candidate, q: string): number {
-  const name = c.name.toLowerCase();
-  const email = c.email.toLowerCase();
-  if (name.startsWith(q)) return 3;
-  if (name.split(/\s+/).some((t) => t.startsWith(q))) return 2;
-  if (email.startsWith(q)) return 2;
-  if (name.includes(q) || email.includes(q)) return 1;
-  return -1;
-}
 
 export function InterviewConsole() {
   const [data, setData] = useState<InterviewBoard | null>(null);
@@ -97,21 +81,12 @@ export function InterviewConsole() {
 
   const mineCount = data?.candidates.filter((c) => c.assignedToMe).length ?? 0;
 
+  // Sorted, numbered, then searched — all of it in `boardRows`, where the rule
+  // that a position survives the search filter can be tested.
   const results = useMemo(() => {
     if (!data) return [];
     const pool = scope === "mine" ? data.candidates.filter((c) => c.assignedToMe) : data.candidates;
-    const sorted = sortBoard(pool, ROUND_KINDS[data.round], order);
-    const q = query.trim().toLowerCase();
-    if (!q) return sorted;
-    // While searching, match quality outranks the chosen order — Enter selects
-    // the top row, and that should be the name being typed, not the highest
-    // scorer who happens to match. `sort` is stable, so within one rank the
-    // list stays in the order chosen above.
-    return sorted
-      .map((c) => ({ c, r: rank(c, q) }))
-      .filter((x) => x.r >= 0)
-      .sort((a, b) => b.r - a.r)
-      .map((x) => x.c);
+    return boardRows(pool, ROUND_KINDS[data.round], order, query);
   }, [data, scope, query, order]);
 
   const selected = useMemo(
@@ -168,7 +143,7 @@ export function InterviewConsole() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && results.length > 0) setSelectedId(results[0].id);
+            if (e.key === "Enter" && results.length > 0) setSelectedId(results[0].candidate.id);
             if (e.key === "Escape") setQuery("");
           }}
           autoFocus
@@ -205,7 +180,8 @@ export function InterviewConsole() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <div className="grid grid-cols-[2.5rem_1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <span className="text-right" title="Position in the order chosen above">#</span>
           <span>Candidate</span>
           <span>Resume</span>
           <span className="text-right">Score</span>
@@ -221,12 +197,17 @@ export function InterviewConsole() {
                   : `Nobody is in the ${ROUND_LABEL[data.round].toLowerCase()} yet. Exec advances candidates into it from the decision queue.`}
             </li>
           )}
-          {results.map((c) => (
+          {results.map(({ candidate: c, position }) => (
             <li key={c.id}>
               <button
                 onClick={() => setSelectedId(c.id)}
-                className="grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40"
+                className="grid w-full grid-cols-[2.5rem_1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-[var(--bg-cream)]/40"
               >
+                {/* Tabular figures so the column stays a straight edge from 1
+                    to 100 — this is a list people read down to find a line. */}
+                <span className="text-right text-[13px] font-semibold tabular-nums text-[var(--muted)]">
+                  {position}
+                </span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5 font-medium text-[var(--bg-dark)]">
                     <span className="truncate">{c.name}</span>

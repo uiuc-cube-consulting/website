@@ -827,6 +827,67 @@ export function sortBoard(
   return out;
 }
 
+// ── The rows the console draws ───────────────────────────────────────────────
+
+/** One row of the board: a candidate and their place in the current order. */
+export type BoardRow = { candidate: Candidate; position: number };
+
+/**
+ * Rank a candidate against the search query. Higher is better; -1 means
+ * "don't show". A full-name prefix beats a first/last-name prefix, which beats
+ * a loose substring — so typing "jo" puts Jordan above someone whose email
+ * merely contains "jo".
+ */
+function queryRank(c: Candidate, q: string): number {
+  const name = c.name.toLowerCase();
+  const email = c.email.toLowerCase();
+  if (name.startsWith(q)) return 3;
+  if (name.split(/\s+/).some((t) => t.startsWith(q))) return 2;
+  if (email.startsWith(q)) return 2;
+  if (name.includes(q) || email.includes(q)) return 1;
+  return -1;
+}
+
+/**
+ * The board as the console draws it: sorted, NUMBERED, then searched.
+ *
+ * The numbering is why this is one function rather than a sort the component
+ * indexes afterwards. A position is a place in the ranking — "we're taking the
+ * top 20 and this one is 21" is the whole reason the column exists — so it is
+ * assigned to the sorted pool and then carried through the search filter
+ * unchanged. Renumbering the three rows that match "jordan" as 1, 2, 3 would
+ * answer a question nobody asked, and would move the cutoff line every time
+ * somebody typed.
+ *
+ * Search results are ordered by match quality rather than by `order`, because
+ * Enter selects the first row and that should be the name being typed, not the
+ * highest scorer who happens to contain those letters. Their numbers therefore
+ * run out of sequence — which is correct, and is what tells you that #21 is
+ * the person you looked up rather than the second-best of the matches.
+ */
+export function boardRows(
+  candidates: readonly Candidate[],
+  kinds: readonly InterviewKind[],
+  order: BoardOrder,
+  query: string
+): BoardRow[] {
+  const rows = sortBoard(candidates, kinds, order).map((candidate, i) => ({
+    candidate,
+    position: i + 1,
+  }));
+
+  const q = query.trim().toLowerCase();
+  if (!q) return rows;
+
+  // `sort` is stable, so within one match rank the rows stay in the order
+  // chosen above.
+  return rows
+    .map((row) => ({ row, r: queryRank(row.candidate, q) }))
+    .filter((x) => x.r >= 0)
+    .sort((a, b) => b.r - a.r)
+    .map((x) => x.row);
+}
+
 /** The human label for a recommendation key, or an em dash when unrecorded. */
 export function recommendationLabel(key: string | null | undefined): string {
   return RECOMMENDATIONS.find((r) => r.key === key)?.label ?? "—";
