@@ -64,26 +64,16 @@ export function issueBody(input: {
   viewport?: string | null;
   screenshotUrl: string | null;
   screenshotNote: string | null;
-  /** The reporter asked to be left off the issue. See the note below. */
-  anonymous?: boolean;
 }): string {
   const who = input.memberName?.trim()
     ? `${input.memberName.trim()} · ${input.memberEmail}`
     : input.memberEmail;
 
-  // An anonymous report drops BOTH the name and the role, and the caller still
-  // passes them: this function is the last place either could reach a public
-  // document, so the withholding happens here rather than at each call site
-  // that might one day forget. The role goes too — "exec, on /portal/pipeline,
-  // at 2am" names one of five people in a club this size, and a promise of
-  // anonymity that survives only a careless reader is not one.
   const rows: string[] = [
     `| | |`,
     `| --- | --- |`,
-    input.anonymous
-      ? `| **From** | Anonymous — a signed-in portal member |`
-      : `| **From** | ${cell(who)} |`,
-    ...(input.anonymous ? [] : [`| **Role** | ${cell(input.memberRole ?? "member")} |`]),
+    `| **From** | ${cell(who)} |`,
+    `| **Role** | ${cell(input.memberRole ?? "member")} |`,
     `| **Page** | \`${cell(input.pagePath).replace(/`/g, "")}\` |`,
   ];
   if (input.viewport) rows.push(`| **Viewport** | ${cell(input.viewport)} |`);
@@ -106,14 +96,7 @@ export function issueBody(input: {
     parts.push("", "### Screenshot", "", `_${input.screenshotNote}_`);
   }
 
-  parts.push(
-    "",
-    "---",
-    "",
-    input.anonymous
-      ? "<sub>Filed anonymously from the member portal's feedback widget — there is no reporter to follow up with here.</sub>"
-      : "<sub>Filed from the member portal's feedback widget.</sub>"
-  );
+  parts.push("", "---", "", "<sub>Filed from the member portal's feedback widget.</sub>");
   return parts.join("\n");
 }
 

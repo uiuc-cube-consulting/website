@@ -49,10 +49,6 @@ export type FeedbackRow = {
   screenshot_mime: string | null;
   issue_number: number | null;
   issue_url: string | null;
-  // No `anonymous` here on purpose. The column is written but never read back:
-  // this type mirrors the SELECT in `getFeedback`, and naming a column there
-  // that a deployment mid-migration does not have yet would fail the whole read
-  // — which is the screenshot route's only source of truth about who may look.
 };
 
 /**
@@ -104,41 +100,24 @@ export async function createFeedbackRecord(input: {
   description: string;
   page_path: string;
   viewport: string | null;
-  /** They asked to be left off the public issue. The row still names them —
-   *  see db/anonymous.sql for why that is the honest arrangement. */
-  anonymous?: boolean;
 }): Promise<CreateResult> {
   const sb = db();
   if (!sb) return { ok: false, demo: true };
 
-  // `Record<string, unknown>` rather than an inferred literal: the insert below
-  // is sometimes this object and sometimes this object plus `anonymous`, and a
-  // literal type makes the wider one an excess-property error.
-  const row: Record<string, unknown> = {
-    member_id: input.member_id,
-    member_email: input.member_email,
-    member_name: input.member_name,
-    member_role: input.member_role,
-    kind: input.kind,
-    description: input.description,
-    page_path: input.page_path,
-    viewport: input.viewport,
-  };
-
-  // `anonymous` is only sent when it was asked for, and a database that predates
-  // db/anonymous.sql retries without it. Same concession `submitFlag` makes for
-  // `attributed`, and it costs nothing here: the ISSUE is already anonymous by
-  // then — the route decides that from the request, not from this row — so a
-  // missing column loses a record of the choice, never honours it late.
-  let { data, error } = await sb
+  const { data, error } = await sb
     .from("portal_feedback")
-    .insert(input.anonymous ? { ...row, anonymous: true } : row)
+    .insert({
+      member_id: input.member_id,
+      member_email: input.member_email,
+      member_name: input.member_name,
+      member_role: input.member_role,
+      kind: input.kind,
+      description: input.description,
+      page_path: input.page_path,
+      viewport: input.viewport,
+    })
     .select("id")
     .single();
-
-  if (error && input.anonymous && /anonymous/i.test(error.message)) {
-    ({ data, error } = await sb.from("portal_feedback").insert(row).select("id").single());
-  }
 
   if (error || !data) return { ok: false, error: error?.message ?? "Could not record the report." };
   return { ok: true, id: data.id as string };

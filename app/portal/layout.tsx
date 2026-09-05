@@ -61,6 +61,11 @@ export default async function PortalLayout({
     // coffee chats months before a cycle opens, which is exactly when the
     // recruiting console is shut. See app/portal/flags/page.tsx.
     { href: "/portal/flags", label: "Flags" },
+    // Everyone, always, and never behind a role or a toggle: the member most
+    // likely to need an anonymous channel is the one with the least standing to
+    // ask for it. It sits in the nav rather than only in the corner widget
+    // because somebody has to be able to FIND it without asking where it is.
+    { href: "/portal/anonymous", label: "Anonymous Note" },
     ...(isInterviewer && recruitingOpen ? [{ href: "/portal/interview", label: "Interviews" }] : []),
   ];
 
