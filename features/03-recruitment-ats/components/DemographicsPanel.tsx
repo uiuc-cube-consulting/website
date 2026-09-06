@@ -197,6 +197,44 @@ export function DemographicsPanel() {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
+        <p className="eyebrow">Mean first round score</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Averaged per person out of 32 (Case 15 + Behavioral 17) for candidates with completed interviews.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-4">
+          {data.groups.map((g) => (
+            <div key={g.group} className="rounded-xl bg-[var(--bg-cream)]/50 px-4 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{g.label}</p>
+              <p className="text-lg font-semibold tabular-nums text-[var(--bg-dark)]">
+                {g.meanFirstRoundScore ?? "—"}
+                <span className="text-xs font-normal text-[var(--muted)]"> / 32</span>
+              </p>
+              <p className="text-[11px] text-[var(--muted)]">{g.firstRoundReviewed ?? 0} interviewed</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
+        <p className="eyebrow">Mean final round score</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Averaged per person out of 32 (Case 15 + Behavioral 17) for candidates with completed final interviews.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-4">
+          {data.groups.map((g) => (
+            <div key={g.group} className="rounded-xl bg-[var(--bg-cream)]/50 px-4 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{g.label}</p>
+              <p className="text-lg font-semibold tabular-nums text-[var(--bg-dark)]">
+                {g.meanFinalRoundScore ?? "—"}
+                <span className="text-xs font-normal text-[var(--muted)]"> / 32</span>
+              </p>
+              <p className="text-[11px] text-[var(--muted)]">{g.finalRoundReviewed ?? 0} interviewed</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <p className="text-xs text-[var(--muted)]">
         {data.dimension === "pronouns"
           ? "Pronouns are what the form collects, and what people chose to write. They are a proxy for gender, not the same thing."

@@ -146,6 +146,36 @@ describe("demographicsReport", () => {
     expect(she.meanScore).toBe(10);
   });
 
+  it("calculates mean first round interview score out of 32 for completed interviews", () => {
+    const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as any, weighted_total: 12 };
+    const r1Beh: Review = { ...review("a1", 14), kind: "behavioral", scores: { total: 14 } as any, weighted_total: 14 };
+    const r2Case: Review = { ...review("a2", 10), kind: "case", scores: { total: 10 } as any, weighted_total: 10 };
+    const r2Beh: Review = { ...review("a2", 12), kind: "behavioral", scores: { total: 12 } as any, weighted_total: 12 };
+
+    const r = demographicsReport(applicants, [r1Case, r1Beh, r2Case, r2Beh], STAGE_ORDER);
+    const she = r.groups.find((g) => g.group === "she")!;
+    expect(she.firstRoundReviewed).toBe(2);
+    expect(she.meanFirstRoundScore).toBe(24); // (26 + 22) / 2
+  });
+
+  it("calculates mean final round interview score out of 32 for completed final interviews", () => {
+    const r1Case: Review = { ...review("a1", 13), kind: "final_case", scores: { total: 13 } as any, weighted_total: 13 };
+    const r1Beh: Review = { ...review("a1", 15), kind: "final_behavioral", scores: { total: 15 } as any, weighted_total: 15 };
+
+    const r = demographicsReport(applicants, [r1Case, r1Beh], STAGE_ORDER);
+    const she = r.groups.find((g) => g.group === "she")!;
+    expect(she.finalRoundReviewed).toBe(1);
+    expect(she.meanFinalRoundScore).toBe(28); // 13 + 15
+  });
+
+  it("requires both case and behavioral rubrics before a round score counts", () => {
+    const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as any, weighted_total: 12 };
+    const r = demographicsReport(applicants, [r1Case], STAGE_ORDER);
+    const she = r.groups.find((g) => g.group === "she")!;
+    expect(she.firstRoundReviewed).toBe(0);
+    expect(she.meanFirstRoundScore).toBeNull();
+  });
+
   it("handles an empty cohort without dividing by zero", () => {
     const r = demographicsReport([], [], STAGE_ORDER);
     expect(r).toEqual({ dimension: "pronouns", total: 0, groups: [], stages: [], distinct: 0 });

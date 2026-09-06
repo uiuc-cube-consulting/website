@@ -15,6 +15,7 @@
 
 import type { Applicant, Review } from "./types";
 import { isScreenReview, screenTotal } from "./types";
+import { submittedTotal } from "./interview";
 
 /** The response-sheet column this reads. Stored in `responses` because the
  *  import maps only name/email/year/major/college/resume into columns. */
@@ -174,6 +175,14 @@ export type GroupBreakdown = {
   reviewed: number;
   /** Mean written score across reviewed applicants, or null if none are. */
   meanScore: number | null;
+  /** Applicants in this group with completed first round interview scores. */
+  firstRoundReviewed: number;
+  /** Mean first round interview score across reviewed applicants (out of 32), or null if none are. */
+  meanFirstRoundScore: number | null;
+  /** Applicants in this group with completed final round interview scores. */
+  finalRoundReviewed: number;
+  /** Mean final round interview score across reviewed applicants (out of 32), or null if none are. */
+  meanFinalRoundScore: number | null;
   /** How many sit at each stage. */
   byStage: Record<string, number>;
 };
@@ -196,7 +205,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
  * Split a cohort by any dimension, with each group's stage distribution and mean
- * written score.
+ * written, first round, and final round scores.
  *
  * High-cardinality fields are truncated to the `topN` largest groups with the
  * remainder collapsed into "Other". Majors need it: 146 distinct values of which
@@ -215,17 +224,73 @@ export function breakdownBy(
   stageOrder: readonly string[],
   topN: number = DEFAULT_TOP_N
 ): DemographicsReport {
-  // One pass over reviews: applicant -> their written totals.
-  const totalsByApplicant = new Map<string, number[]>();
+  // One pass over reviews: applicant -> written totals & interview round totals.
+  const writtenTotalsByApplicant = new Map<string, number[]>();
+  const firstCaseByApplicant = new Map<string, number[]>();
+  const firstBehavioralByApplicant = new Map<string, number[]>();
+  const finalCaseByApplicant = new Map<string, number[]>();
+  const finalBehavioralByApplicant = new Map<string, number[]>();
+
   for (const r of reviews) {
-    if (!isScreenReview(r)) continue;
-    const cur = totalsByApplicant.get(r.applicant_id);
-    // Recomputed from `scores` rather than trusting `weighted_total`, for the
-    // same reason the decision queue recomputes it: a rubric change leaves the
-    // stored column meaning something that no longer matches the criteria.
-    const total = screenTotal(r.scores);
-    if (cur) cur.push(total);
-    else totalsByApplicant.set(r.applicant_id, [total]);
+    if (isScreenReview(r)) {
+      const cur = writtenTotalsByApplicant.get(r.applicant_id);
+      // Recomputed from `scores` rather than trusting `weighted_total`, for the
+      // same reason the decision queue recomputes it: a rubric change leaves the
+      // stored column meaning something that no longer matches the criteria.
+      const total = screenTotal(r.scores);
+      if (cur) cur.push(total);
+      else writtenTotalsByApplicant.set(r.applicant_id, [total]);
+    } else if (r.kind === "case") {
+      const total = submittedTotal("case", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
+      if (total !== null) {
+        const cur = firstCaseByApplicant.get(r.applicant_id);
+        if (cur) cur.push(total);
+        else firstCaseByApplicant.set(r.applicant_id, [total]);
+      }
+    } else if (r.kind === "behavioral") {
+      const total = submittedTotal("behavioral", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
+      if (total !== null) {
+        const cur = firstBehavioralByApplicant.get(r.applicant_id);
+        if (cur) cur.push(total);
+        else firstBehavioralByApplicant.set(r.applicant_id, [total]);
+      }
+    } else if (r.kind === "final_case") {
+      const total = submittedTotal("final_case", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
+      if (total !== null) {
+        const cur = finalCaseByApplicant.get(r.applicant_id);
+        if (cur) cur.push(total);
+        else finalCaseByApplicant.set(r.applicant_id, [total]);
+      }
+    } else if (r.kind === "final_behavioral") {
+      const total = submittedTotal("final_behavioral", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
+      if (total !== null) {
+        const cur = finalBehavioralByApplicant.get(r.applicant_id);
+        if (cur) cur.push(total);
+        else finalBehavioralByApplicant.set(r.applicant_id, [total]);
+      }
+    }
+  }
+
+  // Pre-calculate per-applicant First Round and Final Round totals (out of 32).
+  const firstRoundByApplicant = new Map<string, number>();
+  const finalRoundByApplicant = new Map<string, number>();
+
+  for (const a of applicants) {
+    const caseScores = firstCaseByApplicant.get(a.id);
+    const behScores = firstBehavioralByApplicant.get(a.id);
+    if (caseScores?.length && behScores?.length) {
+      const caseMean = caseScores.reduce((x, y) => x + y, 0) / caseScores.length;
+      const behMean = behScores.reduce((x, y) => x + y, 0) / behScores.length;
+      firstRoundByApplicant.set(a.id, caseMean + behMean);
+    }
+
+    const fCaseScores = finalCaseByApplicant.get(a.id);
+    const fBehScores = finalBehavioralByApplicant.get(a.id);
+    if (fCaseScores?.length && fBehScores?.length) {
+      const fCaseMean = fCaseScores.reduce((x, y) => x + y, 0) / fCaseScores.length;
+      const fBehMean = fBehScores.reduce((x, y) => x + y, 0) / fBehScores.length;
+      finalRoundByApplicant.set(a.id, fCaseMean + fBehMean);
+    }
   }
 
   const buckets = new Map<string, { label: string; members: Applicant[] }>();
@@ -248,19 +313,35 @@ export function breakdownBy(
     // Averaged over PEOPLE, not over reviews: a candidate read three times would
     // otherwise count for more than one read twice, quietly weighting the group
     // mean toward whoever happened to get an extra reviewer.
-    const perPerson = members
-      .map((a) => totalsByApplicant.get(a.id))
+    const perPersonWritten = members
+      .map((a) => writtenTotalsByApplicant.get(a.id))
       .filter((t): t is number[] => Boolean(t?.length))
       .map((t) => t.reduce((x, y) => x + y, 0) / t.length);
+
+    const perPersonFirst = members
+      .map((a) => firstRoundByApplicant.get(a.id))
+      .filter((t): t is number => typeof t === "number");
+
+    const perPersonFinal = members
+      .map((a) => finalRoundByApplicant.get(a.id))
+      .filter((t): t is number => typeof t === "number");
 
     return {
       group: key,
       label,
       count: members.length,
       pct: applicants.length ? round1((members.length / applicants.length) * 100) : 0,
-      reviewed: perPerson.length,
-      meanScore: perPerson.length
-        ? round1(perPerson.reduce((x, y) => x + y, 0) / perPerson.length)
+      reviewed: perPersonWritten.length,
+      meanScore: perPersonWritten.length
+        ? round1(perPersonWritten.reduce((x, y) => x + y, 0) / perPersonWritten.length)
+        : null,
+      firstRoundReviewed: perPersonFirst.length,
+      meanFirstRoundScore: perPersonFirst.length
+        ? round1(perPersonFirst.reduce((x, y) => x + y, 0) / perPersonFirst.length)
+        : null,
+      finalRoundReviewed: perPersonFinal.length,
+      meanFinalRoundScore: perPersonFinal.length
+        ? round1(perPersonFinal.reduce((x, y) => x + y, 0) / perPersonFinal.length)
         : null,
       byStage,
     };
