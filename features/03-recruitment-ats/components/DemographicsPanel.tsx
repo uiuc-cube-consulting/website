@@ -15,6 +15,7 @@ import {
   type Dimension,
 } from "@/features/03-recruitment-ats/lib/demographics";
 import { SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
+import { ROUNDS, ROUND_LABEL, type Round } from "@/features/03-recruitment-ats/lib/rounds";
 
 const STAGE_LABEL: Record<string, string> = {
   applied: "Applied", screened: "Screened", interview: "First round",
@@ -22,7 +23,14 @@ const STAGE_LABEL: Record<string, string> = {
   rejected: "Rejected", withdrawn: "Withdrawn",
 };
 
-type Api = DemographicsReport & { cycle: string; demo: boolean; error?: string };
+type Api = DemographicsReport & {
+  cycle: string;
+  demo: boolean;
+  round: Round;
+  /** The whole applicant pool, so a round can be reported as "52 of 328". */
+  poolTotal: number;
+  error?: string;
+};
 
 const DIMENSIONS: Dimension[] = ["pronouns", "major", "college", "year"];
 
@@ -30,13 +38,14 @@ export function DemographicsPanel() {
   const [data, setData] = useState<Api | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dimension, setDimension] = useState<Dimension>("pronouns");
+  const [round, setRound] = useState<Round>("written");
 
   useEffect(() => {
     const ctrl = new AbortController();
     (async () => {
       try {
         setError(null);
-        const r = await fetch(`/api/recruitment/demographics?by=${dimension}`, { signal: ctrl.signal, cache: "no-store" });
+        const r = await fetch(`/api/recruitment/demographics?by=${dimension}&round=${round}`, { signal: ctrl.signal, cache: "no-store" });
         const j = await r.json();
         if (ctrl.signal.aborted) return;
         if (!r.ok) setError(j.error || "Could not load demographics.");
@@ -46,11 +55,22 @@ export function DemographicsPanel() {
       }
     })();
     return () => ctrl.abort();
-  }, [dimension]);
+  }, [dimension, round]);
 
   if (error) return <p className="text-sm text-amber-700">{error}</p>;
   if (!data) return <p className="text-sm text-[var(--muted)]">Loading demographics…</p>;
-  if (!data.total) return <p className="text-sm text-[var(--muted)]">No applicants in this cycle yet.</p>;
+  if (!data.total) {
+    return (
+      <div className="space-y-4">
+        <RoundTabs round={round} onChange={setRound} />
+        <p className="text-sm text-[var(--muted)]">
+          {round === "written"
+            ? "No applicants in this cycle yet."
+            : `Nobody has reached the ${ROUND_LABEL[round].toLowerCase()} yet.`}
+        </p>
+      </div>
+    );
+  }
 
   const maxCount = Math.max(1, ...data.groups.map((g) => g.count));
 
@@ -58,6 +78,8 @@ export function DemographicsPanel() {
 
   return (
     <div className="space-y-5">
+      <RoundTabs round={round} onChange={setRound} />
+
       <div className="flex flex-wrap gap-2">
         {DIMENSIONS.map((d) => (
           <button
@@ -76,9 +98,13 @@ export function DemographicsPanel() {
       </div>
 
       <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
-        <p className="eyebrow">Who applied</p>
+        <p className="eyebrow">{data.round === "written" ? "Who applied" : `Who reached the ${ROUND_LABEL[data.round].toLowerCase()}`}</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          {data.total} applicants by {DIMENSION_LABEL[data.dimension].toLowerCase()}
+          {data.total}
+          {data.round !== "written" && data.poolTotal > 0 && (
+            <> of {data.poolTotal} applicants ({Math.round((data.total / data.poolTotal) * 100)}%)</>
+          )}
+          {data.round === "written" ? " applicants" : ""} by {DIMENSION_LABEL[data.dimension].toLowerCase()}
           {data.distinct > data.groups.length && (
             <> · {data.distinct} distinct values, largest {data.groups.length - 1} shown</>
           )}
@@ -236,11 +262,48 @@ export function DemographicsPanel() {
       </div>
 
       <p className="text-xs text-[var(--muted)]">
+        {data.round !== "written" && (
+          <>
+            A round&rsquo;s cohort is everyone who <em>reached</em> it, including the people it
+            turned down — otherwise the comparison that matters (who went in against who came out)
+            has nothing to compare.{" "}
+          </>
+        )}
         {data.dimension === "pronouns"
           ? "Pronouns are what the form collects, and what people chose to write. They are a proxy for gender, not the same thing."
           : "Free-text answers are normalised before counting \u2014 \u201cFinance + DS\u201d and \u201cFinance and Data Science\u201d are one major, not two."}{" "}
         Small groups can identify individuals, which is why this page is exec-only.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Which cohort the report is about.
+ *
+ * First on the panel, above the dimension tabs, because it changes the
+ * POPULATION rather than the axis — "she/her, among the people who got an
+ * interview" is a different sentence from "she/her, among applicants", and the
+ * control that decides which one you are reading should be the one you meet
+ * first.
+ */
+function RoundTabs({ round, onChange }: { round: Round; onChange: (r: Round) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {ROUNDS.map((r) => (
+        <button
+          key={r}
+          onClick={() => onChange(r)}
+          className={
+            "rounded-full px-3.5 py-1.5 text-xs font-semibold transition " +
+            (round === r
+              ? "bg-[var(--bg-dark)] text-[var(--fg-on-dark)]"
+              : "border border-[var(--border)] text-[var(--muted)] hover:bg-white")
+          }
+        >
+          {ROUND_LABEL[r]}
+        </button>
+      ))}
     </div>
   );
 }

@@ -296,6 +296,33 @@ export async function getBoard(
   return { round, candidates, demo: false, viewer, canManage };
 }
 
+/**
+ * Every interview panel row in the cycle, for callers that need to know who was
+ * SCHEDULED rather than who was scored.
+ *
+ * Deliberately not part of `getBoard`, which already has the panels it needs
+ * scoped to one round. This exists for the cohort question — "did this person
+ * reach the first round" — where a candidate who was rostered and then no-showed
+ * still reached it. See lib/cohort.ts.
+ *
+ * Returns [] rather than throwing when the table is unreadable or Supabase is
+ * absent: the panel is a corroborating signal, and losing it degrades the answer
+ * to "reviews and stage only" instead of failing a demographics page.
+ */
+export async function getInterviewPanels(): Promise<{ applicant_id: string; round: string | null }[]> {
+  const sb = db();
+  if (!sb) return [];
+  const { data, error } = await sb.from("interview_panel").select("applicant_id, round");
+  if (error) {
+    console.error("[interview] panel read failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => ({
+    applicant_id: String(r.applicant_id),
+    round: (r.round as string | null) ?? null,
+  }));
+}
+
 // ── Authorization ────────────────────────────────────────────────────────────
 
 /**

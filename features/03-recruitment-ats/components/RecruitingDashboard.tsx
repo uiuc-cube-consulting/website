@@ -672,6 +672,34 @@ export function RecruitingDashboard() {
                 ↓ Export CSV
               </a>
             )}
+            {/* The per-round lists, as named buttons rather than a filter the
+                exec has to assemble.
+
+                They exist because the stage column cannot express them. Everyone
+                cut on their written application and everyone cut after being
+                interviewed both sit at `rejected`, and those two groups get
+                different letters — one has never met us, the other spent forty
+                minutes in a room with two members. Handing someone a filter and
+                trusting them to reconstruct the difference at 1am on decision
+                night is how the wrong template goes to 227 people. */}
+            {canManage && (
+              <>
+                <a
+                  href="/api/recruitment/export?round=first_round&stage=rejected"
+                  className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)]"
+                  title="Everyone who was interviewed in the first round and then turned down — not the written rejections"
+                >
+                  ↓ Rejected after first round
+                </a>
+                <a
+                  href="/api/recruitment/export?round=final_round"
+                  className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)]"
+                  title="Everyone who reached the final round, whatever has happened to them since"
+                >
+                  ↓ Reached final round
+                </a>
+              </>
+            )}
           </div>
           {/* Bulk decisions, exec only — mirrors `canDecide`, and the API refuses
               everyone else regardless. Appears only once something is ticked, so

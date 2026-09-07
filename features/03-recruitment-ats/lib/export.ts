@@ -7,6 +7,8 @@
 import type { Applicant, Flag, Review } from "./types";
 import { isScreenReview, screenTotal } from "./types";
 import { cycleLabel } from "./cycle";
+import { ROUND_KINDS, rubricMax, submittedTotal, type InterviewKind } from "./interview";
+import { type Round } from "./rounds";
 
 /**
  * Spreadsheets execute formulas, and a cell beginning `=`, `+`, `-`, `@`, or a
@@ -55,10 +57,60 @@ export const EXPORT_HEADERS = [
   "Mean score",
   "Max score",
   "Spread",
+  // The interview rounds, added because the written mean explains nothing about
+  // a candidate turned down after being interviewed — the file that names them
+  // has to carry the numbers the call was actually made on. Blank for anyone
+  // who never sat that round, which is most of the written pool.
+  "First round case",
+  "First round behavioral",
+  "First round total",
+  "First round max",
+  "Final round case",
+  "Final round behavioral",
+  "Final round total",
+  "Final round max",
   "Green flags",
   "Red flags",
   "Applied at",
 ] as const;
+
+/**
+ * The panel's mean on one rubric for one candidate, or null if nobody scored it.
+ *
+ * A MEAN across interviewers rather than a sum: two people scoring the same case
+ * produce one case score, not a doubled one. Recomputed from `scores` for the
+ * same reason every other total here is — `weighted_total` means whatever the
+ * rubric meant on the day it was written.
+ */
+function rubricMean(kind: InterviewKind, reviews: Review[], applicantId: string): number | null {
+  const totals = reviews
+    .filter((r) => r.applicant_id === applicantId && r.kind === kind)
+    .map((r) => submittedTotal(kind, r.scores))
+    .filter((t): t is number => t !== null);
+  if (!totals.length) return null;
+  return Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 100) / 100;
+}
+
+/**
+ * A round's two rubric means and their sum.
+ *
+ * The total stays null unless BOTH rubrics have a score, matching
+ * `panelStanding`: half a round against the round's full maximum reads as a weak
+ * candidate, and a spreadsheet is exactly where that misreading gets acted on.
+ */
+function roundScores(
+  round: Exclude<Round, "written">,
+  reviews: Review[],
+  applicantId: string
+): { parts: (number | null)[]; total: number | null; max: number } {
+  const kinds = ROUND_KINDS[round];
+  const parts = kinds.map((k) => rubricMean(k, reviews, applicantId));
+  const max = kinds.reduce((n, k) => n + rubricMax(k), 0);
+  const total = parts.every((p) => p !== null)
+    ? Math.round((parts as number[]).reduce((a, b) => a + b, 0) * 100) / 100
+    : null;
+  return { parts, total, max };
+}
 
 /**
  * One spreadsheet row per applicant.
@@ -87,6 +139,9 @@ export function toExportRow(
   const spread = totals.length > 1 ? Math.max(...totals) - Math.min(...totals) : null;
   const own = flags.filter((f) => f.applicant_id === applicant.id);
 
+  const first = roundScores("first_round", reviews, applicant.id);
+  const final = roundScores("final_round", reviews, applicant.id);
+
   return [
     applicant.name,
     applicant.email,
@@ -99,17 +154,37 @@ export function toExportRow(
     mean ?? "",
     maxPoints,
     spread ?? "",
+    // Empty rather than 0 for a round somebody never sat. A zero is a real score
+    // on these rubrics — every category "Unacceptable Answer" — and writing one
+    // where there was no interview would libel a candidate in a file that gets
+    // forwarded.
+    first.parts[0] ?? "",
+    first.parts[1] ?? "",
+    first.total ?? "",
+    first.total === null ? "" : first.max,
+    final.parts[0] ?? "",
+    final.parts[1] ?? "",
+    final.total ?? "",
+    final.total === null ? "" : final.max,
     own.filter((f) => f.color === "green").length,
     own.filter((f) => f.color === "red").length,
     applicant.created_at,
   ];
 }
 
-/** `cube-applicants-fa26-rejected-2026-08-30.csv` — cycle and filter in the
- *  name, because these files pile up in a downloads folder and "export.csv"
- *  tells you nothing three weeks later. */
-export function exportFilename(cycle: string, stage: string | null, today = new Date()): string {
+/** `cube-applicants-fa26-first_round-rejected-2026-08-30.csv` — cycle, round and
+ *  outcome in the name, because these files pile up in a downloads folder and
+ *  "export.csv" tells you nothing three weeks later. The round matters most of
+ *  all: two files both called "…-rejected.csv" are indistinguishable, and one of
+ *  them is the people who never got an interview. */
+export function exportFilename(
+  cycle: string,
+  stage: string | null,
+  today = new Date(),
+  round: Round | null = null
+): string {
   const date = today.toISOString().slice(0, 10);
+  const inRound = round && round !== "written" ? `-${round}` : "";
   const scope = stage && stage !== "all" ? `-${stage}` : "";
-  return `cube-applicants-${cycle}${scope}-${date}.csv`;
+  return `cube-applicants-${cycle}${inRound}${scope}-${date}.csv`;
 }

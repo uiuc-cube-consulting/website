@@ -5,6 +5,9 @@ import { isExec } from "@/features/03-recruitment-ats/lib/access";
 import { excludeOwnApplications } from "@/features/03-recruitment-ats/lib/self-access";
 import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
 import { breakdownBy, type Dimension } from "@/features/03-recruitment-ats/lib/demographics";
+import { cohortOf, gatherEvidence } from "@/features/03-recruitment-ats/lib/cohort";
+import { getInterviewPanels } from "@/features/03-recruitment-ats/lib/interview-store";
+import { isRound, type Round } from "@/features/03-recruitment-ats/lib/rounds";
 import { STAGES } from "@/features/03-recruitment-ats/lib/types";
 
 // EXEC-ONLY: who is applying, and whether the process treats them the same.
@@ -23,6 +26,13 @@ import { STAGES } from "@/features/03-recruitment-ats/lib/types";
 // Counts are the least useful part. The point is the stage split and the mean
 // score per group: a cohort that is 26% she/her at application and 10% at offer
 // is saying something about the process that a headline number never will.
+//
+// `?round=` scopes the COHORT to the people who reached a round, so the same
+// question can be asked of the first and final rounds and not only of the
+// applicant pool. It has to be a reach rather than a stage match: an hour after
+// exec finishes the first round nobody is at stage `interview` any more, and a
+// report keyed on that stage would say the round had no candidates. See
+// lib/cohort.ts for how far that inference can be trusted.
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +53,10 @@ export async function GET(req: NextRequest) {
   // should show something useful, not a 400.
   const by = params.get("by");
   const dimension: Dimension = DIMENSIONS.includes(by as Dimension) ? (by as Dimension) : "pronouns";
+  // Same forgiving fallback as `by`: a stale link shows the whole pool rather
+  // than a 400.
+  const roundParam = params.get("round");
+  const round: Round = isRound(roundParam) ? roundParam : "written";
 
   try {
     const { applicants, reviews, demo } = await getSnapshot(cycle);
@@ -50,10 +64,21 @@ export async function GET(req: NextRequest) {
     // row in an aggregate rather than a profile, but a group of one still names
     // them, and the rule does not have a size threshold.
     const visible = excludeOwnApplications(email, applicants, (a) => a.email);
+
+    // Panels are fetched only when a round is actually being asked about — they
+    // are a third query, and they change the answer for nobody looking at the
+    // written pool.
+    const panels = round === "written" ? [] : await getInterviewPanels();
+    const evidence = gatherEvidence(reviews, panels);
+    const cohort = cohortOf(round, visible, evidence);
+
     return NextResponse.json({
       cycle,
       demo,
-      ...breakdownBy(dimension, visible, reviews, STAGE_ORDER),
+      round,
+      /** The whole pool, so the UI can say "52 of 328" rather than just "52". */
+      poolTotal: visible.length,
+      ...breakdownBy(dimension, cohort, reviews, STAGE_ORDER),
     });
   } catch (err) {
     return NextResponse.json(
