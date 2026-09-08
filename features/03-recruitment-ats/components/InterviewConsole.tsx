@@ -29,6 +29,7 @@ import {
   ROUND_ADVANCE,
   ROUND_BLURB,
   ROUND_LABEL,
+  isInterviewRound,
   type InterviewRound,
 } from "@/features/03-recruitment-ats/lib/rounds";
 import { CandidateWorkspace } from "./CandidateWorkspace";
@@ -205,10 +206,15 @@ export function InterviewConsole() {
 
       <RoundSwitcher round={data.round} available={data.availableRounds} onChange={switchRound} />
 
-      {/* Folders are a FIRST-ROUND artifact: a resume plus the two rubric docs,
-          created for the people actually being interviewed. Provisioning the
-          written pool would be hundreds of folders nobody opens. */}
-      {data.canManage && data.round === "first_round" && <FolderProvisionBar onProvisioned={reload} />}
+      {/* Folders are an INTERVIEW-ROUND artifact: the rubric docs for the round,
+          created for the people actually being interviewed in it. Provisioning the
+          written pool would be hundreds of folders nobody opens — which is why
+          this bar is absent on the written board rather than disabled there.
+          Resume sync stays first-round only: the final round's folders hold no
+          resume, because the first round's already do. */}
+      {data.canManage && isInterviewRound(data.round) && (
+        <FolderProvisionBar round={data.round} onProvisioned={reload} />
+      )}
       {data.canManage && data.round === "first_round" && <ResumeSyncBar onSynced={reload} />}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -491,10 +497,19 @@ function RoundSwitcher({
 }
 
 // ── Drive folder provisioning (exec) ─────────────────────────────────────────
-// Reads the Google Form response sheet and gives every candidate a Drive folder
-// holding their resume, both rubrics, and a notes doc. Distinct from the resume
-// sync below: this one WRITES to Drive, and its resume mapping comes straight
-// from the Form rather than from filename matching.
+// Reads the Google Form response sheet and gives every candidate in the round on
+// screen a Drive folder holding that round's rubrics — the first round's resume,
+// case and behavioral rubrics and notes doc, or the final round's second-round
+// rubric. Distinct from the resume sync below: this one WRITES to Drive, and its
+// resume mapping comes straight from the Form rather than from filename matching.
+
+/** What each round's bar says it will do, so the button is never a mystery. */
+const PROVISION_BLURB: Record<InterviewRound, string> = {
+  first_round:
+    "Creates a Drive folder per candidate under “1st Round Applicants”, with their resume, both rubrics, and a notes doc. Safe to re-run — only what's missing is created.",
+  final_round:
+    "Creates a Drive folder per final-round candidate under “Final Round Applicants”, each with an editable copy of the second-round rubric. Safe to re-run — only what's missing is created.",
+};
 
 type ProvisionResponse = {
   ok: boolean;
@@ -510,7 +525,13 @@ type ProvisionResponse = {
   failed?: { name: string; email: string; error: string }[];
 };
 
-function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<void> | void }) {
+function FolderProvisionBar({
+  round,
+  onProvisioned,
+}: {
+  round: InterviewRound;
+  onProvisioned: () => Promise<void> | void;
+}) {
   const [busy, setBusy] = useState(false);
   const [repair, setRepair] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
@@ -533,7 +554,7 @@ function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<vo
         const r = await fetch("/api/recruitment/folders/provision", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repair }),
+          body: JSON.stringify({ round, repair }),
         });
         const res: ProvisionResponse = await r.json();
         if (!res.ok) {
@@ -564,7 +585,11 @@ function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<vo
     <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={provision} disabled={busy} className="btn btn-gold text-xs px-4 py-2 disabled:opacity-50">
-          {busy ? "Provisioning…" : "Provision candidate folders"}
+          {busy
+            ? "Provisioning…"
+            : round === "final_round"
+              ? "Provision final round folders"
+              : "Provision candidate folders"}
         </button>
         <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
           <input
@@ -576,7 +601,7 @@ function FolderProvisionBar({ onProvisioned }: { onProvisioned: () => Promise<vo
           Repair mode
         </label>
         <span className="text-xs text-[var(--muted)]">
-          {progress ?? "Creates a Drive folder per candidate with their resume, both rubrics, and a notes doc. Safe to re-run — only what's missing is created."}
+          {progress ?? PROVISION_BLURB[round]}
         </span>
       </div>
 

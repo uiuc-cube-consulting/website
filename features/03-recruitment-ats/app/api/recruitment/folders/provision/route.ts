@@ -5,9 +5,12 @@ import {
   ASSET_KINDS,
   type AssetKind,
 } from "@/features/03-recruitment-ats/lib/provision-store";
+import { isInterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
 
-// Exec-only: read the Google Form response sheet and give every candidate a Drive
-// folder holding their resume, both interview rubrics, and a notes doc.
+// Exec-only: read the Google Form response sheet and give every candidate in an
+// interview round a Drive folder holding that round's rubrics — the first round's
+// resume, case and behavioral rubrics and notes doc, or the final round's
+// second-round rubric.
 //
 // Idempotent — safe to re-run whenever more applications land. Everything can be
 // left to env vars; the body only exists so exec can point a run at a different
@@ -27,6 +30,7 @@ export async function POST(req: NextRequest) {
   if (session.user.role !== "exec") return NextResponse.json({ ok: false, error: "Exec only" }, { status: 403 });
 
   let body: {
+    round?: unknown;
     sheetId?: string;
     range?: string;
     cycle?: string;
@@ -39,6 +43,16 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     /* body is optional — fall back to env */
+  }
+
+  // An unrecognised round is refused rather than defaulted to the first: silently
+  // provisioning the wrong round would build a second tree under the wrong name
+  // and point the wrong applicant column at it.
+  if (body.round !== undefined && !isInterviewRound(body.round)) {
+    return NextResponse.json(
+      { ok: false, error: "round must be first_round or final_round" },
+      { status: 400 }
+    );
   }
 
   // Unrecognised kinds are dropped rather than defaulted away: a typo'd
@@ -58,6 +72,7 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await provisionCandidateFolders({
+    round: body.round,
     sheetId: body.sheetId,
     range: body.range,
     cycle: body.cycle,

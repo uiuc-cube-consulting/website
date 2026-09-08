@@ -148,10 +148,39 @@ export async function getBoard(
     };
   }
 
+  // The Drive folder link follows the round: a final-round candidate has a
+  // first-round folder AND a final-round one, and the useful link is the one for
+  // the round you are looking at. Selected per round rather than both at once
+  // because `final_drive_folder_url` arrives with db/final-round-folders.sql,
+  // which is applied by hand — asking for it unconditionally would take the whole
+  // interview board down until that had happened. Spelled out rather than
+  // interpolated because supabase-js parses the select list in the type system.
+  const APPLICANT_COLUMNS =
+    "id, name, email, year, major, college, stage, resume_file_id, resume_name, resume_mime, resume_match, resume_linked_at";
+  // The two branches differ only in which folder-url column they carry, and
+  // supabase-js types each one exactly; naming the union once keeps the rest of
+  // the assembly reading a single shape.
+  type ApplicantRow = {
+    id: string;
+    name: string;
+    email: string;
+    year: string | null;
+    major: string | null;
+    college: string | null;
+    stage: string;
+    resume_file_id: string | null;
+    resume_name: string | null;
+    resume_mime: string | null;
+    resume_match: string | null;
+    resume_linked_at: string | null;
+    drive_folder_url?: string | null;
+    final_drive_folder_url?: string | null;
+  };
   const [applicantsRes, panelRes, reviewsRes, flagsRes] = await Promise.all([
-    sb
-      .from("applicants")
-      .select("id, name, email, year, major, college, stage, resume_file_id, resume_name, resume_mime, resume_match, resume_linked_at, drive_folder_url")
+    (round === "final_round"
+      ? sb.from("applicants").select(`${APPLICANT_COLUMNS}, final_drive_folder_url`)
+      : sb.from("applicants").select(`${APPLICANT_COLUMNS}, drive_folder_url`)
+    )
       .in("stage", stages as readonly string[])
       .order("name", { ascending: true }),
     sb.from("interview_panel").select("applicant_id, interviewer_email").eq("round", round),
@@ -259,8 +288,8 @@ export async function getBoard(
   // not the board ever listed it.
   const visibleApplicants = excludeOwnApplications(
     viewer,
-    applicantsRes.data ?? [],
-    (a) => a.email as string
+    (applicantsRes.data ?? []) as ApplicantRow[],
+    (a) => a.email
   );
 
   const candidates: Candidate[] = visibleApplicants.map((a) => {
@@ -273,7 +302,8 @@ export async function getBoard(
       major: a.major ?? undefined,
       college: a.college ?? undefined,
       stage: a.stage as Stage,
-      driveFolderUrl: a.drive_folder_url ?? null,
+      driveFolderUrl:
+        (round === "final_round" ? a.final_drive_folder_url : a.drive_folder_url) ?? null,
       // Deliberately no fileId — the client asks for /api/recruitment/resume/<applicant id>.
       resume: a.resume_file_id
         ? {

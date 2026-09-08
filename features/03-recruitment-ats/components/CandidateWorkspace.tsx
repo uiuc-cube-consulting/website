@@ -140,7 +140,7 @@ export function CandidateWorkspace({
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <ResumePane candidate={candidate} />
+        <ResumePane candidate={candidate} round={round} />
 
         <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
           <div className="inline-flex overflow-hidden rounded-full border border-[var(--border)]">
@@ -378,7 +378,7 @@ function PanelScores({
 
 // ── Resume ───────────────────────────────────────────────────────────────────
 
-function ResumePane({ candidate }: { candidate: Candidate }) {
+function ResumePane({ candidate, round }: { candidate: Candidate; round: InterviewRound }) {
   const src = `/api/recruitment/resume/${candidate.id}`;
   const resume = candidate.resume;
   // Google Docs are exported to PDF by the API, so anything but a real Word file renders inline.
@@ -392,7 +392,10 @@ function ResumePane({ candidate }: { candidate: Candidate }) {
       <div className="flex items-center justify-between gap-3">
         <p className="eyebrow">Resume</p>
         <div className="flex items-center gap-3">
-          {/* The provisioned Drive folder, for interviewers who'd rather grade in Docs. */}
+          {/* This round's provisioned Drive folder, for interviewers who'd rather
+              grade in Docs. Named by round because a final-round candidate has two
+              of them — the board hands over whichever matches the round on screen,
+              and an unlabelled link would give no clue which one opened. */}
           {candidate.driveFolderUrl && (
             <a
               href={candidate.driveFolderUrl}
@@ -400,7 +403,7 @@ function ResumePane({ candidate }: { candidate: Candidate }) {
               rel="noreferrer"
               className="text-xs font-semibold text-[var(--gold-deep)] hover:underline"
             >
-              Drive folder ↗
+              {round === "final_round" ? "Final round folder" : "Drive folder"} ↗
             </a>
           )}
           {resume && (

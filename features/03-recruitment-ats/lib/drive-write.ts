@@ -194,6 +194,47 @@ export async function copyInto(
 }
 
 /**
+ * `copyInto`, but only if the destination does not already hold a file by that
+ * name — `ensureFolder`'s look-up-then-create rule, applied to copies.
+ *
+ * The provisioning ledger in ./provision-store.ts is the primary guard against
+ * duplicate work, but it lives in a different system and is written AFTER the
+ * Drive calls. A run that copies fifty rubrics and then fails to record them
+ * would, on the next attempt, give every candidate a SECOND rubric doc — and a
+ * folder holding two rubrics is worse than one holding none, because each
+ * interviewer fills in whichever they happened to open and the other stays
+ * blank. Copy names are deterministic (./folder-naming.ts), so the name is a
+ * reliable identity here, exactly as it is for folders.
+ */
+export async function copyIntoOnce(
+  clients: Clients,
+  sourceFileId: string,
+  destFolderId: string,
+  newName: string
+): Promise<DriveResult<DriveFile>> {
+  try {
+    const found = await clients.drive.files.list({
+      q: [
+        `name = '${escapeQuery(newName)}'`,
+        `'${escapeQuery(destFolderId)}' in parents`,
+        "trashed = false",
+      ].join(" and "),
+      fields: "files(id, name)",
+      pageSize: 1,
+      includeItemsFromAllDrives: true,
+      ...SHARED,
+    });
+    const hit = found.data.files?.[0];
+    if (hit?.id) {
+      return { ok: true, value: { id: hit.id, name: hit.name ?? newName, url: driveFileUrl(hit.id) } };
+    }
+  } catch (e) {
+    return fail(e, `Could not check ${destFolderId} for "${newName}"`);
+  }
+  return copyInto(clients, sourceFileId, destFolderId, newName);
+}
+
+/**
  * Create a Google Doc in `parentId` and fill it with `requests`.
  *
  * Two calls, not one: the Docs API creates an empty document with no way to set a

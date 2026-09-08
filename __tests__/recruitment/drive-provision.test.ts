@@ -15,12 +15,15 @@ import {
 } from "@/features/03-recruitment-ats/lib/form-resume";
 import {
   candidateFolderName,
+  copyFileName,
   resumeFileName,
   docTitle,
   cycleFolderName,
   sanitize,
 } from "@/features/03-recruitment-ats/lib/folder-naming";
 import { notesDocRequests } from "@/features/03-recruitment-ats/lib/rubric-doc";
+import { ROUND_PLANS, ASSET_KINDS } from "@/features/03-recruitment-ats/lib/provision-store";
+import { INTERVIEW_ROUNDS } from "@/features/03-recruitment-ats/lib/rounds";
 import {
   CASE_RUBRIC,
   BEHAVIORAL_RUBRIC,
@@ -154,6 +157,87 @@ const META = {
   subtitle: "Junior · Statistics",
   label: "Case",
 };
+
+// ── ROUND_PLANS ──────────────────────────────────────────────────────────────
+// A candidate in the final round has TWO provisioned folders, and the only thing
+// keeping them apart is that the two plans name different ledger kinds and
+// different applicant columns. Overlap anywhere is not a cosmetic bug: the ledger
+// is keyed (applicant_id, kind), so a shared kind means the final-round folder
+// overwrites the first-round row and the board loses the link to a folder that
+// still exists in Drive, unreachable from the portal.
+
+describe("round provisioning plans", () => {
+  it("covers every interview round", () => {
+    for (const round of INTERVIEW_ROUNDS) expect(ROUND_PLANS[round]).toBeDefined();
+  });
+
+  it("gives each round its own folder kind", () => {
+    const kinds = INTERVIEW_ROUNDS.map((r) => ROUND_PLANS[r].folderKind);
+    expect(new Set(kinds).size).toBe(kinds.length);
+  });
+
+  it("gives each round its own applicant columns", () => {
+    const columns = INTERVIEW_ROUNDS.flatMap((r) => Object.values(ROUND_PLANS[r].columns));
+    expect(new Set(columns).size).toBe(columns.length);
+  });
+
+  it("shares no artifact kind between rounds", () => {
+    const [first, final] = INTERVIEW_ROUNDS.map((r) => new Set<string>(ROUND_PLANS[r].kinds));
+    for (const k of final) expect(first.has(k)).toBe(false);
+  });
+
+  it("uses only kinds the ledger's CHECK constraint allows", () => {
+    for (const round of INTERVIEW_ROUNDS) {
+      for (const kind of ROUND_PLANS[round].kinds) {
+        expect(ASSET_KINDS as readonly string[]).toContain(kind);
+      }
+    }
+  });
+
+  it("includes each round's folder kind in the kinds it provisions", () => {
+    for (const round of INTERVIEW_ROUNDS) {
+      const plan = ROUND_PLANS[round];
+      expect(plan.kinds).toContain(plan.folderKind);
+    }
+  });
+
+  it("copies every template into a kind that round actually provisions", () => {
+    for (const round of INTERVIEW_ROUNDS) {
+      const plan = ROUND_PLANS[round];
+      for (const t of plan.templates) expect(plan.kinds).toContain(t.kind);
+    }
+  });
+
+  it("gives every template a configurable master id", () => {
+    for (const round of INTERVIEW_ROUNDS) {
+      for (const t of ROUND_PLANS[round].templates) {
+        expect(t.env).toMatch(/^RECRUITING_[A-Z_]+_FILE_ID$/);
+      }
+    }
+  });
+
+  it("keeps the final round to a folder and its rubric", () => {
+    // No resume copy (the first-round folder holds it) and no notes doc (the
+    // second-round rubric has its own Notes section). Asserted because adding
+    // either one silently doubles what exec has to keep current.
+    expect(ROUND_PLANS.final_round.kinds).toEqual(["final_folder", "final_rubric"]);
+  });
+
+  it("names the two trees distinctly", () => {
+    const folders = INTERVIEW_ROUNDS.map((r) => ROUND_PLANS[r].folder);
+    expect(new Set(folders).size).toBe(folders.length);
+  });
+
+  it("names a final-round rubric copy after the candidate, with no extension", () => {
+    // The master is a Google Doc so the copy stays editable, and Docs carry no
+    // extension — a copy called "….docx" would be a Doc pretending to be a Word
+    // file.
+    const label = ROUND_PLANS.final_round.templates[0].label;
+    expect(copyFileName(label, "Jane Doe", "FA26 Second Round Rubric")).toBe(
+      "Final Round Rubric — Jane Doe"
+    );
+  });
+});
 
 describe("notesDocRequests", () => {
   it("produces a titled but otherwise blank page", () => {
