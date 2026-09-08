@@ -41,22 +41,37 @@ export function canInterview(role?: string | null): boolean {
 
 export type ReviewKind = "screen" | InterviewKind;
 
-export const INTERVIEW_KINDS = ["case", "behavioral", "final_case", "final_behavioral"] as const;
+export const INTERVIEW_KINDS = ["case", "behavioral", "final"] as const;
 export type InterviewKind = (typeof INTERVIEW_KINDS)[number];
 
-/** The two rubrics conducted in each round, in the order the console shows them. */
+/**
+ * The rubrics conducted in each round, in the order the console shows them.
+ *
+ * The first round runs two conversations and scores each on its own sheet. The
+ * final round runs ONE — a group case, scored on a single sheet per candidate —
+ * so it has a single kind rather than a final-round copy of the first round's
+ * pair. That asymmetry is the club's, not an oversight: see SECOND_ROUND_RUBRIC.
+ */
 export const ROUND_KINDS: Record<InterviewRound, readonly InterviewKind[]> = {
   first_round: ["case", "behavioral"],
-  final_round: ["final_case", "final_behavioral"],
+  final_round: ["final"],
 };
 
 export function isInterviewKind(v: unknown): v is InterviewKind {
   return typeof v === "string" && (INTERVIEW_KINDS as readonly string[]).includes(v);
 }
 
-/** Which round a rubric belongs to — the inverse of ROUND_KINDS. */
+/**
+ * Which round a rubric belongs to — the inverse of ROUND_KINDS.
+ *
+ * Read off ROUND_KINDS rather than pattern-matched on the name. This used to
+ * test `kind.startsWith("final_")`, which was true only as long as every
+ * final-round kind happened to be spelled that way; the moment the round
+ * collapsed to a single `final` kind that test answered "first_round" for the
+ * one kind it exists to classify.
+ */
 export function roundOfKind(kind: InterviewKind): InterviewRound {
-  return kind.startsWith("final_") ? "final_round" : "first_round";
+  return ROUND_KINDS.final_round.includes(kind) ? "final_round" : "first_round";
 }
 
 /** True when `kind` is one of the rubrics `round` actually runs. */
@@ -496,22 +511,323 @@ export const BEHAVIORAL_QUESTIONS: readonly BehavioralQuestion[] = [
   { n: 9, text: "Do you have any questions for us?", category: null },
 ] as const;
 
-// Both rounds score the same two rubrics. The criteria that make a good case
-// interview do not change between a first and a final round — what changes is who
-// is in the room and how much the answer counts — so the templates are shared
-// deliberately rather than duplicated into a near-identical third and fourth copy.
+// ── Second-round rubric ──────────────────────────────────────────────
+// Transcribed from "FA26 Second Round Rubric" — the single sheet the final round
+// is scored on, one copy per candidate.
+//
+// It is not a final-round edition of the first round's two sheets, and the
+// difference is the point. The final round is a GROUP case: several candidates
+// work one problem together and pitch it, and every category here is about how a
+// person behaved among other people — whether they brought the group along, made
+// room for quieter teammates, held their position under challenge. That cannot be
+// scored on a rubric written for one candidate alone in a room with two
+// interviewers, which is why the club wrote a new sheet rather than reusing the
+// old two.
+//
+// Six categories, each 0–2 in half-point steps, totalling 12. The half-steps are
+// the sheet's own — it prints five columns (2 / 1.5 / 1 / 0.5 / 0) rather than the
+// first round's four whole numbers — so SCORE_STEP is load-bearing here in a way
+// it only used to be for the behavioral average.
+//
+// Wording is the club's, kept verbatim rather than tidied, for the same reason
+// the first-round sheets are: an interviewer holding the paper and an interviewer
+// reading the portal have to be looking at the same words, and one who spots a
+// difference has to stop and work out which of the two governs.
+export const SECOND_ROUND_RUBRIC: readonly RubricCriterion[] = [
+  {
+    key: "process_structure",
+    label: "Process/Structure",
+    max: 2,
+    prompts: ["Do they communicate a logical process to tackle the case?"],
+    anchor: "Communicates a logical process, asks clarifying questions, articulates their thinking.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Communicates a very logical process, asks insightful clarifying questions, and " +
+          "clearly articulates their thinking process.",
+      },
+      {
+        min: 1.5, max: 1.5, label: "Slightly Exceeds Expectations",
+        descriptor:
+          "Communicates a logical process and asks clarifying questions but could be slightly " +
+          "more concise and more confident in their approach.",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Communicates a logical process but lacks clarity, repeats themselves, lacks or " +
+          "conciseness in their approach; asks some questions.",
+      },
+      {
+        min: 0.5, max: 0.5, label: "Slightly Below Expectations",
+        descriptor:
+          "Communicates a partially logical process but misses key steps, misinterprets the " +
+          "data or lacks clarity; minimal questioning.",
+      },
+      {
+        min: 0, max: 0, label: "Below Expectations",
+        descriptor:
+          "Does not communicate a logical process, fails to ask clarifying questions, and does " +
+          "not show a clear thinking process.",
+      },
+    ],
+  },
+  {
+    key: "communication",
+    label: "Communication",
+    max: 2,
+    prompts: ["Are they able to effectively express and communicate their ideas to their group?"],
+    anchor: "Gets their ideas across to the group and makes sure the group actually follows.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Actively participates in group discussion, ensuring others understand their thought " +
+          "process, and adapts communication style as needed.",
+      },
+      {
+        min: 1.5, max: 1.5, label: "Slightly Exceeds Expectations",
+        descriptor:
+          "Expresses ideas clearly most of the time, with minor difficulties in helping others " +
+          "understand.",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Expresses ideas but has some difficulty getting others to understand their points or " +
+          "interrupts teammates at times.",
+      },
+      {
+        min: 0.5, max: 0.5, label: "Slightly Below Expectations",
+        descriptor:
+          "Occasionally expresses ideas but often lacks clarity, resulting in misunderstandings/ " +
+          "doesn’t pay close attention to teammates ideas.",
+      },
+      {
+        min: 0, max: 0, label: "Below Expectations",
+        descriptor:
+          "Does not participate in group discussion or only seeks to move the group along " +
+          "without ensuring understanding (groupthink).",
+      },
+    ],
+  },
+  {
+    key: "presentation",
+    label: "Presentation",
+    max: 2,
+    prompts: ["Can they clearly organize and present their thoughts?"],
+    anchor: "Articulate and organised through the discussion and the presentation; projects.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Exceptionally articulate, clear, and organized throughout the discussion and " +
+          "presentation. Vocally projects during conclusion and brainstorming.",
+      },
+      {
+        min: 1.5, max: 1.5, label: "Slightly Exceeds Expectations",
+        descriptor:
+          "Generally articulate, clear, and organized with minor lapses in communication during " +
+          "presentation and group brainstorming.",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Clear in parts but lacks organization or coherence at times or lacks some confidence " +
+          "in demeanor and vocal projection.",
+      },
+      {
+        min: 0.5, max: 0.5, label: "Slightly Below Expectations",
+        descriptor:
+          "Often unclear, unorganized, and lacks coherence in the presentation, or relies on " +
+          "others for backup during presentation.",
+      },
+      {
+        min: 0, max: 0, label: "Below Expectations",
+        descriptor:
+          "Not articulate, clear, or organized; presentation is hard to follow or doesn’t " +
+          "present at all.",
+      },
+    ],
+  },
+  {
+    key: "competency",
+    label: "Competency",
+    max: 2,
+    prompts: ["Do they have interesting points and bring valuable insight?"],
+    anchor: "Insight beyond the data handed to them, and holds up under feedback.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Considers multiple factors, and outside context beyond the provided data and " +
+          "demonstrates deep understanding and insight. Confidently responds to feedback and " +
+          "questions",
+      },
+      {
+        min: 1.5, max: 1.5, label: "Slightly Exceeds Expectations",
+        descriptor:
+          "Shows valuable insights and considers some factors beyond the provided data. Takes a " +
+          "little time to respond back to questions or feedback.",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor: "Provides some valuable insights but is mostly limited to the given data.",
+      },
+      {
+        min: 0.5, max: 0.5, label: "Slightly Below Expectations",
+        descriptor:
+          "Limited insights based on provided data; little to no deeper analysis or wrong " +
+          "analysis at times.",
+      },
+      {
+        min: 0, max: 0, label: "Below Expectations",
+        descriptor: "Examines data but fails to draw logical conclusions or insights.",
+      },
+    ],
+  },
+  {
+    key: "teamwork",
+    label: "Teamwork",
+    max: 2,
+    prompts: [
+      "Do they work well in a team?",
+      "Do they contribute to overall team efficiency?",
+    ],
+    anchor: "Knows when to talk and when to listen; makes the group faster, not slower.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Understands when to provide input and when to listen, actively contributes to team " +
+          "efficiency and promotes collaboration.",
+      },
+      {
+        min: 1.5, max: 1.5, label: "Slightly Exceeds Expectations",
+        descriptor:
+          "Shows good understanding of teamwork dynamics but contributes minimally to improving " +
+          "efficiency.",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Demonstrates general understanding of teamwork but does not positively impact " +
+          "efficiency.",
+      },
+      {
+        min: 0.5, max: 0.5, label: "Slightly Below Expectations",
+        descriptor: "Occasionally hinders productivity with poor teamwork behavior and interruptions.",
+      },
+      {
+        min: 0, max: 0, label: "Below Expectations",
+        descriptor:
+          "Does not understand team dynamics and actively hinders productivity by not providing " +
+          "any contributions or attempting individual and overtaking work only.",
+      },
+    ],
+  },
+  {
+    key: "pitch",
+    label: "Pitch",
+    max: 2,
+    prompts: [
+      "Are they able to present information in an organized way?",
+      "Do they make sure everyone talks in the final pitch?",
+    ],
+    anchor: "Strong, organised analysis in the pitch — and shares the floor while giving it.",
+    levels: [
+      {
+        min: 2, max: 2, label: "Exceeds Expectations",
+        descriptor:
+          "Provides strong analysis with good organization and ensures balanced participation " +
+          "among group members.",
+      },
+      {
+        min: 1.5, max: 1.5, label: "Slightly Exceeds Expectations",
+        descriptor:
+          "Strong analysis with minor organizational issues or weaker analysis with good " +
+          "organization; attempts to ensure participation.",
+      },
+      {
+        min: 1, max: 1, label: "Meets Expectations",
+        descriptor:
+          "Provides strong analysis with no organization, or weak analysis with some " +
+          "organization; uneven participation.",
+      },
+      {
+        min: 0.5, max: 0.5, label: "Slightly Below Expectations",
+        descriptor:
+          "Weak analysis and little organization; presentation dominated by one or two " +
+          "individuals.",
+      },
+      {
+        min: 0, max: 0, label: "Below Expectations",
+        descriptor:
+          "Provides weak analysis, no organization, and presentation dominated by an individual " +
+          "with minimal group involvement.",
+      },
+    ],
+  },
+] as const;
+
+/**
+ * The Room Score — the second-round sheet's A–F grade for the GROUP.
+ *
+ * Reference only. It is displayed beside the rubric so an interviewer scoring in
+ * the portal is reading the same sheet they are holding, but it is NOT stored,
+ * and that is a deliberate limit rather than an omission: a room score describes
+ * the room, not the candidate, and `reviews` has exactly one axis — one applicant,
+ * one reviewer, one kind. Writing a group grade onto each of five candidates'
+ * rows would store the same fact five times and invite five different answers to
+ * it. Giving it a home of its own needs a group/room entity that the schema does
+ * not have yet; until then it lives on the paper sheet in the candidate folder,
+ * and interviewers who want it in the portal put it in their notes.
+ */
+export const ROOM_SCORE_BANDS: readonly { grade: string; descriptor: string }[] = [
+  {
+    grade: "A",
+    descriptor:
+      "Group has amazing chemistry, energy together, actively collaborates with each other and " +
+      "can reach a cohesive conclusion in the given time limit",
+  },
+  {
+    grade: "B",
+    descriptor:
+      "Group has a good dynamic, works well together to solve the case, has one or two " +
+      "individuals that stand out a little more than each other.",
+  },
+  {
+    grade: "C",
+    descriptor: "Group reaches conclusion but needs some guidance and does surface level case solving",
+  },
+  {
+    grade: "D",
+    descriptor:
+      "Group almost has no evidence of collaboration with one person fully dominating the casing " +
+      "or the entire group willing to not participate",
+  },
+  {
+    grade: "F",
+    descriptor: "Group does not reach a conclusion, frequent arguments, or no attempts at any teamwork.",
+  },
+] as const;
+
+// Each round scores its own sheets. The first round's two rubrics are the ones
+// that stayed; the final round used to reuse them under `final_case` and
+// `final_behavioral` and now runs a single group-case sheet instead, because the
+// conversation it scores is a different conversation — several candidates on one
+// problem rather than one candidate across two rooms.
 export const INTERVIEW_RUBRICS: Record<InterviewKind, readonly RubricCriterion[]> = {
   case: CASE_RUBRIC,
   behavioral: BEHAVIORAL_RUBRIC,
-  final_case: CASE_RUBRIC,
-  final_behavioral: BEHAVIORAL_RUBRIC,
+  final: SECOND_ROUND_RUBRIC,
 };
 
 export const KIND_LABEL: Record<InterviewKind, string> = {
   case: "Case",
   behavioral: "Behavioral",
-  final_case: "Case",
-  final_behavioral: "Behavioral",
+  final: "Second Round",
 };
 
 // ── Bottom-line recommendation ───────────────────────────────────────────────
@@ -573,11 +889,16 @@ export const SCORE_KEY = "total";
 /**
  * The finest slice of a point an interviewer may award: a half.
  *
- * Halves are not a nicety here, they fall out of the rubric. The behavioral
+ * Halves are not a nicety here, they fall out of the rubrics. The behavioral
  * sheet's score column reads "the average of both questions", and the average of
  * a 2 and a 1 is 1.5 — under whole numbers the interviewer has to round, and the
  * sheet gives no rule for which way, so the same interview totals differently
  * depending on who is holding the pen.
+ *
+ * The second-round sheet then made halves explicit rather than emergent: it
+ * prints five columns, 2 / 1.5 / 1 / 0.5 / 0, so a half is a band an interviewer
+ * ticks directly and a whole-number-only total would be unable to record most of
+ * the sheet's own scores.
  */
 export const SCORE_STEP = 0.5;
 
@@ -592,7 +913,7 @@ function isHalfStep(v: number): boolean {
   return Number.isFinite(v) && Number.isInteger(v * 2);
 }
 
-/** The highest score this rubric can award: case 15, behavioral 17. */
+/** The highest score this rubric can award: case 15, behavioral 17, second round 12. */
 export function rubricMax(kind: InterviewKind): number {
   return rubricMaxPoints(INTERVIEW_RUBRICS[kind]);
 }

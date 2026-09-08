@@ -245,7 +245,7 @@ export function DemographicsPanel() {
       <div className="rounded-2xl border border-[var(--border)] bg-white p-4">
         <p className="eyebrow">Mean final round score</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Averaged per person out of 32 (Case 15 + Behavioral 17) for candidates with completed final interviews.
+          Averaged per person out of 12 (Second Round group case) for candidates with completed final interviews.
         </p>
         <div className="mt-3 flex flex-wrap gap-4">
           {data.groups.map((g) => (

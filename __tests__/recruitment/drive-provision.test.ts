@@ -293,8 +293,7 @@ describe("isComplete / submittedTotal", () => {
   it("knows each rubric's maximum", () => {
     expect(rubricMax("case")).toBe(15);
     expect(rubricMax("behavioral")).toBe(17);
-    expect(rubricMax("final_case")).toBe(15);
-    expect(rubricMax("final_behavioral")).toBe(17);
+    expect(rubricMax("final")).toBe(12);
   });
 });
 

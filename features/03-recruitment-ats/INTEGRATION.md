@@ -326,13 +326,13 @@ disagree — moving a candidate between rounds is the one stage write exec alrea
 |---|---|---|---|---|
 | **Written applications** | `applied`, `screened` | `/portal/recruiting` | every member may read + flag; recruiting roles score | the 28-point rubric in `lib/types.ts` |
 | **First round** | `interview` | `/portal/interview` → First round | exec, PM, SC, returning members — on the panel | case + behavioral, 1–5 (`lib/interview.ts`) |
-| **Final round** | `final_round` | `/portal/interview` → Final round | **exec only** | the same two rubrics, stored as `final_case` / `final_behavioral` |
+| **Final round** | `final_round` | `/portal/interview` → Final round | **exec only** | the Second Round group-case sheet, 6 categories 0–2 in half steps (/12), stored as `final` |
 
 `offer`, `accepted`, `rejected` and `withdrawn` belong to **no** round — there is no work
 left to do on them, and treating them as one would put them back on somebody's board.
 
 Run **`db/rounds.sql`** (after `schema.sql` and `interview.sql`). It widens the `reviews.kind`
-check to the two final-round kinds, adds `round` to `interview_panel` and repoints its primary
+check to the final-round kind, adds `round` to `interview_panel` and repoints its primary
 key at `(applicant_id, interviewer_email, round)`, and documents the new `final_round` stage.
 
 ### The written rubric is points, not a 1–5 mean

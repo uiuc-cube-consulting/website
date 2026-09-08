@@ -65,8 +65,11 @@ export const EXPORT_HEADERS = [
   "First round behavioral",
   "First round total",
   "First round max",
-  "Final round case",
-  "Final round behavioral",
+  // One column, because the second round is one sheet. There is no
+  // "Final round behavioral" any more, and leaving the header in place with
+  // nothing under it would read as an interview that was never scored rather
+  // than one that never existed.
+  "Final round group case",
   "Final round total",
   "Final round max",
   "Green flags",
@@ -92,11 +95,14 @@ function rubricMean(kind: InterviewKind, reviews: Review[], applicantId: string)
 }
 
 /**
- * A round's two rubric means and their sum.
+ * A round's rubric means and their sum — two for the first round, one for the
+ * second.
  *
- * The total stays null unless BOTH rubrics have a score, matching
+ * The total stays null unless EVERY rubric in the round has a score, matching
  * `panelStanding`: half a round against the round's full maximum reads as a weak
  * candidate, and a spreadsheet is exactly where that misreading gets acted on.
+ * Written against ROUND_KINDS rather than a hardcoded pair, which is why the
+ * second round collapsing to a single sheet needed nothing here.
  */
 function roundScores(
   round: Exclude<Round, "written">,
@@ -163,7 +169,6 @@ export function toExportRow(
     first.total ?? "",
     first.total === null ? "" : first.max,
     final.parts[0] ?? "",
-    final.parts[1] ?? "",
     final.total ?? "",
     final.total === null ? "" : final.max,
     own.filter((f) => f.color === "green").length,

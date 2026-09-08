@@ -333,7 +333,7 @@ export async function getInterviewPanels(): Promise<{ applicant_id: string; roun
  *
  * The round is part of the check, not decoration. Sitting a candidate's FIRST
  * round is not authority to write their FINAL-round rubric — that round is exec's
- * — so a first-round panelist posting a `final_case` body is refused here even
+ * — so a first-round panelist posting a `final` body is refused here even
  * though they are, in some sense, "on the panel".
  */
 export async function isOnPanel(

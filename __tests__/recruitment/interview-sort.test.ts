@@ -26,7 +26,7 @@ const FIRST = ROUND_KINDS.first_round;
 
 function candidate(id: string, name: string, panelScores: PanelScore[] = []): Candidate {
   const none = {
-    case: null, behavioral: null, final_case: null, final_behavioral: null,
+    case: null, behavioral: null, final: null,
   } as Record<InterviewKind, RubricEntry | null>;
   return {
     id,
@@ -37,7 +37,7 @@ function candidate(id: string, name: string, panelScores: PanelScore[] = []): Ca
     panel: [],
     assignedToMe: false,
     myRubrics: none,
-    completed: { case: 0, behavioral: 0, final_case: 0, final_behavioral: 0 },
+    completed: { case: 0, behavioral: 0, final: 0 },
     panelScores,
     flags: [],
   };
@@ -155,12 +155,9 @@ describe("sortBoard", () => {
     expect(ids(input)).toEqual(["d", "b", "c", "a"]);
   });
 
-  it("orders the final round on its own rubrics", () => {
-    // Same shape, different kinds — a first-round score must not count here.
-    const strong = candidate("i", "Ida", [
-      score("final_case", 14, "yes"),
-      score("final_behavioral", 16, "yes"),
-    ]);
+  it("orders the final round on its own rubric", () => {
+    // Same shape, different kind — a first-round score must not count here.
+    const strong = candidate("i", "Ida", [score("final", 11, "yes")]);
     const stale = candidate("j", "Jo", bothRubrics(15, 17, ["strong_yes", "strong_yes"]));
     expect(ids(sortBoard([stale, strong], ROUND_KINDS.final_round, "score"))).toEqual(["i", "j"]);
   });
@@ -298,7 +295,7 @@ describe("panelNotesFrom", () => {
     // The final round is exec-only in every direction. A first-round note must
     // not surface there, and a final-round note must never reach a first-round
     // response — which is what the kind filter is for.
-    const finalNote = row({ kind: "final_case" });
+    const finalNote = row({ kind: "final" });
     expect(panelNotesFrom([finalNote], FIRST)).toEqual([]);
     expect(panelNotesFrom([row()], ROUND_KINDS.final_round)).toEqual([]);
     expect(panelNotesFrom([finalNote], ROUND_KINDS.final_round)).toHaveLength(1);

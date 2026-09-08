@@ -158,17 +158,19 @@ describe("demographicsReport", () => {
     expect(she.meanFirstRoundScore).toBe(24); // (26 + 22) / 2
   });
 
-  it("calculates mean final round interview score out of 32 for completed final interviews", () => {
-    const r1Case: Review = { ...review("a1", 13), kind: "final_case", scores: { total: 13 } as any, weighted_total: 13 };
-    const r1Beh: Review = { ...review("a1", 15), kind: "final_behavioral", scores: { total: 15 } as any, weighted_total: 15 };
+  it("calculates mean final round interview score out of 12 for completed final interviews", () => {
+    // One sheet, several graders in the room: the candidate's final-round score
+    // is the mean of what those graders wrote, not a sum across rubrics.
+    const g1: Review = { ...review("a1", 10), kind: "final", scores: { total: 10 } as any, weighted_total: 10 };
+    const g2: Review = { ...review("a1", 9), kind: "final", scores: { total: 9 } as any, weighted_total: 9 };
 
-    const r = demographicsReport(applicants, [r1Case, r1Beh], STAGE_ORDER);
+    const r = demographicsReport(applicants, [g1, g2], STAGE_ORDER);
     const she = r.groups.find((g) => g.group === "she")!;
     expect(she.finalRoundReviewed).toBe(1);
-    expect(she.meanFinalRoundScore).toBe(28); // 13 + 15
+    expect(she.meanFinalRoundScore).toBe(9.5); // (10 + 9) / 2
   });
 
-  it("requires both case and behavioral rubrics before a round score counts", () => {
+  it("requires both first-round rubrics before a round score counts", () => {
     const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as any, weighted_total: 12 };
     const r = demographicsReport(applicants, [r1Case], STAGE_ORDER);
     const she = r.groups.find((g) => g.group === "she")!;

@@ -40,7 +40,11 @@ import type { Applicant, Review, Stage } from "./types";
  *  ./interview.ts, kept here as strings so this module stays free of it. */
 const ROUND_REVIEW_KINDS: Record<InterviewRound, readonly string[]> = {
   first_round: ["case", "behavioral"],
-  final_round: ["final_case", "final_behavioral"],
+  // 'final_case' / 'final_behavioral' are the pre-FA26 final-round kinds. They
+  // are still listed because this module reads HISTORY: a candidate seen in a
+  // past cycle's final round has rows under the old kinds, and dropping them
+  // here would quietly report that round as never having happened.
+  final_round: ["final", "final_case", "final_behavioral"],
 };
 
 /**

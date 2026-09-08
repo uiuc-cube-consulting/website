@@ -193,7 +193,7 @@ export type Review = {
   /** Which rubric this row is an instance of, which is also which ROUND it
    *  belongs to (see ./rounds.ts). Absent on rows written before the interview
    *  console existed, which are all written-application screens. */
-  kind?: "screen" | "case" | "behavioral" | "final_case" | "final_behavioral";
+  kind?: "screen" | "case" | "behavioral" | "final" | "final_case" | "final_behavioral";
   recommendation?: string | null;
 };
 

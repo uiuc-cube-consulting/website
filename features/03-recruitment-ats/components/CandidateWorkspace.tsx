@@ -14,6 +14,7 @@ import { FlagPanel } from "@/features/03-recruitment-ats/components/FlagPanel";
 import {
   INTERVIEW_RUBRICS,
   KIND_LABEL,
+  ROOM_SCORE_BANDS,
   RECOMMENDATIONS,
   ROUND_KINDS,
   SCORE_KEY,
@@ -467,9 +468,11 @@ function RubricForm({
   const complete = isComplete(kind, scores);
   const maxPoints = rubricMax(kind);
   const total = submittedTotal(kind, scores);
-  // The behavioral sheet is half script, half grid; the case sheet is scored
-  // against whatever case the panel runs, so it has no fixed questions.
-  const questions = kind === "behavioral" || kind === "final_behavioral" ? BEHAVIORAL_QUESTIONS : null;
+  // The behavioral sheet is half script, half grid; the case sheets are scored
+  // against whatever case the panel runs, so they have no fixed questions. The
+  // second round has none either — it is a group case, and there is no script for
+  // a conversation between the candidates.
+  const questions = kind === "behavioral" ? BEHAVIORAL_QUESTIONS : null;
   const othersDone = Math.max(0, candidate.completed[kind] - (existing && isComplete(kind, existing.scores) ? 1 : 0));
 
   function set<T>(setter: (v: T) => void) {
@@ -611,6 +614,27 @@ function RubricForm({
             </div>
           ))}
         </div>
+
+        {kind === "final" && (
+          <div className="mt-4 border-t border-[var(--border)] pt-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-semibold text-[var(--bg-dark)]">Room Score</span>
+              <span className="shrink-0 text-[11px] text-[var(--muted)]">the group, not the candidate</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+              Graded on the paper sheet. It describes the room everyone in it shared, so it has no
+              box here — put it in your notes if you want it in the portal.
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {ROOM_SCORE_BANDS.map((b) => (
+                <li key={b.grade} className="text-[11px] leading-relaxed text-[var(--muted)]">
+                  <span className="font-semibold text-[var(--bg-dark)]">{b.grade}</span>{" "}
+                  {b.descriptor}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </details>
 
       <div className="mt-4">
@@ -640,9 +664,11 @@ function RubricForm({
         disabled={!editable}
         rows={5}
         placeholder={
-          kind.endsWith("case")
+          kind === "case"
             ? "What did they do with the case? Where did they get stuck?"
-            : "Specific moments, quotes, and follow-ups worth remembering."
+            : kind === "final"
+              ? "How did they work with the group? What did they add, and who did they bring in?"
+              : "Specific moments, quotes, and follow-ups worth remembering."
         }
         className="mt-4 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--gold)] disabled:bg-[var(--bg-cream)]/40"
       />

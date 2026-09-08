@@ -488,6 +488,10 @@ describe("POST /api/recruitment/interview/rubric", () => {
   const url = "http://localhost/api/recruitment/interview/rubric";
   // What an interviewer submits: the total off the paper case sheet, out of 15.
   const CASE_SCORES = { total: 11 };
+  // The second-round sheet tops out at 12, so a first-round total is not a
+  // valid body for it — these cases must fail on the gate under test, not on
+  // an out-of-range score that would pass the assertion for the wrong reason.
+  const FINAL_SCORES = { total: 9 };
 
   /**
    * The whole point of opening interviews up: a plain member, on no panel, can
@@ -529,7 +533,7 @@ describe("POST /api/recruitment/interview/rubric", () => {
   it("still refuses a plain member the final round", async () => {
     signInAs("member");
     const res = await rubricPOST(
-      post(url, { applicant_id: "app-bob", kind: "final_case", scores: CASE_SCORES })
+      post(url, { applicant_id: "app-bob", kind: "final", scores: FINAL_SCORES })
     );
     expect(res.status).toBe(403);
     expect(rubricStub.saveRubric).not.toHaveBeenCalled();
@@ -554,7 +558,7 @@ describe("POST /api/recruitment/interview/rubric", () => {
     // told this is their own application, not that the final round is exec-only.
     signInAs("project_manager");
     const res = await rubricPOST(
-      post(url, { applicant_id: "app-jane", kind: "final_case", scores: CASE_SCORES })
+      post(url, { applicant_id: "app-jane", kind: "final", scores: FINAL_SCORES })
     );
     expect(res.status).toBe(403);
     expect((await res.json()).error).toMatch(/your own application/i);

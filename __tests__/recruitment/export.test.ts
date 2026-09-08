@@ -113,6 +113,16 @@ describe("toExportRow", () => {
     { id: "f3", created_at: "", applicant_id: "other", subject_email: "bob@illinois.edu", submitter_email: "s@x.edu", color: "red", description: "not hers" },
   ];
 
+  it("emits exactly one cell per header", () => {
+    // Every other assertion in here reads the row by zipping it against
+    // EXPORT_HEADERS, which silently tolerates a row that is the wrong width —
+    // a dropped cell shifts every column after it, and the file still opens.
+    // This is the only check that would catch that, and the second round losing
+    // its behavioral column is exactly the edit that could cause it.
+    const row = toExportRow(applicant(), [review(FULL)], flags, 28);
+    expect(row).toHaveLength(EXPORT_HEADERS.length);
+  });
+
   it("carries what a decision email needs", () => {
     const row = toExportRow(applicant(), [review(FULL), review(WEAK)], flags, 28);
     const byHeader = Object.fromEntries(EXPORT_HEADERS.map((h, i) => [h, row[i]]));

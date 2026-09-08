@@ -181,7 +181,7 @@ export type GroupBreakdown = {
   meanFirstRoundScore: number | null;
   /** Applicants in this group with completed final round interview scores. */
   finalRoundReviewed: number;
-  /** Mean final round interview score across reviewed applicants (out of 32), or null if none are. */
+  /** Mean final round interview score across reviewed applicants (out of 12), or null if none are. */
   meanFinalRoundScore: number | null;
   /** How many sit at each stage. */
   byStage: Record<string, number>;
@@ -228,8 +228,7 @@ export function breakdownBy(
   const writtenTotalsByApplicant = new Map<string, number[]>();
   const firstCaseByApplicant = new Map<string, number[]>();
   const firstBehavioralByApplicant = new Map<string, number[]>();
-  const finalCaseByApplicant = new Map<string, number[]>();
-  const finalBehavioralByApplicant = new Map<string, number[]>();
+  const finalByApplicant = new Map<string, number[]>();
 
   for (const r of reviews) {
     if (isScreenReview(r)) {
@@ -254,24 +253,19 @@ export function breakdownBy(
         if (cur) cur.push(total);
         else firstBehavioralByApplicant.set(r.applicant_id, [total]);
       }
-    } else if (r.kind === "final_case") {
-      const total = submittedTotal("final_case", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
+    } else if (r.kind === "final") {
+      const total = submittedTotal("final", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
       if (total !== null) {
-        const cur = finalCaseByApplicant.get(r.applicant_id);
+        const cur = finalByApplicant.get(r.applicant_id);
         if (cur) cur.push(total);
-        else finalCaseByApplicant.set(r.applicant_id, [total]);
-      }
-    } else if (r.kind === "final_behavioral") {
-      const total = submittedTotal("final_behavioral", r.scores) ?? (typeof r.weighted_total === "number" ? r.weighted_total : null);
-      if (total !== null) {
-        const cur = finalBehavioralByApplicant.get(r.applicant_id);
-        if (cur) cur.push(total);
-        else finalBehavioralByApplicant.set(r.applicant_id, [total]);
+        else finalByApplicant.set(r.applicant_id, [total]);
       }
     }
   }
 
-  // Pre-calculate per-applicant First Round and Final Round totals (out of 32).
+  // Pre-calculate per-applicant First Round (out of 32) and Final Round (out of
+  // 12) totals. The two rounds are NOT on one scale and are never added together:
+  // the first round sums two sheets, the second round has one.
   const firstRoundByApplicant = new Map<string, number>();
   const finalRoundByApplicant = new Map<string, number>();
 
@@ -284,12 +278,12 @@ export function breakdownBy(
       firstRoundByApplicant.set(a.id, caseMean + behMean);
     }
 
-    const fCaseScores = finalCaseByApplicant.get(a.id);
-    const fBehScores = finalBehavioralByApplicant.get(a.id);
-    if (fCaseScores?.length && fBehScores?.length) {
-      const fCaseMean = fCaseScores.reduce((x, y) => x + y, 0) / fCaseScores.length;
-      const fBehMean = fBehScores.reduce((x, y) => x + y, 0) / fBehScores.length;
-      finalRoundByApplicant.set(a.id, fCaseMean + fBehMean);
+    // One sheet, so one mean across however many graders scored the room — where
+    // the first round needs both of its rubrics present before it reports a
+    // total, this needs only that somebody scored the candidate.
+    const finalScores = finalByApplicant.get(a.id);
+    if (finalScores?.length) {
+      finalRoundByApplicant.set(a.id, finalScores.reduce((x, y) => x + y, 0) / finalScores.length);
     }
   }
 

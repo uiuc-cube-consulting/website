@@ -28,6 +28,10 @@ import {
 import {
   INTERVIEW_KINDS,
   INTERVIEW_RUBRICS,
+  ROOM_SCORE_BANDS,
+  SECOND_ROUND_RUBRIC,
+  isComplete,
+  rubricMax,
   ROUND_KINDS,
   isKindInRound,
   roundOfKind,
@@ -203,7 +207,7 @@ describe("ROUND_KINDS", () => {
 
   it("refuses a kind from the other round", () => {
     expect(isKindInRound("case", "final_round")).toBe(false);
-    expect(isKindInRound("final_case", "first_round")).toBe(false);
+    expect(isKindInRound("final", "first_round")).toBe(false);
   });
 
   it("has a rubric template for every kind", () => {
@@ -211,6 +215,57 @@ describe("ROUND_KINDS", () => {
       expect(INTERVIEW_RUBRICS[kind]).toBeDefined();
       expect(INTERVIEW_RUBRICS[kind].length).toBeGreaterThan(0);
     }
+  });
+
+  it("scores the final round on one sheet", () => {
+    // The final round is a group case: several candidates on one problem, scored
+    // once per candidate. It is deliberately NOT a final-round copy of the first
+    // round's pair, and a second kind reappearing here means somebody restored
+    // the old shape without the sheet to back it.
+    expect(ROUND_KINDS.final_round).toEqual(["final"]);
+    expect(INTERVIEW_RUBRICS.final).toBe(SECOND_ROUND_RUBRIC);
+  });
+});
+
+describe("SECOND_ROUND_RUBRIC", () => {
+  it("totals to the 12 printed on the sheet", () => {
+    expect(rubricMax("final")).toBe(12);
+    expect(SECOND_ROUND_RUBRIC).toHaveLength(6);
+    for (const c of SECOND_ROUND_RUBRIC) expect(c.max).toBe(2);
+  });
+
+  it("offers the sheet's five bands, in half steps, highest first", () => {
+    // The sheet prints 2 / 1.5 / 1 / 0.5 / 0 as five columns. Whole numbers alone
+    // could not record most of them, so this is what makes SCORE_STEP load-bearing
+    // rather than decorative.
+    for (const c of SECOND_ROUND_RUBRIC) {
+      expect(c.levels.map((l) => l.min)).toEqual([2, 1.5, 1, 0.5, 0]);
+      for (const l of c.levels) expect(l.min).toBe(l.max);
+    }
+  });
+
+  it("accepts a half-point total and refuses a finer slice", () => {
+    expect(isComplete("final", { total: 9.5 })).toBe(true);
+    expect(isComplete("final", { total: 0 })).toBe(true);
+    expect(isComplete("final", { total: 12 })).toBe(true);
+    expect(isComplete("final", { total: 9.25 })).toBe(false);
+    expect(isComplete("final", { total: 12.5 })).toBe(false);
+    expect(isComplete("final", { total: -0.5 })).toBe(false);
+  });
+
+  it("gives every category a distinct key and a prompt off the sheet", () => {
+    const keys = SECOND_ROUND_RUBRIC.map((c) => c.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const c of SECOND_ROUND_RUBRIC) expect(c.prompts?.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the room score out of the scored total", () => {
+    // The A-F room grade describes the group, not the person, and `reviews` has
+    // one row per candidate. It is reference text beside the rubric; if it ever
+    // becomes a criterion, the /12 on the paper sheet stops matching the portal.
+    expect(ROOM_SCORE_BANDS.map((b) => b.grade)).toEqual(["A", "B", "C", "D", "F"]);
+    expect(SECOND_ROUND_RUBRIC.some((c) => c.key.includes("room"))).toBe(false);
+    expect(rubricMax("final")).toBe(12);
   });
 });
 

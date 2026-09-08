@@ -23,16 +23,30 @@
 -- ── 2. Final-round review kinds ──────────────────────────────────────────────
 -- 'screen'                          the written application (lib/types.ts RUBRIC)
 -- 'case' | 'behavioral'             first-round interviews  (lib/interview.ts)
--- 'final_case' | 'final_behavioral' final-round interviews, exec-only
+-- 'final'                           second-round group case, exec-only
+-- 'final_case' | 'final_behavioral' RETIRED — pre-FA26 final round, read-only
 --
--- The first and final rounds run the same two rubric templates but store them
--- under separate kinds. The uniqueness key below is (applicant, reviewer, kind),
--- so an exec who interviews the same candidate in both rounds would otherwise
--- overwrite their own first-round rubric — losing the earlier score exactly when
--- the two are worth comparing.
+-- The rounds store their scores under separate kinds. The uniqueness key below is
+-- (applicant, reviewer, kind), so an exec who interviews the same candidate in
+-- both rounds would otherwise overwrite their own first-round rubric — losing the
+-- earlier score exactly when the two are worth comparing.
+--
+-- The final round used to reuse the first round's two sheets under 'final_case'
+-- and 'final_behavioral'. From FA26 it runs one group-case sheet, scored 0-2 in
+-- half steps across six categories (/12), stored under 'final'.
+--
+-- The two retired kinds stay in this CHECK on purpose. Nothing writes them any
+-- more, but rows written before the change still carry them, and a constraint
+-- that rejected those values would make every one of those rows unwritable —
+-- any later UPDATE touching a historical review would fail on a column it never
+-- changed. They are not migrated into 'final' either: the old rows are totals out
+-- of 15 and 17 from two separate conversations, and there is no arithmetic that
+-- turns that pair into an honest /12 on a group case nobody ran. They are kept as
+-- what they are, and `roundOfKind`/ROUND_KINDS in lib/interview.ts no longer offer
+-- them for scoring.
 alter table reviews drop constraint if exists reviews_kind_check;
 alter table reviews add constraint reviews_kind_check
-  check (kind in ('screen', 'case', 'behavioral', 'final_case', 'final_behavioral'));
+  check (kind in ('screen', 'case', 'behavioral', 'final', 'final_case', 'final_behavioral'));
 
 -- ── 3. Per-round interview panels ────────────────────────────────────────────
 -- Existing rows all predate the final round, so they are first-round panels.

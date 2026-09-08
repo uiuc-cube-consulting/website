@@ -99,8 +99,7 @@ describe("buildDecisionQueue", () => {
       review("a1", "r1@x.edu", 20, "screen"),
       review("a1", "r2@x.edu", 25, "case"),
       review("a1", "r3@x.edu", 25, "behavioral"),
-      review("a1", "r4@x.edu", 25, "final_case"),
-      review("a1", "r5@x.edu", 25, "final_behavioral"),
+      review("a1", "r4@x.edu", 25, "final"),
     ]);
     expect(row.reviewCount).toBe(1);
     expect(row.ready).toBe(false);

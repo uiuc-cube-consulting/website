@@ -18,8 +18,8 @@ import { isOwnApplicationId } from "@/features/03-recruitment-ats/lib/self-acces
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 // An interviewer fills in ONE rubric for ONE candidate. The `kind` says which
-// rubric AND which round: case/behavioral are the first round, final_case and
-// final_behavioral are the exec-only final.
+// rubric AND which round: case/behavioral are the first round, final is the
+// exec-only second round.
 //
 // Three things are deliberately not trusted from the client:
 //   · the reviewer identity — always the session email, never the body
