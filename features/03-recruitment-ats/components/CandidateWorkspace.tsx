@@ -31,6 +31,7 @@ import {
   type PanelNote,
   type Reviewer,
 } from "@/features/03-recruitment-ats/lib/interview";
+import { hasHistory, type PriorRound } from "@/features/03-recruitment-ats/lib/history";
 import { ROUND_ADVANCE, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
 import type { Stage } from "@/features/03-recruitment-ats/lib/types";
 
@@ -104,6 +105,7 @@ export function CandidateWorkspace({
               Yours to interview
             </span>
           )}
+          <PriorTotals history={candidate.history} />
         </div>
       </div>
 
@@ -178,7 +180,196 @@ export function CandidateWorkspace({
           column beside it: these are paragraphs, and a paragraph in a half
           column at 12px is a paragraph nobody reads. */}
       <PanelNotes candidate={candidate} kinds={kinds} viewer={viewer} />
+
+      {/* And under it, everything that came before. The two read as one record
+          in the order it happened — the written screen, then the first round,
+          then what this round's panel is saying — so the candidate can be
+          weighed whole instead of on the last conversation alone. */}
+      <EarlierRounds history={candidate.history} />
     </div>
+  );
+}
+
+// ── Everything decided before this round ─────────────────────────────────────
+
+/**
+ * The candidate's earlier rounds, in full, on the screen where the next call is
+ * made.
+ *
+ * A round used to end and take its numbers with it, which meant the panel about
+ * to decide an offer saw one group case out of 12 and nothing else. These are
+ * the same rows the earlier console showed, read back — nothing is recomputed
+ * and nothing new is stored (see lib/history.ts).
+ *
+ * Open rather than behind a disclosure, and last rather than first. Opening a
+ * candidate is already the deliberate act — nobody lands here by accident — and
+ * the point of the screen is to weigh the whole person, which a click can only
+ * get in the way of. Sitting under "what the panel wrote" puts the record in the
+ * order it happened: the written screen, the rounds since, and then what this
+ * round's panel is saying about them now.
+ */
+function EarlierRounds({ history }: { history?: PriorRound[] }) {
+  const rounds = history ?? [];
+  // No earlier rounds at all means the FIRST round, which has none by
+  // definition — nothing to say, so nothing is rendered. A round that exists but
+  // was never scored is different, and does get a card below.
+  if (rounds.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="eyebrow">Earlier rounds</p>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+          {hasHistory(rounds) ? (
+            rounds.map((r) => (
+              <span key={r.round}>
+                {r.label}{" "}
+                <span className="font-semibold text-[var(--bg-dark)]">{roundTotal(r)}</span>
+              </span>
+            ))
+          ) : (
+            <span>Nothing recorded in any earlier round</span>
+          )}
+        </p>
+      </div>
+
+      <div className="mt-4 space-y-4">
+        {rounds.map((r) => (
+          <PriorRoundCard key={r.round} round={r} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** "21.5 / 28", or why there is no number yet. */
+function roundTotal(r: PriorRound): string {
+  if (r.total !== null) return `${formatScore(r.total)} / ${r.max}`;
+  // A round with two sheets and only one scored has no honest total: a strong
+  // candidate with just the case in reads as 12/32, which looks like a
+  // rejection. Same rule `panelStanding` applies to the live round.
+  return r.scores.length === 0 ? "not scored" : "partial";
+}
+
+function PriorRoundCard({ round: r }: { round: PriorRound }) {
+  const reviewers = r.reviewers;
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/30 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-[var(--bg-dark)]">{r.label}</p>
+        <p className="text-xs text-[var(--muted)]">
+          <span className="font-semibold text-[var(--bg-dark)]">{roundTotal(r)}</span>
+          {reviewers.length > 0 && (
+            <span className="ml-2">
+              {reviewers.length} {reviewers.length === 1 ? "reviewer" : "reviewers"}
+            </span>
+          )}
+        </p>
+      </div>
+
+      {r.scores.length === 0 ? (
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Nothing was recorded for this candidate in this round.
+        </p>
+      ) : (
+        <>
+          {/* Per sheet, when there is more than one — a round with a single sheet
+              would just repeat the total above it. */}
+          {r.sheets.length > 1 && (
+            <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+              {r.sheets.map((sh) => (
+                <span key={sh.kind}>
+                  {sh.label}{" "}
+                  <span className="font-semibold text-[var(--bg-dark)]">
+                    {sh.mean === null ? "—" : `${formatScore(sh.mean)} / ${sh.max}`}
+                  </span>
+                  {sh.n > 1 && <span> (mean of {sh.n})</span>}
+                </span>
+              ))}
+            </p>
+          )}
+
+          {/* The written round's criteria. The one place a single number really
+              does hide the answer: 21/28 with 3/7 on the case essay is a
+              different candidate to a panel about to run a case. */}
+          {r.criteria && r.criteria.some((c) => c.mean !== null) && (
+            <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]">
+              {r.criteria.map((c) => (
+                <span key={c.key}>
+                  {c.label}{" "}
+                  <span className="font-semibold text-[var(--bg-dark)]">
+                    {c.mean === null ? "—" : formatScore(c.mean)}
+                  </span>
+                  <span> / {c.max}</span>
+                </span>
+              ))}
+            </p>
+          )}
+
+          <div className="mt-3 space-y-2.5">
+            {reviewers.map((email) => (
+              <div key={email} className="border-t border-[var(--border)] pt-2.5">
+                <p className="text-xs font-semibold text-[var(--bg-dark)]">{email}</p>
+                {r.scores
+                  .filter((sc) => sc.reviewer === email)
+                  .map((sc) => (
+                    <div key={sc.kind} className="mt-1">
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        <span>{sc.label}</span>
+                        <span className="text-[var(--bg-dark)]">
+                          {sc.total === null
+                            ? "score not entered"
+                            : `${formatScore(sc.total)} / ${sc.max}`}
+                        </span>
+                        {sc.recommendation && (
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] normal-case tracking-normal text-[var(--bg-dark)]">
+                            {recommendationLabel(sc.recommendation)}
+                          </span>
+                        )}
+                      </p>
+                      {sc.notes && (
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-[var(--fg)]">
+                          {sc.notes}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The earlier rounds' totals, up beside the stage badge.
+ *
+ * The same numbers as the card below, on the line someone reads before they
+ * scroll. Rounds with nothing recorded are dropped here rather than shown as
+ * "not scored" — this is a glance, and the card is where the absence is worth
+ * spelling out.
+ */
+function PriorTotals({ history }: { history?: PriorRound[] }) {
+  const scored = (history ?? []).filter((r) => r.scores.length > 0);
+  if (scored.length === 0) return null;
+
+  return (
+    <>
+      {scored.map((r) => (
+        <span
+          key={r.round}
+          title={r.sheets
+            .map((sh) => `${sh.label}: ${sh.mean === null ? "not scored" : `${formatScore(sh.mean)} / ${sh.max}`}`)
+            .join("\n")}
+          className="rounded-full border border-[var(--border)] bg-white px-3 py-1 text-xs text-[var(--muted)]"
+        >
+          {r.label} <span className="font-semibold text-[var(--bg-dark)]">{roundTotal(r)}</span>
+        </span>
+      ))}
+    </>
   );
 }
 

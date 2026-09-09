@@ -7,6 +7,10 @@
 // `reviews` (unique on applicant + reviewer + kind).
 
 import { ALL_MEMBER_ROLES, canInterviewRole } from "./access";
+// Type-only, and deliberately so: ./history.ts imports the rubrics FROM here, so
+// a value import would close a runtime cycle. The wire format is declared in one
+// place regardless of which module owns the shape inside it.
+import type { PriorRound } from "./history";
 import type { InterviewRound } from "./rounds";
 import { rubricMaxPoints, type Flag, type RubricCriterion, type Stage } from "./types";
 
@@ -999,6 +1003,21 @@ export type Candidate = {
    * nobody else, and that check happens before this is ever assembled.
    */
   panelNotes?: PanelNote[];
+  /**
+   * What this candidate was already scored, in the rounds BEFORE this one —
+   * oldest first, so a final-round card reads written, then first round.
+   *
+   * A round used to end and take its numbers with it. The panel about to decide
+   * an offer saw one group case out of 12 and nothing else: not the case and
+   * behavioral totals that advanced this person, not the written marks under
+   * those. Every score the club has recorded is relevant to the last decision it
+   * makes, and this is how they reach it.
+   *
+   * Read-only in every direction, and it has to be — a prior round's rubric
+   * belongs to the round that ran it, and `myRubrics` stays the only thing this
+   * console can write. See ./history.ts.
+   */
+  history?: PriorRound[];
   /**
    * Red/green flags filed on this person, so the board can show them beside the
    * name like the written console and the decision queue do.

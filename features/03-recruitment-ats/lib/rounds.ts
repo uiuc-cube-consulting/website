@@ -52,6 +52,20 @@ export const ROUND_LABEL: Record<Round, string> = {
   final_round: "Final round",
 };
 
+/**
+ * The same three rounds, for a column with no room for a name.
+ *
+ * "2R" rather than "FR" for the final round because that is what the club calls
+ * it on the sheet itself — the second-round rubric (KIND_LABEL.final in
+ * ./interview.ts reads "Second Round"). A label the portal invented would be one
+ * more thing to translate between the screen and the paper.
+ */
+export const ROUND_SHORT: Record<Round, string> = {
+  written: "W",
+  first_round: "1R",
+  final_round: "2R",
+};
+
 export const ROUND_BLURB: Record<Round, string> = {
   written: "Essays and resume, scored out of 28 points by two independent readers.",
   first_round: "Case (out of 15) and behavioral (out of 17) interviews, with a Drive folder per candidate.",
@@ -84,6 +98,22 @@ export function roundOfStage(stage: Stage): Round | null {
 /** True when this candidate is live in `round` right now. */
 export function isInRound(stage: Stage, round: Round): boolean {
   return ROUND_STAGES[round].includes(stage);
+}
+
+/**
+ * The rounds a candidate has already come through to reach `round`, oldest first.
+ *
+ * Read off ROUNDS rather than written out per round, so a fourth round inserted
+ * into that list is history to everything after it without a second edit. Empty
+ * for the written round, which nobody arrives at from anywhere.
+ *
+ * This is what makes a score outlive its round: the console for the round a
+ * candidate is IN uses this to fetch what they were already given, so a final-round
+ * panel reads the case and behavioral totals from the first round and the written
+ * marks under those, instead of judging the last conversation on its own.
+ */
+export function priorRounds(round: Round): Round[] {
+  return ROUNDS.slice(0, ROUNDS.indexOf(round));
 }
 
 /** The stage a candidate lands on when advanced INTO `round`. */

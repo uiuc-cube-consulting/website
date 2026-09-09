@@ -29,9 +29,11 @@ import {
   ROUND_ADVANCE,
   ROUND_BLURB,
   ROUND_LABEL,
+  ROUND_SHORT,
   isInterviewRound,
   type InterviewRound,
 } from "@/features/03-recruitment-ats/lib/rounds";
+import { type PriorRound } from "@/features/03-recruitment-ats/lib/history";
 import { CandidateWorkspace } from "./CandidateWorkspace";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 
@@ -297,7 +299,7 @@ export function InterviewConsole() {
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <div
-          className={`relative grid grid-cols-[2.5rem_1fr_auto_auto_auto] gap-3 border-b border-[var(--border)] py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] ${
+          className={`relative grid grid-cols-[2.5rem_1fr_auto_auto_auto_auto] gap-3 border-b border-[var(--border)] py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] ${
             selectable ? "pl-10 pr-4" : "px-4"
           }`}
         >
@@ -331,6 +333,12 @@ export function InterviewConsole() {
           <span className="text-right" title="Position in the order chosen above">#</span>
           <span>Candidate</span>
           <span>Resume</span>
+          {/* What the earlier rounds already said. Hidden on a phone, where six
+              columns stop being a table — the workspace carries the same numbers
+              in full, and this column is a scanning aid rather than the record. */}
+          <span className="hidden text-right sm:block" title="Totals from the rounds before this one">
+            Earlier
+          </span>
           <span className="text-right">Score</span>
           <span>Your rubrics</span>
         </div>
@@ -364,7 +372,7 @@ export function InterviewConsole() {
               )}
               <button
                 onClick={() => setSelectedId(c.id)}
-                className={`grid w-full grid-cols-[2.5rem_1fr_auto_auto_auto] items-center gap-3 py-3 text-left hover:bg-[var(--bg-cream)]/40 ${
+                className={`grid w-full grid-cols-[2.5rem_1fr_auto_auto_auto_auto] items-center gap-3 py-3 text-left hover:bg-[var(--bg-cream)]/40 ${
                   selectable ? "pl-10 pr-4" : "px-4"
                 }`}
               >
@@ -386,6 +394,7 @@ export function InterviewConsole() {
                 <span className={`text-xs font-semibold ${c.resume ? "text-[var(--gold-deep)]" : "text-[var(--muted)]"}`}>
                   {c.resume ? "✓" : "—"}
                 </span>
+                <PriorCell history={c.history} />
                 {(() => {
                   const st = panelStanding(c.panelScores, ROUND_KINDS[data.round]);
                   if (st.submissions === 0) {
@@ -450,6 +459,51 @@ export function InterviewConsole() {
         </ul>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the earlier rounds gave this candidate, one line per round.
+ *
+ * The list is where an exec decides who to advance, and until this column
+ * existed the only number on it was the round being worked — so the decision
+ * that ends a candidate's cycle was made against one conversation, with the
+ * written marks and (in the final round) the first-round totals a click away on
+ * a different screen for each person.
+ *
+ * Abbreviated hard, because it is a scanning column: "W 21.5" beside "1R 26".
+ * The full breakdown is in the title, and the whole record — criteria, notes,
+ * who said what — is in the workspace one click away.
+ */
+function PriorCell({ history }: { history?: PriorRound[] }) {
+  const scored = (history ?? []).filter((r) => r.total !== null || r.scores.length > 0);
+  if (scored.length === 0) {
+    return <span className="hidden text-right text-xs text-[var(--muted)] sm:block">—</span>;
+  }
+  return (
+    <span
+      className="hidden text-right sm:block"
+      title={scored
+        .flatMap((r) => [
+          `${r.label}: ${r.total === null ? "partial" : `${formatScore(r.total)} / ${r.max}`}`,
+          ...r.sheets.map(
+            (sh) =>
+              `  ${sh.label}: ${sh.mean === null ? "not scored" : `${formatScore(sh.mean)} / ${sh.max}`}` +
+              (sh.n > 1 ? ` (mean of ${sh.n})` : "")
+          ),
+        ])
+        .join("\n")}
+    >
+      {scored.map((r) => (
+        <span key={r.round} className="block text-[11px] tabular-nums text-[var(--muted)]">
+          {ROUND_SHORT[r.round]}{" "}
+          <span className="font-semibold text-[var(--bg-dark)]">
+            {r.total === null ? "partial" : formatScore(r.total)}
+          </span>
+          <span> / {r.max}</span>
+        </span>
+      ))}
+    </span>
   );
 }
 

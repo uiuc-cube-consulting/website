@@ -59,6 +59,40 @@ export const DEMO_REVIEWS: Review[] = [
   review("a9", "isabella@cubeconsulting.org", { essay_1: 4, essay_2: 2, essay_3: 3, case_essay: 6, misc: 4, resume: 4 }, "Agreed — through to interviews.", 2),
 ];
 
+/**
+ * First-round rubrics, so the demo has a candidate who arrives at the final
+ * round carrying something — the whole point of ./history.ts is that the last
+ * panel reads the earlier rounds, and a demo where every earlier round is empty
+ * shows none of it.
+ *
+ * Stored the way the real rows are: one `total` off the paper sheet
+ * (lib/interview.ts SCORE_KEY), not a criterion-by-criterion split. Typed
+ * separately from DEMO_REVIEWS because `Review.scores` is the WRITTEN rubric's
+ * shape and an interview row genuinely does not have it.
+ */
+export type DemoInterviewReview = {
+  applicant_id: string;
+  reviewer_email: string;
+  kind: "case" | "behavioral" | "final";
+  scores: Record<string, number>;
+  notes: string;
+  recommendation: string | null;
+  created_at: string;
+};
+
+export const DEMO_INTERVIEW_REVIEWS: DemoInterviewReview[] = [
+  // a9 — Nikhil Rao, sitting in the final round. Written 24/28, first round 12/15
+  // case and 14/17 behavioral: a strong candidate whose case is the softer half,
+  // which is exactly what a second-round group case is about to test.
+  { applicant_id: "a9", reviewer_email: "sujan@cubeconsulting.org", kind: "case", scores: { total: 12 }, notes: "Structured the market sizing cleanly, lost a few minutes on the breakeven before recovering. Landed a recommendation with numbers behind it.", recommendation: "yes", created_at: "2026-09-07T18:00:00Z" },
+  { applicant_id: "a9", reviewer_email: "isabella@cubeconsulting.org", kind: "behavioral", scores: { total: 14 }, notes: "Best answer of the day on the conflict question — owned their part in it. Goals are specific and they have already done something about them.", recommendation: "strong_yes", created_at: "2026-09-07T18:40:00Z" },
+  // a1 and a5 are live in the FIRST round, so their case/behavioral rows are
+  // this round's scores rather than history. Here so the first-round board is
+  // not blank in demo mode either.
+  { applicant_id: "a1", reviewer_email: "neha@cubeconsulting.org", kind: "case", scores: { total: 9 }, notes: "Froze on the maths but recovered and drove the recommendation.", recommendation: "yes", created_at: "2026-09-07T15:00:00Z" },
+  { applicant_id: "a5", reviewer_email: "neha@cubeconsulting.org", kind: "case", scores: { total: 7 }, notes: "Never prioritised — worked every branch of the tree at the same depth.", recommendation: "no", created_at: "2026-09-07T16:00:00Z" },
+];
+
 // Two kinds of flag, both real: ones already sitting on an applicant's profile,
 // and PENDING ones filed at an event against an email nobody has applied from
 // yet. The last linked flag below was itself filed pre-application (note the

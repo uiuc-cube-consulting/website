@@ -13,9 +13,15 @@ import { getReviewerPool } from "@/features/03-recruitment-ats/lib/store";
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
 // One ROUND's interviewer console: the candidates live in that round, their
-// resume pointer, who is on their panel for it, and the CURRENT interviewer's own
-// rubrics. Other interviewers' scores and notes are never included — same
-// blind-ish posture as the written-application feed.
+// resume pointer, who is on their panel for it, the whole panel's scores and
+// notes, and the CURRENT interviewer's own rubrics — the only thing this console
+// can WRITE.
+//
+// It also carries what the EARLIER rounds recorded (lib/history.ts): the written
+// marks under a first-round candidate, and both those and the case/behavioral
+// totals under a final-round one. Read-only, and scoped the same way everything
+// else here is — a board never carries a LATER round's scores, so the final
+// round stays exec-only by construction rather than by filtering.
 //
 // ?round=first_round (default) | final_round
 //

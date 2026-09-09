@@ -9,7 +9,7 @@
 // demo mode instead of silently succeeding.
 
 import { createServerClient } from "@/lib/supabase/server";
-import { DEMO_APPLICANTS, DEMO_FLAGS } from "./demo";
+import { DEMO_APPLICANTS, DEMO_FLAGS, DEMO_INTERVIEW_REVIEWS, DEMO_REVIEWS } from "./demo";
 import { fetchFileMeta, listResumeFiles } from "./drive";
 import {
   INTERVIEW_KINDS,
@@ -24,7 +24,8 @@ import {
   type Recommendation,
   type RubricEntry,
 } from "./interview";
-import { ROUND_STAGES, type InterviewRound } from "./rounds";
+import { historyFrom, sheetsOfRounds, type PriorRound } from "./history";
+import { ROUND_STAGES, priorRounds, type InterviewRound } from "./rounds";
 import { parseResumeId } from "./form-resume";
 import { readApplicantsFromSheet } from "./import";
 import { planResumeMatches, type DriveFileMeta } from "./resume-match";
@@ -103,8 +104,12 @@ function toEntry(row: ReviewRow, kind: InterviewKind): RubricEntry {
  *     applicant pool.
  *   · panels — this round's panel rows only, so first- and final-round panels are
  *     independent.
- *   · rubrics — only this round's kinds, so a final-round score is not merely
- *     hidden from a first-round response, it is never fetched into it.
+ *   · rubrics — this round's kinds, plus the sheets of every round BEFORE it.
+ *     The earlier ones are history: read-only, summarised by ./history.ts, and
+ *     the reason a final-round panel can see the case and behavioral totals that
+ *     advanced a candidate and the written marks under those. A LATER round's
+ *     kinds are still never fetched, so a final-round score is not merely hidden
+ *     from a first-round response — it is not in it.
  *
  * The route is what refuses a non-exec caller asking for `final_round`; this
  * function assumes that check has already passed and simply builds the board it
@@ -118,6 +123,12 @@ export async function getBoard(
   const viewer = viewerEmail.toLowerCase();
   const stages = ROUND_STAGES[round];
   const kinds = ROUND_KINDS[round];
+  // Everything already decided about these candidates. Derived from the round
+  // rather than listed per round, so the first round carries the written screen
+  // and the final round carries the written screen AND the first round without
+  // either being spelled out here.
+  const priors = priorRounds(round);
+  const priorSheets = sheetsOfRounds(priors);
   const sb = db();
 
   if (!sb) {
@@ -140,6 +151,13 @@ export async function getBoard(
         assignedToMe: false,
         myRubrics: emptyRubrics(),
         completed: zeroCounts(),
+        history: historyFrom(
+          [
+            ...DEMO_REVIEWS.filter((r) => r.applicant_id === a.id),
+            ...DEMO_INTERVIEW_REVIEWS.filter((r) => r.applicant_id === a.id),
+          ],
+          priors
+        ),
         flags: DEMO_FLAGS.filter((f) => f.applicant_id === a.id),
       })),
       demo: true,
@@ -187,7 +205,12 @@ export async function getBoard(
     sb
       .from("reviews")
       .select("applicant_id, reviewer_email, kind, scores, notes, recommendation, weighted_total, created_at")
-      .in("kind", kinds as readonly string[]),
+      // This round's sheets and every earlier round's, in one read. Unscoped by
+      // applicant for the same reason `getSnapshot` is: scoping would need the
+      // candidate ids first, turning one round trip into two on the request that
+      // runs every time the console opens. Rows belonging to applicants who are
+      // not on this board are grouped by id below and simply never looked up.
+      .in("kind", [...kinds, ...priorSheets] as readonly string[]),
     // Only flags already attached to an applicant. A PENDING flag is filed
     // against an email nobody has applied from, so it belongs to no candidate on
     // this board — it is claimed at application time, not matched here.
@@ -247,9 +270,14 @@ export async function getBoard(
     if (cur) cur.push(r);
     else rowsByApplicant.set(r.applicant_id, [r]);
   }
+  // What every earlier round already decided about this candidate. Built from
+  // the same rows, in the same pass — a prior round is not a separate fetch, it
+  // is the sheets of a round that has finished, read back (./history.ts).
+  const history = new Map<string, PriorRound[]>();
   for (const [applicantId, rows] of rowsByApplicant) {
     const notes = panelNotesFrom(rows, kinds);
     if (notes.length) panelNotes.set(applicantId, notes);
+    if (priors.length) history.set(applicantId, historyFrom(rows, priors));
   }
 
   for (const r of (reviewsRes.data ?? []) as ReviewRow[]) {
@@ -319,6 +347,11 @@ export async function getBoard(
       completed: completed.get(a.id) ?? zeroCounts(),
       panelScores: panelScores.get(a.id) ?? [],
       panelNotes: panelNotes.get(a.id) ?? [],
+      // A candidate with no rows at all still gets the empty rounds rather than
+      // no history: "written application — not scored" is a fact about how they
+      // got here (somebody advanced them by hand), and an absent card is
+      // indistinguishable from a console that never looked.
+      history: history.get(a.id) ?? historyFrom([], priors),
       flags: flagsByApplicant.get(a.id) ?? [],
     };
   });
