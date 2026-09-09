@@ -43,7 +43,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import { readApplicantsFromSheet } from "./import";
 import { importApplicants } from "./store";
-import { parseResumeId } from "./form-resume";
+import { driveFolderUrl, parseResumeId } from "./form-resume";
 import {
   candidateFolderName,
   copyFileName,
@@ -515,10 +515,21 @@ export async function provisionCandidateFolders(
    * not to create would leave every candidate pending, `remaining` would never
    * reach zero, and the console's keep-calling-until-done loop would spin through
    * all 50 of its passes creating nothing.
+   *
+   * "Provisioned" is also not quite the same question as "linked". The ledger
+   * records what exists in Drive; the board clicks through `plan.columns.id` on
+   * the applicant row, and those are two writes in step 6 with no transaction
+   * around them. If the ledger upsert lands and the applicant upsert fails, the
+   * candidate has a folder nobody can reach — and judging completeness by the
+   * ledger alone would mark them done forever, so every later run reports them
+   * "unchanged" and the link never appears. Requiring the row to agree with the
+   * ledger puts them back in `pending`, where 5a re-points the row for the price
+   * of no Drive calls at all.
    */
   const isComplete = (c: Candidate): boolean => {
     const have = ledger.get(c.id);
     if (!have) return false;
+    if (c.folderId !== have.get(plan.folderKind)?.file_id) return false;
     for (const k of plan.kinds) {
       if (!wanted.has(k)) continue;
       // A candidate who never uploaded a resume cannot be waiting on one.
@@ -553,7 +564,12 @@ export async function provisionCandidateFolders(
     let folder: DriveFile;
     const folderRow = await existing(plan.folderKind);
     if (folderRow) {
-      folder = { id: folderRow.file_id, name: "", url: folderRow.web_link ?? "" };
+      // Derived from the id rather than read straight off `web_link`, which is
+      // nullable: an empty string here would satisfy the id check below and then
+      // be written to the applicant row as the folder's URL, leaving the board
+      // with a candidate it believes is linked and a link it cannot render. A
+      // folder's URL is a pure function of its id, so there is nothing to trust.
+      folder = { id: folderRow.file_id, name: "", url: folderRow.web_link || driveFolderUrl(folderRow.file_id) };
       out.skipped.push(plan.folderKind);
     } else {
       const made = await ensureFolder(
