@@ -92,7 +92,7 @@ export function ExecCard({ member }: { member: ExecMember }) {
             className="absolute -right-10 -top-10 w-32 h-32 rounded-full bg-[var(--gold)]/15 blur-2xl"
           />
 
-          <p className="eyebrow text-[var(--gold)]">{member.role}</p>
+          <p className="eyebrow eyebrow-on-dark">{member.role}</p>
           <h3 className="mt-2 font-display font-extrabold text-xl leading-tight">
             What they do
           </h3>

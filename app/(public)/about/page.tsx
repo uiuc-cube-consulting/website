@@ -25,29 +25,29 @@ export default function AboutPage() {
       <section className="section-y bg-white">
         <div className="container-x">
           <div className="max-w-2xl">
-            <p className="eyebrow">Core values</p>
+            <p className="eyebrow">Leadership</p>
             <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl text-[var(--bg-dark)] leading-[1.05]">
-              What we stand for.
+              Executive Board.
             </h2>
+            <p className="mt-5 text-[var(--muted)] text-[17px] leading-relaxed">
+              Eight students run CUBE. Each card flips for what that role owns.
+            </p>
           </div>
-          <PillarsFlow />
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {EXEC_BOARD.map((m) => <ExecCard key={m.name} member={m} />)}
+          </div>
         </div>
       </section>
 
       <section className="section-y bg-[var(--bg-cream)]">
         <div className="container-x">
           <div className="max-w-2xl">
-            <p className="eyebrow">Leadership</p>
+            <p className="eyebrow">Core values</p>
             <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl text-[var(--bg-dark)] leading-[1.05]">
-              Executive Board.
+              What we stand for.
             </h2>
-            <p className="mt-5 text-[var(--muted)] text-[17px] leading-relaxed">
-              The people who keep CUBE running, semester after semester.
-            </p>
           </div>
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {EXEC_BOARD.map((m) => <ExecCard key={m.name} member={m} />)}
-          </div>
+          <PillarsFlow />
         </div>
       </section>
 

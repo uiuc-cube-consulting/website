@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { ProjectShowcase } from "@/components/ProjectShowcase";
-import { ClientCarousel } from "@/components/ClientCarousel";
 import { PageHero } from "@/components/PageHero";
-import { PROJECTS, CLIENT_LOGOS } from "@/lib/content";
+import { PROJECTS } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Projects",
@@ -37,17 +36,6 @@ export default function ProjectsPage() {
         </div>
       </section>
 
-      <section className="bg-white">
-        <div className="container-x section-y">
-          <p className="eyebrow text-center">Recent Clients</p>
-          <h2 className="mt-3 text-center font-display font-extrabold text-[var(--bg-dark)] text-3xl md:text-4xl">
-            Companies we&apos;ve worked with.
-          </h2>
-          <div className="mt-10 px-4 md:px-6">
-            <ClientCarousel items={CLIENT_LOGOS} />
-          </div>
-        </div>
-      </section>
     </>
   );
 }

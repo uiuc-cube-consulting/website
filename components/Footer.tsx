@@ -83,6 +83,18 @@ export function Footer() {
               {SITE.email}
             </a>
           </p>
+
+          <h3 className="mt-8 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--gold)]">
+            Members
+          </h3>
+          <p className="mt-4 text-sm">
+            <Link
+              href="/portal"
+              className="inline-flex items-center gap-1.5 text-[var(--fg-on-dark)]/70 hover:text-[var(--gold)]"
+            >
+              Member Portal
+            </Link>
+          </p>
         </div>
       </div>
 

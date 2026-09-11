@@ -65,7 +65,7 @@ export function EngagementProcess() {
         className="absolute inset-0 -z-10 opacity-55"
         style={{
           background:
-            "radial-gradient(700px 360px at 80% 0%, rgba(212,166,87,0.16), transparent 65%), radial-gradient(700px 360px at 20% 100%, rgba(212,166,87,0.10), transparent 70%)",
+            "radial-gradient(700px 360px at 80% 0%, rgba(223,174,62,0.16), transparent 65%), radial-gradient(700px 360px at 20% 100%, rgba(223,174,62,0.10), transparent 70%)",
         }}
       />
 
@@ -77,7 +77,7 @@ export function EngagementProcess() {
           transition={{ duration: 0.55 }}
           className="max-w-2xl"
         >
-          <p className="eyebrow">How we work</p>
+          <p className="eyebrow eyebrow-on-dark">How we work</p>
           <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl leading-[1.05]">
             Inside a CUBE engagement.
           </h2>

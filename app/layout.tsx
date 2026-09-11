@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Archivo } from "next/font/google";
 import "./globals.css";
 import { SITE } from "@/lib/content";
 
-const body = Inter({
+/**
+ * One typeface for the whole site. Hierarchy comes from size, weight and
+ * tracking rather than a second family -- a grotesque with a real weight range
+ * reads more deliberate than Inter paired with a geometric display face, and
+ * it drops a font request.
+ */
+const archivo = Archivo({
   variable: "--font-body",
   subsets: ["latin"],
-  display: "swap",
-});
-
-const display = Outfit({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -41,7 +41,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-scroll-behavior="smooth"
-      className={`${body.variable} ${display.variable} h-full antialiased`}
+      className={`${archivo.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-[var(--fg)]">
         {children}

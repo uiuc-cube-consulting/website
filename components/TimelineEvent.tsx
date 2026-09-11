@@ -11,7 +11,7 @@ export function TimelineEvent({
     <li className="group relative pl-12 pb-7 last:pb-0">
       <span
         aria-hidden
-        className="absolute left-3 top-1.5 w-3 h-3 rounded-full bg-[var(--gold)] ring-4 ring-[var(--bg-cream)] shadow-[0_0_0_2px_rgba(212,166,87,0.25)] group-hover:scale-110 group-hover:shadow-[0_0_0_4px_rgba(212,166,87,0.35)] transition-all duration-300"
+        className="absolute left-3 top-1.5 w-3 h-3 rounded-full bg-[var(--gold)] ring-4 ring-[var(--bg-cream)] shadow-[0_0_0_2px_rgba(223,174,62,0.25)] group-hover:scale-110 group-hover:shadow-[0_0_0_4px_rgba(223,174,62,0.35)] transition-all duration-300"
       />
       {!last && (
         <span

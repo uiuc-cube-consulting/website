@@ -1,18 +1,30 @@
 @import "tailwindcss";
 
+/* ── Palette ───────────────────────────────────────────────────────────────
+   Grounds stay warm near-black + cream (the established CUBE look).
+   Accents come from the approved CUBE slide palette:
+     #FFFFFF  #AD8ED4  #5A1CA9  #3E1370  #DFAE3E  #B2B2B2
+   Black (#000000) is NOT on the approved list -- use --brand-deep instead.
+   Tints below are alpha/mix derivations of those six; no new hues.
+   ------------------------------------------------------------------------ */
 :root {
-  /* Background hues match the live site: warm near-black for the header
-     and dominant navy/black areas, cream for soft sections. */
   --bg: #ffffff;
   --bg-dark: #15110b;        /* header / dark sections */
   --bg-dark-2: #1c1610;      /* slightly lifted dark surface */
-  --bg-cream: #f6efde;       /* warm cream like the live site */
+  --bg-cream: #f6efde;       /* warm cream for soft sections */
   --fg: #15110b;
   --fg-on-dark: #f4ecd9;     /* off-white on dark bg */
   --muted: #6b6357;
-  --gold: #d4a657;           /* primary brand gold */
-  --gold-soft: #e8c789;
-  --gold-deep: #b8862f;
+
+  /* Approved CUBE accents */
+  --gold: #dfae3e;           /* primary accent */
+  --gold-soft: #ecc978;
+  --gold-deep: #a87c1c;      /* darkened gold: readable as text on light */
+  --brand: #5a1ca9;          /* CUBE purple - secondary accent, links, eyebrows */
+  --brand-deep: #3e1370;     /* deepest purple - stands in for black */
+  --lavender: #ad8ed4;       /* light purple - accents on dark grounds */
+  --grey: #b2b2b2;           /* rules, disabled, decorative only */
+
   --border: #e7e2d3;
   --border-dark: rgba(244, 236, 217, 0.15);
 }
@@ -26,6 +38,9 @@
   --color-brand-gold: var(--gold);
   --color-brand-gold-soft: var(--gold-soft);
   --color-brand-gold-deep: var(--gold-deep);
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-lavender: var(--lavender);
   --color-muted: var(--muted);
 }
 
@@ -42,13 +57,16 @@ body {
 }
 
 h1, h2, h3, h4 {
-  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -0.015em;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.028em;
   font-weight: 700;
 }
 
+/* Kept as a hook so existing markup keeps working; it now just asserts the
+   display tracking on a non-heading element. */
 .font-display {
-  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.028em;
 }
 
 .container-x {
@@ -111,6 +129,19 @@ h1, h2, h3, h4 {
 }
 .btn-light-outline:hover { background: var(--fg-on-dark); color: var(--bg-dark); }
 
+.btn-purple {
+  background: var(--brand);
+  color: #fff;
+}
+.btn-purple:hover { background: var(--brand-deep); }
+
+.btn-purple-outline {
+  background: transparent;
+  color: var(--brand);
+  border: 1.5px solid var(--brand);
+}
+.btn-purple-outline:hover { background: var(--brand); color: #fff; }
+
 .btn-dark {
   background: var(--bg-dark);
   color: var(--fg-on-dark);
@@ -123,6 +154,104 @@ h1, h2, h3, h4 {
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--gold);
+}
+
+/* Public site only. Gold on cream measured ~2:1 -- CUBE purple is ~9.6:1.
+   The portal is outside `.site` and keeps gold. */
+.site .eyebrow { color: var(--brand); }
+
+/* Eyebrows on a dark ground take gold, which reads there. Declared after the
+   rule above so it wins at equal specificity. */
+.site .eyebrow-on-dark,
+.eyebrow-on-dark { color: var(--gold); }
+
+/* ── Hero pointer spotlight ───────────────────────────────────────────────
+   The section sets --mx/--my/--glow from JS; this paints them. Defaults keep
+   the hero correct when JS never runs. */
+.hero-spotlight {
+  --mx: 50%;
+  --my: 38%;
+  --glow: 0;
+}
+
+.hero-spotlight__glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--glow);
+  transition: opacity 420ms ease;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    420px circle at var(--mx) var(--my),
+    rgba(223, 174, 62, 0.30),
+    rgba(223, 174, 62, 0.11) 42%,
+    transparent 68%
+  );
+}
+
+/* Light sweeps across the button on hover. */
+.btn-sweep {
+  position: relative;
+  overflow: hidden;
+}
+.btn-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.38) 50%,
+    transparent 80%
+  );
+  transform: translateX(-130%);
+  transition: transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-sweep:hover::after { transform: translateX(130%); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-spotlight__glow { display: none; }
+  .btn-sweep::after { display: none; }
+}
+
+/* ── Sticky practice stack ────────────────────────────────────────────────
+   Each card pins below the sticky header; the next slides up over it. The
+   per-card offset leaves the previous card's top edge visible so the stack
+   reads as a stack. No overflow:hidden may sit on an ancestor or sticky
+   silently stops working. */
+.practice-stack {
+  --stack-top: 104px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.practice-stack__item {
+  position: sticky;
+  top: calc(var(--stack-top) + var(--i) * 16px);
+  padding-bottom: 28px;
+}
+
+/* Trailing space so the last card can pin before the section ends. */
+.practice-stack::after {
+  content: "";
+  display: block;
+  height: 22vh;
+}
+
+@media (max-width: 767px) {
+  /* Stacking on a short viewport hides more than it reveals. */
+  .practice-stack__item { position: static; }
+  .practice-stack::after { display: none; }
+}
+
+/* Alternating vertical offset turns the alumni grid into a constellation. */
+.constellation__cell { transform: translateY(calc(var(--col) * 14px)); }
+
+@media (max-width: 640px) {
+  .constellation__cell { transform: translateY(calc(var(--col) * 8px)); }
 }
 
 /* Nav link underline */

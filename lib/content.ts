@@ -27,7 +27,7 @@ export const NAV_LINKS = [
 export const STATS = [
   { label: "Active Members", value: 50, suffix: "" },
   { label: "Projects Completed", value: 180, suffix: "" },
-  { label: "Cups of Coffee", value: 3760, suffix: "" },
+  { label: "Years Running", value: 14, suffix: "" },
 ] as const;
 
 export const PILLARS = [
@@ -151,11 +151,31 @@ export type Project = {
   name: string;
   /** Path under /public to the client logo. */
   logo?: string;
+  /** Short industry tag, e.g. "SaaS", "Robotics". Renders as a pill. */
+  sector?: string;
+  /** One sentence: what the engagement is. Shown under the client name. */
+  summary?: string;
   /** Path under /public to the team composite photo. */
   teamImage?: string;
-  /** Omit until the team writes up the semester's deliverables. */
+  /** 2-4 deliverables. Shown under a "What we delivered" heading. */
   bullets?: string[];
 };
+
+// TODO(web): each entry below still needs `sector`, `summary`, and `bullets`.
+// Until they are filled in, /projects shows a client logo and one placeholder
+// line — which is the single biggest gap on the site for prospective clients.
+// Template:
+//   {
+//     name: "Replit",
+//     logo: "/clients/replit.png",
+//     sector: "Developer tools",
+//     summary: "Positioning and go-to-market research for a new education tier.",
+//     bullets: [
+//       "Competitive teardown of 8 adjacent products",
+//       "24 user interviews with CS instructors",
+//       "Pricing model and launch recommendation",
+//     ],
+//   },
 
 export const PROJECTS: Project[] = [
   {
@@ -190,7 +210,30 @@ export const PROJECTS: Project[] = [
 
 // Brand directory used by LogoStrip / ClientCarousel / AlumniGrid.
 // `logo` is optional — components fall back to a styled text chip when missing.
-export type Brand = { name: string; logo?: string };
+export type Brand = {
+  name: string;
+  logo?: string;
+  /**
+   * True when the logo file is dark ink and therefore disappears on a dark
+   * ground. Those are rendered as a light silhouette instead.
+   *
+   * Measured, not guessed: median ink luminance of each file was compared for
+   * contrast against white and against --bg-dark. 20 of the 24 alumni logos
+   * are light-ink files built for dark backgrounds; only these four are dark
+   * ink. All four brands ship an official white mark, so the silhouette is
+   * brand-correct rather than a hack.
+   */
+  darkInk?: boolean;
+  /**
+   * Render the mark as a CSS mask filled with the surrounding ink colour
+   * instead of an <img>.
+   *
+   * Used for the single-colour marks sourced as SVG: masking uses only the
+   * alpha channel, so the logo comes out crisp at any size and in exactly the
+   * colour we want, with no next/image SVG configuration involved.
+   */
+  mono?: boolean;
+};
 
 export const CLIENT_LOGOS: Brand[] = [
   { name: "Earnest Earth",    logo: "/clients/earnest-earth.jpeg" },
@@ -225,30 +268,32 @@ export const PARTNER_LOGOS: Brand[] = [
 ];
 
 export const ALUMNI_PLACEMENTS: Brand[] = [
+  // Grouped loosely by sector so the wall reads as clusters rather than a
+  // random pile. Entries without `logo` render as a wordmark chip.
   { name: "Microsoft",       logo: "/alumni/microsoft.png" },
   { name: "Google",          logo: "/alumni/google.png" },
   { name: "Apple",           logo: "/alumni/apple.webp" },
   { name: "Amazon",          logo: "/alumni/amazon.png" },
   { name: "Meta",            logo: "/alumni/meta.png" },
+  { name: "OpenAI",          logo: "/alumni/openai.svg",   mono: true },
   { name: "Adobe",           logo: "/alumni/adobe.png" },
+  { name: "Oracle",          logo: "/alumni/oracle.svg",   mono: true },
+  { name: "Rippling",        logo: "/alumni/rippling.svg", mono: true },
+  { name: "Scale AI",        logo: "/alumni/scale.webp" },
   { name: "McKinsey",        logo: "/alumni/mckinsey.png" },
-  { name: "BCG",             logo: "/alumni/bcg.png" },
-  { name: "Bain & Co.",      logo: "/alumni/bain.png" },
+  { name: "BCG",             logo: "/alumni/bcg.png", darkInk: true },
+  { name: "Bain & Co.",      logo: "/alumni/bain.png", darkInk: true },
   { name: "Deloitte",        logo: "/alumni/deloitte.png" },
-  { name: "Capital One",     logo: "/alumni/capital-one.webp" },
-  { name: "Bank of America", logo: "/alumni/bank-of-america.png" },
-  { name: "Citi",            logo: "/alumni/citi.png" },
-  { name: "BMO",             logo: "/alumni/bmo.png" },
-  { name: "Synchrony",       logo: "/alumni/synchrony.png" },
   { name: "KPMG",            logo: "/alumni/kpmg.png" },
   { name: "Crowe",           logo: "/alumni/crowe.png" },
+  { name: "Citadel",         logo: "/alumni/citadel.svg",  mono: true },
+  { name: "Capital One",     logo: "/alumni/capital-one.webp" },
+  { name: "Citi",            logo: "/alumni/citi.png" },
+  { name: "Synchrony",       logo: "/alumni/synchrony.png" },
   { name: "Intuit",          logo: "/alumni/intuit.png" },
-  { name: "Scale AI",        logo: "/alumni/scale.webp" },
   { name: "Rivian",          logo: "/alumni/rivian.png" },
   { name: "Caterpillar",     logo: "/alumni/caterpillar.png" },
-  { name: "Boeing",          logo: "/alumni/boeing.png" },
-  { name: "Tropicana",       logo: "/alumni/tropicana.webp" },
-  { name: "UChicago",        logo: "/alumni/uchicago.webp" },
+  { name: "Boeing",          logo: "/alumni/boeing.png", darkInk: true },
 ];
 
 export const FALL_RECRUITMENT = {

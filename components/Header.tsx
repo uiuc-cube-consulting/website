@@ -79,12 +79,6 @@ export function Header() {
               </Link>
             );
           })}
-          <Link
-            href="/portal"
-            className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[var(--gold)]/55 text-[var(--gold)] hover:bg-[var(--gold)] hover:text-[var(--bg-dark)] text-xs font-semibold tracking-wider uppercase transition-colors"
-          >
-            Member Portal
-          </Link>
         </nav>
 
         <button

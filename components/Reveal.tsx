@@ -5,6 +5,13 @@ import type { ReactNode } from "react";
 
 type Direction = "up" | "down" | "left" | "right" | "none";
 
+/**
+ * Hidden state is 0.35, never 0. Content parked at opacity 0 is invisible to
+ * anything that does not run rAF to completion -- backgrounded tabs, slow or
+ * failed JS, link-preview crawlers, Lighthouse. The reveal still reads as a
+ * fade; the page just stays legible when the animation never fires.
+ */
+
 const OFFSETS: Record<Direction, { x: number; y: number }> = {
   up: { x: 0, y: 24 },
   down: { x: 0, y: -24 },
@@ -34,7 +41,7 @@ export function Reveal({
   const offset = OFFSETS[direction];
 
   const variants: Variants = {
-    hidden: reduced ? { opacity: 1 } : { opacity: 0, x: offset.x, y: offset.y },
+    hidden: reduced ? { opacity: 1 } : { opacity: 0.35, x: offset.x, y: offset.y },
     visible: {
       opacity: 1,
       x: 0,
@@ -104,7 +111,7 @@ export function RevealStagger({
 }
 
 export const revealItemVariants: Variants = {
-  hidden: { opacity: 0, y: 18 },
+  hidden: { opacity: 0.35, y: 18 },
   visible: {
     opacity: 1,
     y: 0,

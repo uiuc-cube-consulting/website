@@ -13,7 +13,7 @@ export function Testimonials() {
         className="absolute inset-0 -z-10 opacity-60"
         style={{
           background:
-            "radial-gradient(700px 360px at 50% 0%, rgba(212,166,87,0.16), transparent 70%), radial-gradient(500px 280px at 50% 100%, rgba(212,166,87,0.08), transparent 70%)",
+            "radial-gradient(700px 360px at 50% 0%, rgba(223,174,62,0.16), transparent 70%), radial-gradient(500px 280px at 50% 100%, rgba(223,174,62,0.08), transparent 70%)",
         }}
       />
 
@@ -25,7 +25,7 @@ export function Testimonials() {
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="max-w-2xl mx-auto text-center"
         >
-          <p className="eyebrow">In their words</p>
+          <p className="eyebrow eyebrow-on-dark">In their words</p>
           <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl leading-[1.05]">
             What clients say.
           </h2>
@@ -56,7 +56,7 @@ export function Testimonials() {
             >
               <span
                 aria-hidden
-                className="block font-display font-black text-[var(--gold)] text-7xl leading-none mb-2 drop-shadow-[0_4px_18px_rgba(212,166,87,0.35)]"
+                className="block font-display font-black text-[var(--gold)] text-7xl leading-none mb-2 drop-shadow-[0_4px_18px_rgba(223,174,62,0.35)]"
               >
                 &ldquo;
               </span>

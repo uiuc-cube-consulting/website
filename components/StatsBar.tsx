@@ -51,7 +51,7 @@ export function StatsBar() {
         className="absolute inset-0 -z-10 opacity-60"
         style={{
           background:
-            "radial-gradient(600px 240px at 50% 100%, rgba(212,166,87,0.18), transparent 70%)",
+            "radial-gradient(600px 240px at 50% 100%, rgba(223,174,62,0.18), transparent 70%)",
         }}
       />
 

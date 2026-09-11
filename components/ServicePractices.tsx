@@ -1,107 +1,91 @@
 "use client";
 
 import { Briefcase, Code2, PenTool, type LucideIcon } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
 import { SERVICE_CATEGORIES } from "@/lib/content";
 
 const ICONS: LucideIcon[] = [Briefcase, Code2, PenTool];
 
 /**
- * Editorial replacement for the 3-card cream grid on the Services page.
- * Each practice gets its own alternating-side row with an oversized numeral,
- * an icon medallion, and a two-column scope grid instead of a bulleted list.
+ * Three practices as a sticky card stack.
+ *
+ * Each card pins under the header and the next one slides up over it, so three
+ * screens of content occupy one screen of attention and the sequence itself
+ * says "these are parallel options, not steps." Replaces the alternating
+ * editorial rows, which read as three unrelated sections.
+ *
+ * Surfaces are tints of the approved palette -- cream, lavender, gold -- so a
+ * card is identifiable at a glance without introducing a new hue. Each card is
+ * opaque, which is what makes the stack read.
  */
+const SURFACES = [
+  { bg: "var(--bg-cream)", chip: "var(--bg-dark)", chipText: "var(--gold)" },
+  { bg: "color-mix(in srgb, var(--lavender) 20%, #ffffff)", chip: "var(--brand)", chipText: "#ffffff" },
+  { bg: "color-mix(in srgb, var(--gold) 18%, #ffffff)", chip: "var(--bg-dark)", chipText: "var(--gold)" },
+];
+
 export function ServicePractices() {
-  const reduced = useReducedMotion();
-
   return (
-    <ol className="relative space-y-20 md:space-y-28">
-      <span
-        aria-hidden
-        className="hidden md:block absolute left-1/2 top-6 bottom-6 w-px bg-gradient-to-b from-transparent via-[var(--border)] to-transparent"
-      />
-
+    <ol className="practice-stack">
       {SERVICE_CATEGORIES.map((cat, i) => {
         const Icon = ICONS[i] ?? Briefcase;
-        const flipped = i % 2 === 1;
+        const skin = SURFACES[i] ?? SURFACES[0];
 
         return (
-          <motion.li
+          <li
             key={cat.title}
-            initial={reduced ? { opacity: 1 } : { opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="relative grid lg:grid-cols-12 gap-8 lg:gap-12 items-center"
+            className="practice-stack__item"
+            style={{ ["--i" as string]: i }}
           >
-            <span
-              aria-hidden
-              className="hidden md:grid absolute left-1/2 -translate-x-1/2 -top-2 place-items-center w-12 h-12 rounded-full bg-white border border-[var(--gold)]/35 text-[var(--gold-deep)] font-display font-extrabold text-sm"
+            <article
+              className="rounded-3xl border border-[var(--border)] overflow-hidden shadow-[0_24px_60px_-40px_rgba(21,17,11,0.55)]"
+              style={{ background: skin.bg }}
             >
-              {String(i + 1).padStart(2, "0")}
-            </span>
-
-            {/* Headline side */}
-            <div
-              className={
-                "lg:col-span-5 " +
-                (flipped ? "lg:order-2 lg:pl-10" : "lg:pr-10 lg:text-right")
-              }
-            >
-              <div
-                className={
-                  "inline-flex items-center gap-3 " +
-                  (flipped ? "" : "lg:flex-row-reverse")
-                }
-              >
-                <span className="grid place-items-center w-14 h-14 rounded-2xl bg-[var(--bg-dark)] text-[var(--gold)]">
-                  <Icon size={26} strokeWidth={1.5} />
-                </span>
-                <span className="font-display font-black text-[3.2rem] md:text-[4rem] leading-none text-[var(--gold)]/25 tracking-tight select-none">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-              </div>
-
-              <h3 className="mt-5 font-display font-extrabold text-4xl md:text-5xl text-[var(--bg-dark)] leading-[1.02]">
-                {cat.title}.
-              </h3>
-              <p
-                className={
-                  "mt-4 text-[16.5px] leading-relaxed text-[var(--muted)] max-w-md " +
-                  (flipped ? "" : "lg:ml-auto")
-                }
-              >
-                {cat.blurb}
-              </p>
-            </div>
-
-            {/* Scope side */}
-            <div
-              className={
-                "lg:col-span-7 " +
-                (flipped ? "lg:order-1 lg:pr-10" : "lg:pl-10")
-              }
-            >
-              <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
-                {cat.points.map((point, idx) => (
-                  <li
-                    key={point}
-                    className="group relative pl-10 py-3 border-b border-[var(--border)] last:border-b-0 sm:[&:nth-last-child(2)]:border-b-0"
-                  >
+              <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 p-7 md:p-11 lg:p-14">
+                <div className="lg:col-span-5">
+                  <div className="flex items-center gap-4">
                     <span
-                      aria-hidden
-                      className="absolute left-0 top-1/2 -translate-y-1/2 grid place-items-center w-7 h-7 rounded-full border border-[var(--gold)]/40 text-[var(--gold-deep)] text-[11px] font-bold tabular-nums tracking-wide group-hover:bg-[var(--gold)] group-hover:text-[var(--bg-dark)] transition-colors"
+                      className="grid place-items-center w-14 h-14 rounded-2xl shrink-0"
+                      style={{ background: skin.chip, color: skin.chipText }}
                     >
-                      {String(idx + 1).padStart(2, "0")}
+                      <Icon size={26} strokeWidth={1.5} />
                     </span>
-                    <span className="text-[15px] text-[var(--bg-dark)] font-medium">
-                      {point}
+                    <span className="font-display font-black text-[3.4rem] leading-none text-[var(--bg-dark)]/15 tracking-tight select-none tabular-nums">
+                      {String(i + 1).padStart(2, "0")}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </motion.li>
+                  </div>
+
+                  <h3 className="mt-6 font-display font-extrabold text-4xl md:text-5xl text-[var(--bg-dark)] leading-[1.02]">
+                    {cat.title}.
+                  </h3>
+                  <p className="mt-4 text-[16.5px] leading-relaxed text-[var(--muted)] max-w-md">
+                    {cat.blurb}
+                  </p>
+                </div>
+
+                <div className="lg:col-span-7 lg:pl-6">
+                  <p className="text-[10.5px] font-bold tracking-[0.24em] uppercase text-[var(--muted)]">
+                    What that covers
+                  </p>
+                  <ul className="mt-4 grid sm:grid-cols-2 gap-x-8 gap-y-1">
+                    {cat.points.map((point) => (
+                      <li
+                        key={point}
+                        className="flex items-start gap-3 py-3 border-b border-[var(--bg-dark)]/10"
+                      >
+                        <span
+                          aria-hidden
+                          className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--gold-deep)]"
+                        />
+                        <span className="text-[15px] text-[var(--bg-dark)] font-medium">
+                          {point}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </article>
+          </li>
         );
       })}
     </ol>

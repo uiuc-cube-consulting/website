@@ -11,7 +11,7 @@ export function AlumniGrid() {
     <section className="bg-[var(--bg-dark)] text-white">
       <div className="container-x section-y">
         <div className="text-center max-w-2xl mx-auto">
-          <p className="eyebrow">After CUBE</p>
+          <p className="eyebrow eyebrow-on-dark">After CUBE</p>
           <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl leading-[1.05]">
             What Comes After CUBE?
           </h2>
@@ -28,14 +28,37 @@ export function AlumniGrid() {
               key={brand.name}
               className="h-16 md:h-20 flex items-center justify-center"
             >
-              {brand.logo ? (
+              {brand.mono ? (
+                <>
+                  <span
+                    aria-hidden
+                    className="block h-12 md:h-14 w-[80%] bg-white/90"
+                    style={{
+                      WebkitMaskImage: `url(${brand.logo})`,
+                      maskImage: `url(${brand.logo})`,
+                      WebkitMaskRepeat: "no-repeat",
+                      maskRepeat: "no-repeat",
+                      WebkitMaskPosition: "center",
+                      maskPosition: "center",
+                      WebkitMaskSize: "contain",
+                      maskSize: "contain",
+                    }}
+                  />
+                  <span className="sr-only">{brand.name}</span>
+                </>
+              ) : brand.logo ? (
                 <div className="relative h-12 md:h-14 w-[80%]">
                   <Image
                     src={brand.logo}
                     alt={brand.name}
                     fill
                     sizes="140px"
-                    className="object-contain opacity-90 hover:opacity-100 transition-opacity"
+                    className={
+                      // Dark-ink files are invisible on this dark ground; see
+                      // the `darkInk` note on Brand in lib/content.ts.
+                      "object-contain opacity-90 hover:opacity-100 transition-opacity " +
+                      (brand.darkInk ? "brightness-0 invert" : "")
+                    }
                   />
                 </div>
               ) : (

@@ -20,14 +20,14 @@ export function AlumniMarquee() {
         className="absolute inset-0 -z-10 opacity-60"
         style={{
           background:
-            "radial-gradient(720px 360px at 50% 0%, rgba(212,166,87,0.12), transparent 70%)",
+            "radial-gradient(720px 360px at 50% 0%, rgba(223,174,62,0.12), transparent 70%)",
         }}
       />
 
       <div className="container-x section-y">
         <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center">
           <div className="lg:col-span-5">
-            <p className="eyebrow">After CUBE</p>
+            <p className="eyebrow eyebrow-on-dark">After CUBE</p>
             <h2 className="mt-4 font-display font-extrabold text-4xl md:text-5xl leading-[1.05]">
               Where alumni land.
             </h2>
