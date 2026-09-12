@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getPendingFlags, removeFlag, submitFlag } from "@/features/03-recruitment-ats/lib/store";
 import { canFlag, isExec } from "@/features/03-recruitment-ats/lib/access";
+import { FLAG_INTAKE_ENABLED } from "@/features/03-recruitment-ats/lib/flag-intake-enabled";
 import { canViewRecruiting, getActiveCycle } from "@/features/03-recruitment-ats/lib/visibility";
 // Not SELF_ACCESS_DENIED: that wording is about withholding your application
 // file and its scores, which is not what refusing a self-flag is about.
@@ -32,6 +33,18 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (!canFlag(session?.user?.role)) {
     return NextResponse.json({ ok: false, error: "Recruiting access required" }, { status: 403 });
+  }
+  // Intake is closed between cycles (lib/flag-intake-enabled.ts). Checked here
+  // and not only on the page, because the page vanishing does nothing for a form
+  // already open in somebody's tab: without this they would file a flag, be told
+  // it worked, and have it land in a table everyone believes is closed. GET and
+  // DELETE stay open — exec must still be able to read and take down whatever
+  // was filed before the switch was thrown.
+  if (!FLAG_INTAKE_ENABLED) {
+    return NextResponse.json(
+      { ok: false, error: "Flags are closed for this cycle." },
+      { status: 403 }
+    );
   }
 
   let body: {

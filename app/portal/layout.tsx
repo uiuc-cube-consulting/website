@@ -4,6 +4,7 @@ import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 import { canInterviewRole } from "@/features/03-recruitment-ats/lib/access";
+import { FLAG_INTAKE_ENABLED } from "@/features/03-recruitment-ats/lib/flag-intake-enabled";
 import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 import { PortalMobileNav, type PortalNavLink } from "@/components/PortalMobileNav";
 import { FeedbackWidget } from "@/features/06-portal-feedback/components/FeedbackWidget";
@@ -59,8 +60,9 @@ export default async function PortalLayout({
     ...(recruitingOpen ? [{ href: "/portal/recruiting", label: "Recruiting" }] : []),
     // Flags are NOT behind `recruitingOpen`: they are filed at info nights and
     // coffee chats months before a cycle opens, which is exactly when the
-    // recruiting console is shut. See app/portal/flags/page.tsx.
-    { href: "/portal/flags", label: "Flags" },
+    // recruiting console is shut. They are behind their own switch instead,
+    // currently off for the incoming cohort — see lib/flag-intake-enabled.ts.
+    ...(FLAG_INTAKE_ENABLED ? [{ href: "/portal/flags", label: "Flags" }] : []),
     ...(isInterviewer && recruitingOpen ? [{ href: "/portal/interview", label: "Interviews" }] : []),
   ];
 

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { FlagIntake } from "@/features/03-recruitment-ats/components/FlagIntake";
 import { canFlag } from "@/features/03-recruitment-ats/lib/access";
+import { FLAG_INTAKE_ENABLED } from "@/features/03-recruitment-ats/lib/flag-intake-enabled";
 
 export const metadata: Metadata = {
   title: "Flags",
@@ -17,11 +18,18 @@ export const metadata: Metadata = {
  * open and closes when decisions are done. Flags aren't cycle-scoped. The most
  * valuable ones are filed at an info night in August, months before there is an
  * applicant row to attach them to, and the console is closed for that entire
- * window. So this page stands on its own and stays open year-round; the gate it
- * keeps is the role check, which is the same club-wide baseline as flagging from
- * a candidate's profile.
+ * window. So this page stands on its own year-round; the gate it keeps is the
+ * role check, which is the same club-wide baseline as flagging from a
+ * candidate's profile.
+ *
+ * It is currently switched off for the incoming cohort by its own constant
+ * (lib/flag-intake-enabled.ts) — which is separate from the visibility toggle
+ * precisely because of the August window described above. The redirect here is
+ * belt-and-braces with proxy.ts: a direct URL must not render the form even if
+ * the proxy matcher changes.
  */
 export default async function FlagsPage() {
+  if (!FLAG_INTAKE_ENABLED) redirect("/portal");
   const session = await auth();
   if (!session?.user?.email) redirect("/portal/sign-in");
   if (!canFlag(session.user.role)) redirect("/portal");

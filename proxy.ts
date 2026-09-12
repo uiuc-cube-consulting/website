@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
 import { canInterviewRole } from "@/features/03-recruitment-ats/lib/access";
+import { FLAG_INTAKE_ENABLED } from "@/features/03-recruitment-ats/lib/flag-intake-enabled";
 // export { auth as proxy } from "@/types/auth";
 
 export default auth((req) => {
@@ -48,6 +49,14 @@ export default auth((req) => {
   // applicants up, and flag them. Scoring, screener assignment, and decisions
   // are gated further inside the API routes (lib/access.ts), not here.
   // No role check on /portal/recruiting itself — any signed-in member passes.
+
+  // Flag intake is switched off for the incoming cohort
+  // (features/03-recruitment-ats/lib/flag-intake-enabled.ts). As with the
+  // pipeline above, the code and the store remain; only the door is shut, so a
+  // stale bookmark lands on the dashboard rather than a 404.
+  if (!FLAG_INTAKE_ENABLED && pathname.startsWith("/portal/flags")) {
+    return NextResponse.redirect(new URL("/portal", req.url));
+  }
 
   // Interview console: every member role, same as scoring itself. An interview is
   // staffed from whoever is in the room, so the console cannot be narrower than

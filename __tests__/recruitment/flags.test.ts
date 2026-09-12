@@ -19,6 +19,17 @@
 let mockSession: { user: { email: string; role: string } } | null = null;
 jest.mock("@/auth", () => ({ auth: jest.fn(() => Promise.resolve(mockSession)) }));
 
+// Intake can be switched off between cycles. Defaulted to OPEN here because the
+// suites below are about the filing RULES — matching, validation, the visibility
+// carve-out — which are what must survive the switch being thrown either way.
+// The closed case gets its own section at the bottom.
+let flagIntakeOpen = true;
+jest.mock("@/features/03-recruitment-ats/lib/flag-intake-enabled", () => ({
+  get FLAG_INTAKE_ENABLED() {
+    return flagIntakeOpen;
+  },
+}));
+
 let recruitingVisible = true;
 jest.mock("@/features/03-recruitment-ats/lib/visibility", () => ({
   canViewRecruiting: jest.fn(async (role: string) => role === "exec" || recruitingVisible),
@@ -107,6 +118,7 @@ function post(body: unknown): NextRequest {
 beforeEach(() => {
   mockSession = { user: { email: "member@illinois.edu", role: "member" } };
   recruitingVisible = true;
+  flagIntakeOpen = true;
   stub.submitFlag.mockClear();
   stub.getPendingFlags.mockClear();
   stub.removeFlag.mockClear();
@@ -246,6 +258,52 @@ describe("POST /api/recruitment/flags — by email", () => {
     const b = await flagsPOST(post({ subject_email: "r@illinois.edu", color: "red", description: "   " }));
     expect(b.status).toBe(400);
     expect(stub.submitFlag).not.toHaveBeenCalled();
+  });
+});
+
+// ── 2b. Intake closed between cycles ─────────────────────────────────────────
+//
+// Distinct from the visibility carve-out below: `recruiting_settings.visible`
+// closes the CONSOLE and deliberately leaves by-email flagging open, because
+// info nights happen between cycles. FLAG_INTAKE_ENABLED closes the filing
+// itself, which is a separate and louder decision — so the case that must hold
+// is the one the carve-out otherwise guarantees: by-email filing, which survives
+// `visible=false`, must NOT survive this.
+
+describe("filing while flag intake is closed", () => {
+  beforeEach(() => {
+    flagIntakeOpen = false;
+  });
+
+  it("refuses a by-email flag — the path that stays open when recruiting closes", async () => {
+    const res = await flagsPOST(
+      post({ subject_email: "r@illinois.edu", color: "green", description: "Great at the callout." })
+    );
+    expect(res.status).toBe(403);
+    expect(stub.submitFlag).not.toHaveBeenCalled();
+  });
+
+  it("refuses exec too — closing intake is not a permissions question", async () => {
+    mockSession = { user: { email: "exec@illinois.edu", role: "exec" } };
+    const res = await flagsPOST(post({ applicant_id: "a1", color: "red", description: "…" }));
+    expect(res.status).toBe(403);
+    expect(stub.submitFlag).not.toHaveBeenCalled();
+  });
+
+  it("says the flags are closed rather than implying the member lacks access", async () => {
+    // The wording matters: "Recruiting access required" would send a member to
+    // ask exec for a permission that would not help them.
+    const res = await flagsPOST(post({ subject_email: "r@illinois.edu", color: "red", description: "…" }));
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: "Flags are closed for this cycle." });
+  });
+
+  it("still lets exec take an existing flag down", async () => {
+    // Intake is shut; the removal path is not. A flag filed before the switch
+    // must still be removable, or closing intake would freeze the record.
+    mockSession = { user: { email: "exec@illinois.edu", role: "exec" } };
+    const res = await flagsDELETE(del("f1"));
+    expect(res.status).toBe(200);
+    expect(stub.removeFlag).toHaveBeenCalled();
   });
 });
 
