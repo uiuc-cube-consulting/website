@@ -14,14 +14,8 @@ import {
   type DemographicsReport,
   type Dimension,
 } from "@/features/03-recruitment-ats/lib/demographics";
-import { SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
+import { SCREEN_MAX_POINTS, stageLabel } from "@/features/03-recruitment-ats/lib/types";
 import { ROUNDS, ROUND_LABEL, type Round } from "@/features/03-recruitment-ats/lib/rounds";
-
-const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied", screened: "Screened", interview: "First round",
-  final_round: "Final round", offer: "Offer", accepted: "Accepted",
-  rejected: "Rejected", withdrawn: "Withdrawn",
-};
 
 type Api = DemographicsReport & {
   cycle: string;
@@ -152,7 +146,7 @@ export function DemographicsPanel() {
                 <th className="py-2 pr-3 font-semibold">{wide ? DIMENSION_LABEL[data.dimension] : "Stage"}</th>
                 {(wide ? data.stages : data.groups.map((g) => g.group)).map((col) => (
                   <th key={col} className="py-2 pr-3 font-semibold">
-                    {wide ? (STAGE_LABEL[col] ?? col) : data.groups.find((g) => g.group === col)?.label}
+                    {wide ? stageLabel(col) : data.groups.find((g) => g.group === col)?.label}
                   </th>
                 ))}
                 <th className="py-2 font-semibold">Total</th>
@@ -180,7 +174,7 @@ export function DemographicsPanel() {
                     const total = data.groups.reduce((n, g) => n + (g.byStage[stage] ?? 0), 0);
                     return (
                       <tr key={stage} className="border-b border-[var(--border)] last:border-b-0">
-                        <td className="py-2 pr-3 text-[var(--bg-dark)]">{STAGE_LABEL[stage] ?? stage}</td>
+                        <td className="py-2 pr-3 text-[var(--bg-dark)]">{stageLabel(stage)}</td>
                         {data.groups.map((g) => {
                           const n = g.byStage[stage] ?? 0;
                           return (

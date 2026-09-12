@@ -8,7 +8,7 @@ import { breakdownBy, type Dimension } from "@/features/03-recruitment-ats/lib/d
 import { cohortOf, gatherEvidence } from "@/features/03-recruitment-ats/lib/cohort";
 import { getInterviewPanels } from "@/features/03-recruitment-ats/lib/interview-store";
 import { isRound, type Round } from "@/features/03-recruitment-ats/lib/rounds";
-import { STAGES } from "@/features/03-recruitment-ats/lib/types";
+import { ALL_STAGES } from "@/features/03-recruitment-ats/lib/types";
 
 // EXEC-ONLY: who is applying, and whether the process treats them the same.
 //
@@ -36,7 +36,7 @@ import { STAGES } from "@/features/03-recruitment-ats/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const STAGE_ORDER: string[] = [...STAGES, "rejected", "withdrawn"];
+const STAGE_ORDER: string[] = ALL_STAGES;
 const DIMENSIONS: Dimension[] = ["pronouns", "major", "college", "year"];
 
 export async function GET(req: NextRequest) {

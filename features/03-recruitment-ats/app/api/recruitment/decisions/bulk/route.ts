@@ -4,7 +4,7 @@ import { getSnapshot, setDecisions } from "@/features/03-recruitment-ats/lib/sto
 import { canDecide } from "@/features/03-recruitment-ats/lib/access";
 import { ownApplicationIds, SELF_ACCESS_DENIED } from "@/features/03-recruitment-ats/lib/self-access";
 import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
-import { STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
+import { ALL_STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
 
 // EXEC-ONLY: move a set of applicants to the same stage in one action.
 //
@@ -20,8 +20,6 @@ import { STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
 // than silently dropped or silently applied.
 
 export const dynamic = "force-dynamic";
-
-const VALID: Stage[] = [...STAGES, "rejected", "withdrawn"];
 
 /** A guard against a runaway client, not a policy limit. Nobody decides on more
  *  than a few hundred people at once deliberately; a payload larger than this is
@@ -59,7 +57,7 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!body.stage || !VALID.includes(body.stage as Stage)) {
+  if (!body.stage || !ALL_STAGES.includes(body.stage as Stage)) {
     return NextResponse.json({ ok: false, error: "A valid stage is required" }, { status: 400 });
   }
 

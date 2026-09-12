@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { setDecision, getSnapshot } from "@/features/03-recruitment-ats/lib/store";
-import { STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
+import { ALL_STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
 import { ROUND_STAGES } from "@/features/03-recruitment-ats/lib/rounds";
 import { canDecide } from "@/features/03-recruitment-ats/lib/access";
 import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
@@ -20,8 +20,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const VALID: Stage[] = [...STAGES, "rejected", "withdrawn"];
-
 export async function POST(req: NextRequest) {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
@@ -37,7 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.applicant_id || !body.stage || !VALID.includes(body.stage as Stage)) {
+  if (!body.applicant_id || !body.stage || !ALL_STAGES.includes(body.stage as Stage)) {
     return NextResponse.json({ ok: false, error: "applicant_id and a valid stage are required" }, { status: 400 });
   }
 

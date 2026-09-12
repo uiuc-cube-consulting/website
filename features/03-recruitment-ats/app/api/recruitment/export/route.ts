@@ -4,7 +4,7 @@ import { getSnapshot } from "@/features/03-recruitment-ats/lib/store";
 import { isExec } from "@/features/03-recruitment-ats/lib/access";
 import { excludeOwnApplications } from "@/features/03-recruitment-ats/lib/self-access";
 import { resolveCycle } from "@/features/03-recruitment-ats/lib/visibility";
-import { SCREEN_MAX_POINTS, STAGES, type Stage } from "@/features/03-recruitment-ats/lib/types";
+import { ALL_STAGES, SCREEN_MAX_POINTS, type Stage } from "@/features/03-recruitment-ats/lib/types";
 import { cohortOf, deepestRound, gatherEvidence } from "@/features/03-recruitment-ats/lib/cohort";
 import { getInterviewPanels } from "@/features/03-recruitment-ats/lib/interview-store";
 import { isRound, type Round } from "@/features/03-recruitment-ats/lib/rounds";
@@ -38,7 +38,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const VALID_STAGES: string[] = [...STAGES, "rejected", "withdrawn"];
+const VALID_STAGES: string[] = ALL_STAGES;
 
 export async function GET(req: NextRequest) {
   const session = await auth();

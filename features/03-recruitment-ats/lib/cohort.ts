@@ -52,10 +52,16 @@ const ROUND_REVIEW_KINDS: Record<InterviewRound, readonly string[]> = {
  *
  * Terminal stages are deliberately absent: `rejected` says nothing about how far
  * someone got, which is the entire reason this module exists.
+ *
+ * `waitlisted` is the exception that proves that rule, and so it IS listed. It is
+ * not terminal and it is not ambiguous — nobody is held anywhere but after a final
+ * interview — so it says exactly how far a candidate got, without any of the
+ * guessing the rest of this module has to do. Present in both rounds because
+ * reaching the final one means having come through the first.
  */
 const AT_OR_PAST: Record<InterviewRound, readonly Stage[]> = {
-  first_round: ["interview", "final_round", "offer", "accepted"],
-  final_round: ["final_round", "offer", "accepted"],
+  first_round: ["interview", "final_round", "waitlisted", "offer", "accepted"],
+  final_round: ["final_round", "waitlisted", "offer", "accepted"],
 };
 
 /**

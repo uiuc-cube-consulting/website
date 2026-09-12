@@ -13,12 +13,23 @@
 --   2. interview_panel gains `round`, so a candidate can have a first-round panel
 --      and a different final-round panel at the same time.
 
--- ── 1. The 'final_round' stage ───────────────────────────────────────────────
--- applicants.stage is free text with no CHECK (see db/schema.sql), so the new
--- value needs no DDL. Recorded here so the vocabulary stays documented in one
--- place, in funnel order:
+-- ── 1. The 'final_round' and 'waitlisted' stages ─────────────────────────────
+-- applicants.stage is free text with no CHECK (see db/schema.sql), so neither
+-- value needs DDL — NOTHING IN THIS SECTION HAS TO BE RUN. Recorded here so the
+-- vocabulary stays documented in one place, in funnel order:
 --   applied -> screened -> interview -> final_round -> offer -> accepted
+--   waitlisted            (a final-round HOLD — see below)
 --   rejected | withdrawn  (terminal, reachable from anywhere)
+--
+-- 'waitlisted' is NOT a rung on that ladder, which is why it is listed apart from
+-- it. It means the final round said "yes, if there is room": the candidate has
+-- been interviewed and the decision is deferred until the seats are counted. They
+-- stay on the final round's board (ROUND_STAGES in lib/rounds.ts) and leave it
+-- for 'offer' or 'rejected' like anybody else.
+--
+-- `decisions.decision` stores the same vocabulary (setDecision in lib/store.ts
+-- writes the stage straight into it), and is likewise free text, so a waitlist
+-- decision records itself with no migration either.
 
 -- ── 2. Final-round review kinds ──────────────────────────────────────────────
 -- 'screen'                          the written application (lib/types.ts RUBRIC)

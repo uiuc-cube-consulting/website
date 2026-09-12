@@ -32,14 +32,8 @@ import {
   type Reviewer,
 } from "@/features/03-recruitment-ats/lib/interview";
 import { hasHistory, type PriorRound } from "@/features/03-recruitment-ats/lib/history";
-import { ROUND_ADVANCE, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
-import type { Stage } from "@/features/03-recruitment-ats/lib/types";
-
-const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied", screened: "Screened", interview: "First round",
-  final_round: "Final round", offer: "Offer", accepted: "Accepted",
-  rejected: "Rejected", withdrawn: "Withdrawn",
-};
+import { ROUND_ADVANCE, ROUND_HOLD, ROUND_LABEL, type InterviewRound } from "@/features/03-recruitment-ats/lib/rounds";
+import { STAGE_LABEL, type Stage } from "@/features/03-recruitment-ats/lib/types";
 
 export function CandidateWorkspace({
   candidate,
@@ -914,6 +908,10 @@ function RoundDecision({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const next = ROUND_ADVANCE[round];
+  const hold = ROUND_HOLD[round];
+  // Already on the hold: offer the two calls that resolve it, not the one they
+  // are already on. The button would be a no-op write that looks like progress.
+  const held = hold ? candidate.stage === hold.stage : false;
 
   async function decide(stage: Stage, label: string) {
     setBusy(true);
@@ -942,7 +940,9 @@ function RoundDecision({
     <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
       <p className="eyebrow">Decision</p>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Moving {candidate.name.split(" ")[0]} on takes them off this round&rsquo;s board.
+        {held
+          ? `${candidate.name.split(" ")[0]} is on the waitlist and stays on this board until the seats are settled.`
+          : `Moving ${candidate.name.split(" ")[0]} on takes them off this round\u2019s board.`}
         {round === "first_round" && " The final round is exec-only from there."}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -951,8 +951,22 @@ function RoundDecision({
           disabled={busy}
           className="btn btn-gold text-xs px-3 py-1.5 disabled:opacity-50"
         >
-          Advance → {next.label}
+          {held ? `Pull off waitlist → ${next.label}` : `Advance → ${next.label}`}
         </button>
+        {/* The third answer, and the reason this panel has three buttons rather
+            than two. Styled between them on purpose — neither the gold of an
+            offer nor the red of a rejection — because that is what it means: a
+            decision deferred, not made. Only rendered where the round has a hold
+            (ROUND_HOLD), so the first round still reads as the pass/cut it is. */}
+        {hold && !held && (
+          <button
+            onClick={() => decide(hold.stage, STAGE_LABEL[hold.stage])}
+            disabled={busy}
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)] hover:bg-[var(--bg-cream)]/60 disabled:opacity-50"
+          >
+            {hold.label}
+          </button>
+        )}
         <button
           onClick={() => decide("rejected", "Rejected")}
           disabled={busy}

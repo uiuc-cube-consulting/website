@@ -15,9 +15,67 @@ export const STAGES = [
   "offer",
   "accepted",
 ] as const;
-export type Stage = (typeof STAGES)[number] | "rejected" | "withdrawn";
 
-/** Stages that form the conversion funnel (excludes terminal rejected/withdrawn). */
+/**
+ * The stages that are not steps forward.
+ *
+ *   waitlisted  A HOLD, not an exit. The final round said "yes, if there is
+ *               room" — a third answer that neither `offer` nor `rejected` can
+ *               express, and the one the club actually gives most years. A
+ *               waitlisted candidate is still live: they stay on the final
+ *               round's board (ROUND_STAGES in ./rounds.ts) and leave it for
+ *               `offer` or `rejected` like anyone else. Deliberately NOT in
+ *               STAGES — it is not a rung between `final_round` and `offer`, and
+ *               ranking it as one would make `stageRank` report a held candidate
+ *               as further along than one still being interviewed.
+ *   rejected    Our decision, terminal.
+ *   withdrawn   Theirs, terminal.
+ */
+export const OFF_FUNNEL_STAGES = ["waitlisted", "rejected", "withdrawn"] as const;
+
+export type Stage = (typeof STAGES)[number] | (typeof OFF_FUNNEL_STAGES)[number];
+
+/**
+ * Every stage a candidate can be moved to, forward or back.
+ *
+ * One definition because five surfaces enumerate the vocabulary — the stage
+ * picker, the board filter, and the three routes that validate an incoming
+ * `stage` — and each used to spell `[...STAGES, "rejected", "withdrawn"]` by
+ * hand. A stage added to the union but missing from one of those copies is
+ * rejected by an API that the UI happily offers, which is exactly how
+ * `waitlisted` would have shipped half-working.
+ */
+export const ALL_STAGES: Stage[] = [...STAGES, ...OFF_FUNNEL_STAGES];
+
+/**
+ * What each stage is called on screen. Lived in four identical copies across the
+ * components; a `Record<Stage, string>` here means the compiler names the file
+ * that forgot a new one instead of the UI rendering a raw `waitlisted`.
+ */
+export const STAGE_LABEL: Record<Stage, string> = {
+  applied: "Applied",
+  screened: "Screened",
+  interview: "First round",
+  final_round: "Final round",
+  offer: "Offer",
+  accepted: "Accepted",
+  waitlisted: "Waitlisted",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+};
+
+/**
+ * The same label for a stage that arrives as a plain `string` — off an API
+ * payload, a `<select>`, or a demographics report keyed by stage — falling back
+ * to the raw value rather than rendering a blank cell for a stage this build has
+ * not heard of. Components holding a real `Stage` index STAGE_LABEL directly and
+ * get the exhaustiveness check instead.
+ */
+export function stageLabel(stage: string): string {
+  return STAGE_LABEL[stage as Stage] ?? stage;
+}
+
+/** Stages that form the conversion funnel (excludes the off-funnel stages above). */
 export const FUNNEL_STAGES: Stage[] = [...STAGES];
 const STAGE_ORDER: Record<string, number> = Object.fromEntries(STAGES.map((s, i) => [s, i]));
 

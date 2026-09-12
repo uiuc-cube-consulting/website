@@ -13,10 +13,12 @@ import {
   INTERVIEW_ROUNDS,
   ROUNDS,
   ROUND_ADVANCE,
+  ROUND_HOLD,
   ROUND_STAGES,
   canInterviewInRound,
   canViewRound,
   entryStage,
+  isHeldInRound,
   isInRound,
   isInterviewRound,
   isRound,
@@ -37,9 +39,11 @@ import {
   roundOfKind,
 } from "@/features/03-recruitment-ats/lib/interview";
 import {
+  ALL_STAGES,
   RUBRIC,
   SCREEN_MAX_POINTS,
   STAGES,
+  STAGE_LABEL,
   isScreenComplete,
   isValidScore,
   screenTotal,
@@ -62,10 +66,10 @@ describe("ROUND_STAGES", () => {
     }
   });
 
-  it("only names stages the funnel actually has", () => {
+  it("only names stages that exist", () => {
     for (const round of ROUNDS) {
       for (const stage of ROUND_STAGES[round]) {
-        expect(STAGES as readonly string[]).toContain(stage);
+        expect(ALL_STAGES as readonly string[]).toContain(stage);
       }
     }
   });
@@ -73,7 +77,64 @@ describe("ROUND_STAGES", () => {
   it("treats the written round as everything before the first interview", () => {
     expect(ROUND_STAGES.written).toEqual(["applied", "screened"]);
     expect(ROUND_STAGES.first_round).toEqual(["interview"]);
-    expect(ROUND_STAGES.final_round).toEqual(["final_round"]);
+    // The waitlist is a final-round HOLD, not an exit: a held candidate stays on
+    // that round's board until the seats are settled. Drop them from this list
+    // and the board stops showing them, which is how a waitlist turns into a
+    // rejection nobody remembers making.
+    expect(ROUND_STAGES.final_round).toEqual(["final_round", "waitlisted"]);
+  });
+
+  it("lists each round's entry stage first, so entryStage never lands on a hold", () => {
+    for (const round of ROUNDS) {
+      expect(entryStage(round)).toBe(ROUND_STAGES[round][0]);
+      if (isInterviewRound(round)) {
+        // Advancing INTO a round must never park the candidate on its waitlist.
+        expect(ROUND_HOLD[round]?.stage).not.toBe(entryStage(round));
+      }
+    }
+  });
+});
+
+// ── The waitlist ─────────────────────────────────────────────────────────────
+
+describe("ROUND_HOLD", () => {
+  it("gives the final round a third answer and the first round none", () => {
+    expect(ROUND_HOLD.final_round).toEqual({ stage: "waitlisted", label: "Waitlist" });
+    // A first round that could hold people would just be a slower first round.
+    expect(ROUND_HOLD.first_round).toBeUndefined();
+  });
+
+  it("holds at a stage that is neither the advance nor a rejection", () => {
+    const hold = ROUND_HOLD.final_round!;
+    expect(hold.stage).not.toBe(ROUND_ADVANCE.final_round.stage);
+    expect(hold.stage).not.toBe("rejected");
+  });
+
+  it("keeps a held candidate in the round they are held in", () => {
+    const hold = ROUND_HOLD.final_round!;
+    expect(isInRound(hold.stage, "final_round")).toBe(true);
+    expect(roundOfStage(hold.stage)).toBe("final_round");
+  });
+
+  it("is not a rung on the funnel", () => {
+    // In STAGES it would rank as a step between `final_round` and `offer`, and a
+    // held candidate would read as further along than one still being interviewed.
+    expect(STAGES as readonly string[]).not.toContain("waitlisted");
+    expect(ALL_STAGES).toContain("waitlisted");
+  });
+
+  it("has a label, like every other stage", () => {
+    for (const stage of ALL_STAGES) expect(STAGE_LABEL[stage]).toBeTruthy();
+    expect(STAGE_LABEL.waitlisted).toBe("Waitlisted");
+  });
+});
+
+describe("isHeldInRound", () => {
+  it("is true only for the hold stage of a round that has one", () => {
+    expect(isHeldInRound("waitlisted", "final_round")).toBe(true);
+    expect(isHeldInRound("final_round", "final_round")).toBe(false);
+    expect(isHeldInRound("waitlisted", "first_round")).toBe(false);
+    expect(isHeldInRound("waitlisted", "written")).toBe(false);
   });
 });
 
@@ -96,7 +157,7 @@ describe("roundOfStage", () => {
   });
 
   it("agrees with isInRound", () => {
-    for (const stage of [...STAGES, "rejected", "withdrawn"] as const) {
+    for (const stage of ALL_STAGES) {
       for (const round of ROUNDS) {
         expect(isInRound(stage, round)).toBe(roundOfStage(stage) === round);
       }

@@ -28,8 +28,10 @@ import {
 import {
   ROUND_ADVANCE,
   ROUND_BLURB,
+  ROUND_HOLD,
   ROUND_LABEL,
   ROUND_SHORT,
+  isHeldInRound,
   isInterviewRound,
   type InterviewRound,
 } from "@/features/03-recruitment-ats/lib/rounds";
@@ -179,6 +181,7 @@ export function InterviewConsole() {
   // round's tab is absent rather than disabled for a non-exec.
   const selectable = data.canManage;
   const advance = ROUND_ADVANCE[data.round];
+  const hold = ROUND_HOLD[data.round];
 
   if (selected) {
     return (
@@ -280,6 +283,21 @@ export function InterviewConsole() {
           >
             {bulkBusy ? "Working…" : `Pass → ${advance.label}`}
           </button>
+          {/* The cutoff is rarely one line. Ordering by score and reading down
+              gives an obvious yes at the top and an obvious no at the bottom, and
+              a band in between that depends on how many seats are left — which
+              nobody knows on delibs night. Holding that band is a real decision,
+              and making it one click keeps it from being recorded as a rejection
+              that somebody means to revisit and does not. */}
+          {hold && (
+            <button
+              onClick={() => bulkDecide(hold.stage, hold.label)}
+              disabled={bulkBusy}
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)] disabled:opacity-50"
+            >
+              {hold.label} selected
+            </button>
+          )}
           <button
             onClick={() => bulkDecide("rejected", "Rejected")}
             disabled={bulkBusy}
@@ -385,6 +403,15 @@ export function InterviewConsole() {
                   <span className="flex items-center gap-1.5 font-medium text-[var(--bg-dark)]">
                     <span className="truncate">{c.name}</span>
                     <FlagBadge flags={c.flags} />
+                    {/* Held candidates share the board with the undecided ones,
+                        so the row has to say which it is — otherwise the board
+                        reads as "nobody has decided yet" and the waitlist is
+                        worked twice. */}
+                    {isHeldInRound(c.stage, data.round) && (
+                      <span className="shrink-0 rounded-full bg-[var(--bg-cream)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        Waitlist
+                      </span>
+                    )}
                     {c.assignedToMe && <span className="shrink-0 text-[11px] text-[var(--gold-deep)]">yours</span>}
                   </span>
                   <span className="block truncate text-[12px] text-[var(--muted)]">

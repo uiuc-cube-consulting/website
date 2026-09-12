@@ -168,3 +168,32 @@ describe("the two stage lists agree", () => {
     }
   });
 });
+
+describe("the waitlist", () => {
+  // Unlike every other stage this module has to reason about, `waitlisted` is
+  // unambiguous: nobody is held anywhere but after a final interview. So it needs
+  // none of the review/panel evidence the rest of these tests lean on — the stage
+  // alone says how far the candidate got.
+  const h = applicant("h", "waitlisted");
+  const ev = gatherEvidence([]);
+
+  it("counts as having reached both interview rounds, on the stage alone", () => {
+    expect(reachedRound(h, "final_round", ev)).toBe(true);
+    // You cannot be held after a final interview without having passed the first.
+    expect(reachedRound(h, "first_round", ev)).toBe(true);
+    expect(deepestRound(h, ev)).toBe("final_round");
+  });
+
+  it("is in both rounds' cohorts, so the reports do not lose them", () => {
+    expect(cohortOf("final_round", [h], ev)).toEqual([h]);
+    expect(cohortOf("first_round", [h], ev)).toEqual([h]);
+  });
+
+  it("is never reported as a rejection", () => {
+    // The mailing list this feeds is the reason: a waitlisted candidate must not
+    // land in the file named for the people the final round turned down.
+    expect(rejectedAfter("final_round", [h], ev)).toEqual([]);
+    expect(rejectedAfter("first_round", [h], ev)).toEqual([]);
+    expect(rejectedAfter("written", [h], ev)).toEqual([]);
+  });
+});

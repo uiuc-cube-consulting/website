@@ -9,9 +9,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ALL_STAGES,
   RUBRIC,
   SCREEN_MAX_POINTS,
   STAGES,
+  STAGE_LABEL,
   isScreenComplete,
   screenTotal,
   type Flag,
@@ -81,17 +83,6 @@ type ApiResponse = {
 // Imported, not re-declared: this was previously a hand-kept copy of
 // MIN_REVIEWERS_PER_APPLICANT, and lib/assignment.ts is pure and safe here.
 const MIN_REVIEWERS = MIN_REVIEWERS_PER_APPLICANT;
-
-const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied", screened: "Screened", interview: "First round",
-  final_round: "Final round", offer: "Offer", accepted: "Accepted",
-  rejected: "Rejected", withdrawn: "Withdrawn",
-};
-
-/** Every stage a candidate can be moved to, forward or back. `rejected` and
- *  `withdrawn` are not in STAGES — they are exits, not steps — so they are
- *  appended explicitly rather than being silently unreachable from the picker. */
-const ALL_STAGES: Stage[] = [...STAGES, "rejected", "withdrawn"];
 
 /** Out of the running: hidden from the written round, and not re-scorable until
  *  reopened. `accepted` is excluded — that is a finished success, not something
@@ -601,11 +592,11 @@ export function RecruitingDashboard() {
               className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm"
             >
               <option value="all">Any stage ({inRound.length})</option>
-              {/* Driven by STAGES so a new stage cannot be added to the pipeline
-                  and quietly go missing from this filter. Stages nobody is at are
-                  listed but disabled, so the set of options stays stable instead
-                  of appearing and vanishing as people move through. */}
-              {[...STAGES, "rejected" as const, "withdrawn" as const].map((s) => {
+              {/* Driven by ALL_STAGES so a new stage cannot be added to the
+                  pipeline and quietly go missing from this filter. Stages nobody
+                  is at are listed but disabled, so the set of options stays stable
+                  instead of appearing and vanishing as people move through. */}
+              {ALL_STAGES.map((s) => {
                 const n = stageCounts.get(s) ?? 0;
                 return (
                   <option key={s} value={s} disabled={n === 0}>

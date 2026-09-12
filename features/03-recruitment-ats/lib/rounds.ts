@@ -79,11 +79,22 @@ export const ROUND_BLURB: Record<Round, string> = {
  * has been recorded, not that the candidate has moved on. `offer` and `accepted`
  * are past the last round entirely and belong to none of them, as are the terminal
  * `rejected` / `withdrawn`.
+ *
+ * `waitlisted` is a FINAL-ROUND stage, not an exit. A waitlisted candidate has had
+ * their interview and is waiting on how many seats are left — the decision is
+ * deferred, not made — so they stay on the final round's board where exec can see
+ * them beside the people still to be decided, and are pulled to `offer` or
+ * `rejected` from there. Dropping them off the board would put the club's most
+ * common third answer somewhere nobody looks, which is how a waitlist quietly
+ * becomes a rejection.
+ *
+ * The ENTRY stage stays first in each list — `entryStage` reads [0] — so
+ * advancing into the final round still lands on `final_round`, never on the hold.
  */
 export const ROUND_STAGES: Record<Round, readonly Stage[]> = {
   written: ["applied", "screened"],
   first_round: ["interview"],
-  final_round: ["final_round"],
+  final_round: ["final_round", "waitlisted"],
 };
 
 /** The round a candidate is currently being worked in, or null if they are past
@@ -151,6 +162,33 @@ export const ROUND_ADVANCE: Record<InterviewRound, { stage: Stage; label: string
   first_round: { stage: "final_round", label: "Final round" },
   final_round: { stage: "offer", label: "Offer" },
 };
+
+/**
+ * Where a candidate goes when a round can neither pass nor cut them — the third
+ * answer, beside ROUND_ADVANCE and a rejection.
+ *
+ * Only the final round has one, and that is the point: a waitlist is a decision
+ * about SEATS, and seats only run out at the end. A first round that could hold
+ * people would just be a slower first round — the candidates it is unsure about
+ * belong in the final round, where the conversation that settles it happens.
+ * Partial rather than a full Record so a round without a hold has no button
+ * instead of a button that means nothing.
+ *
+ * A held candidate is still in the round (ROUND_STAGES above), so the same
+ * Advance and Reject controls resolve them later; nothing else has to know the
+ * waitlist exists.
+ */
+export const ROUND_HOLD: Partial<Record<InterviewRound, { stage: Stage; label: string }>> = {
+  final_round: { stage: "waitlisted", label: "Waitlist" },
+};
+
+/** True when this candidate is parked on `round`'s hold rather than awaiting its
+ *  interview — the board badges them, and the decision panel offers the resolution
+ *  rather than the hold they are already on. */
+export function isHeldInRound(stage: Stage, round: Round): boolean {
+  const hold = isInterviewRound(round) ? ROUND_HOLD[round] : undefined;
+  return hold ? stage === hold.stage : false;
+}
 
 /**
  * Whether a role may sit a panel and write rubrics in `round`.

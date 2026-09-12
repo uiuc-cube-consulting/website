@@ -13,18 +13,12 @@
 // rubrics and notes that justify the call.
 
 import { useCallback, useEffect, useState } from "react";
-import { SCREEN_MAX_POINTS } from "@/features/03-recruitment-ats/lib/types";
+import { SCREEN_MAX_POINTS, STAGE_LABEL, stageLabel } from "@/features/03-recruitment-ats/lib/types";
 import { DISAGREEMENT_THRESHOLD, type DecisionRow, type QueueOrder, type QueueSummary } from "@/features/03-recruitment-ats/lib/decision";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
 import { VerdictCards } from "@/features/03-recruitment-ats/components/VerdictCards";
 
 type ApiResponse = { rows: DecisionRow[]; summary: QueueSummary; demo: boolean; error?: string };
-
-const STAGE_LABEL: Record<string, string> = {
-  applied: "Applied", screened: "Screened", interview: "First round",
-  final_round: "Final round", offer: "Offer", accepted: "Accepted",
-  rejected: "Rejected", withdrawn: "Withdrawn",
-};
 
 export function DecisionQueue() {
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -73,7 +67,7 @@ export function DecisionQueue() {
         body: JSON.stringify({ applicant_id: applicantId, stage }),
       });
       const j = await r.json();
-      setToast(j.ok ? `${name} → ${STAGE_LABEL[stage] ?? stage}` : j.error || "Could not update.");
+      setToast(j.ok ? `${name} → ${stageLabel(stage)}` : j.error || "Could not update.");
       if (j.ok) reload();
     } finally {
       setBusy(null);
@@ -96,7 +90,7 @@ export function DecisionQueue() {
       .filter((r) => picked.has(r.applicant.id))
       .map((r) => r.applicant.name);
     const preview = names.slice(0, 12).join(", ") + (names.length > 12 ? `, and ${names.length - 12} more` : "");
-    if (!window.confirm(`Move ${ids.length} to ${STAGE_LABEL[stage] ?? stage}?\n\n${preview}`)) return;
+    if (!window.confirm(`Move ${ids.length} to ${stageLabel(stage)}?\n\n${preview}`)) return;
 
     setBulkBusy(true);
     setToast(null);
@@ -115,7 +109,7 @@ export function DecisionQueue() {
         j.skippedSelf ? `${j.skippedSelf} skipped (your own application)` : "",
         j.notFound ? `${j.notFound} no longer existed` : "",
       ].filter(Boolean).join(", ");
-      setToast(`Moved ${j.updated} to ${STAGE_LABEL[stage] ?? stage}.${extra ? ` ${extra}.` : ""}`);
+      setToast(`Moved ${j.updated} to ${stageLabel(stage)}.${extra ? ` ${extra}.` : ""}`);
       setPicked(new Set());
       reload();
     } catch {
