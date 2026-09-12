@@ -8,13 +8,18 @@
  */
 
 import {
+  DECISION_EXPORTS,
   EXPORT_HEADERS,
   csvCell,
+  decisionExportQuery,
   exportFilename,
+  isCountableFromStage,
   toCsv,
   toExportRow,
 } from "@/features/03-recruitment-ats/lib/export";
+import { ALL_STAGES } from "@/features/03-recruitment-ats/lib/types";
 import type { Applicant, Flag, Review } from "@/features/03-recruitment-ats/lib/types";
+import { isRound } from "@/features/03-recruitment-ats/lib/rounds";
 
 function applicant(over: Partial<Applicant> = {}): Applicant {
   return {
@@ -188,5 +193,107 @@ describe("exportFilename", () => {
   it("omits the scope when exporting everyone", () => {
     expect(exportFilename("fa26", null, day)).toBe("cube-applicants-fa26-2026-08-30.csv");
     expect(exportFilename("fa26", "all", day)).toBe("cube-applicants-fa26-2026-08-30.csv");
+  });
+});
+
+// ── The named decision lists ─────────────────────────────────────────────────
+//
+// Each of these is a mailing list. The failure that matters is not a missing
+// column, it is the wrong PEOPLE: a filter the route silently drops does not
+// export nothing, it exports everyone.
+
+describe("DECISION_EXPORTS", () => {
+  it("names only real stages and real rounds", () => {
+    for (const x of DECISION_EXPORTS) {
+      if (x.stage) expect(ALL_STAGES).toContain(x.stage);
+      if (x.round) expect(isRound(x.round)).toBe(true);
+      // A list that filters on nothing is the whole cycle under a label that
+      // says otherwise.
+      expect(x.stage || x.round).toBeTruthy();
+    }
+  });
+
+  it("covers the three groups the final round produces", () => {
+    // Offer, waitlist, rejection — the whole point of the waitlist existing is
+    // that the middle one is no longer folded into either neighbour.
+    const byLabel = Object.fromEntries(DECISION_EXPORTS.map((x) => [x.label, x]));
+    expect(byLabel["Offers"]).toMatchObject({ stage: "offer" });
+    expect(byLabel["Waitlist"]).toMatchObject({ stage: "waitlisted" });
+    expect(byLabel["Rejected after second round"]).toMatchObject({
+      round: "final_round",
+      stage: "rejected",
+    });
+  });
+
+  it("separates the two rejection letters by round", () => {
+    const rejections = DECISION_EXPORTS.filter((x) => x.stage === "rejected");
+    expect(rejections).toHaveLength(2);
+    // Both are `rejected`; only the round tells them apart, which is the entire
+    // reason these are buttons rather than a stage filter.
+    expect(rejections.map((x) => x.round)).toEqual(["first_round", "final_round"]);
+  });
+
+  it("has a distinct label and query for each", () => {
+    const labels = DECISION_EXPORTS.map((x) => x.label);
+    const queries = DECISION_EXPORTS.map(decisionExportQuery);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(new Set(queries).size).toBe(queries.length);
+  });
+});
+
+describe("decisionExportQuery", () => {
+  it("builds the query the export route reads", () => {
+    expect(decisionExportQuery({ label: "", title: "", stage: "waitlisted" })).toBe(
+      "?stage=waitlisted"
+    );
+    expect(decisionExportQuery({ label: "", title: "", round: "final_round" })).toBe(
+      "?round=final_round"
+    );
+    expect(
+      decisionExportQuery({ label: "", title: "", round: "final_round", stage: "rejected" })
+    ).toBe("?round=final_round&stage=rejected");
+  });
+
+  it("is empty when nothing is filtered, rather than a stray '?'", () => {
+    expect(decisionExportQuery({ label: "", title: "" })).toBe("");
+  });
+});
+
+describe("isCountableFromStage", () => {
+  it("counts a list a single stage defines, and refuses one a round narrows", () => {
+    expect(isCountableFromStage({ label: "", title: "", stage: "waitlisted" })).toBe(true);
+    expect(isCountableFromStage({ label: "", title: "", stage: "offer" })).toBe(true);
+    // `rejected` is where both rejection lists sit; the stage count would be the
+    // sum of the two and match neither file.
+    expect(
+      isCountableFromStage({ label: "", title: "", round: "final_round", stage: "rejected" })
+    ).toBe(false);
+    expect(isCountableFromStage({ label: "", title: "", round: "final_round" })).toBe(false);
+  });
+});
+
+describe("exportFilename for the new lists", () => {
+  const day = new Date("2026-09-11T12:00:00Z");
+
+  it("gives each decision list a file you can still identify next week", () => {
+    expect(exportFilename("fa26", "offer", day)).toBe("cube-applicants-fa26-offer-2026-09-11.csv");
+    expect(exportFilename("fa26", "waitlisted", day)).toBe(
+      "cube-applicants-fa26-waitlisted-2026-09-11.csv"
+    );
+    // The round comes before the stage, so the two rejection files sort apart
+    // in a downloads folder instead of reading as near-identical names.
+    expect(exportFilename("fa26", "rejected", day, "final_round")).toBe(
+      "cube-applicants-fa26-final_round-rejected-2026-09-11.csv"
+    );
+    expect(exportFilename("fa26", "rejected", day, "first_round")).toBe(
+      "cube-applicants-fa26-first_round-rejected-2026-09-11.csv"
+    );
+  });
+
+  it("gives every named list a distinct filename", () => {
+    const names = DECISION_EXPORTS.map((x) =>
+      exportFilename("fa26", x.stage ?? null, day, x.round ?? null)
+    );
+    expect(new Set(names).size).toBe(names.length);
   });
 });

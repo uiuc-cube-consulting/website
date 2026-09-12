@@ -4,7 +4,7 @@
 // Pure: no server imports, no I/O. The route decides WHO may export and WHICH
 // rows; this decides what a row looks like and how it is encoded.
 
-import type { Applicant, Flag, Review } from "./types";
+import type { Applicant, Flag, Review, Stage } from "./types";
 import { isScreenReview, screenTotal } from "./types";
 import { cycleLabel } from "./cycle";
 import { ROUND_KINDS, rubricMax, submittedTotal, type InterviewKind } from "./interview";
@@ -182,6 +182,84 @@ export function toExportRow(
  *  "export.csv" tells you nothing three weeks later. The round matters most of
  *  all: two files both called "…-rejected.csv" are indistinguishable, and one of
  *  them is the people who never got an interview. */
+/**
+ * The named CSV lists the dashboard offers, in the order the decision emails go
+ * out on the night: the cuts, then the holds, then the offers.
+ *
+ * They exist because `stage` alone cannot express most of them. Everyone cut on
+ * their written application and everyone cut after two interviews both sit at
+ * `rejected`, and those groups get very different letters — one has never met
+ * us, the other spent two conversations with us and came within a seat of an
+ * offer. Which round a rejection came after is inferred from the rubrics each
+ * round left behind (./cohort.ts), which is server-side work; hand an exec the
+ * stage filter and trust them to reconstruct it at 1am and the wrong template
+ * goes to 227 people.
+ *
+ * Held as STAGE AND ROUND rather than as a query string on purpose. `stage` is
+ * typed, so a typo is a compile error rather than a filter the route silently
+ * drops — and a dropped `stage=` does not export nothing, it exports EVERYONE.
+ * A mistyped waitlist list would put all 328 applicants in the file labelled as
+ * the four people being held.
+ */
+export type DecisionExport = {
+  label: string;
+  /** What the group is, in the words the person downloading it would use. */
+  title: string;
+  stage?: Stage;
+  round?: Round;
+};
+
+export const DECISION_EXPORTS: readonly DecisionExport[] = [
+  {
+    label: "Rejected after first round",
+    title: "Everyone interviewed in the first round and then turned down — not the written rejections",
+    round: "first_round",
+    stage: "rejected",
+  },
+  {
+    label: "Rejected after second round",
+    title: "Everyone turned down after their final interview — a different letter from the first-round cuts",
+    round: "final_round",
+    stage: "rejected",
+  },
+  {
+    label: "Waitlist",
+    title: "Everyone held after the final round, waiting on how many seats are left",
+    stage: "waitlisted",
+  },
+  {
+    label: "Offers",
+    title: "Everyone holding an offer they have not yet accepted — who the offer letter still has to reach",
+    stage: "offer",
+  },
+  {
+    label: "Reached final round",
+    title: "Everyone who reached the final round, whatever has happened to them since",
+    round: "final_round",
+  },
+];
+
+/** The query string for one named list, as /api/recruitment/export reads it. */
+export function decisionExportQuery(x: DecisionExport): string {
+  const params = new URLSearchParams();
+  if (x.round) params.set("round", x.round);
+  if (x.stage) params.set("stage", x.stage);
+  return params.size ? `?${params}` : "";
+}
+
+/**
+ * Whether a list's size can be counted from the stage column alone, so the
+ * button can show the number that will be in the file.
+ *
+ * True only when a stage IS the whole group. Add a round and the answer depends
+ * on which round a candidate reached, which the dashboard cannot see —
+ * `roundOfStage("rejected")` is null by design — so any number would be a guess
+ * about a mailing list. A count that disagrees with its file is worse than none.
+ */
+export function isCountableFromStage(x: DecisionExport): boolean {
+  return Boolean(x.stage) && !x.round;
+}
+
 export function exportFilename(
   cycle: string,
   stage: string | null,

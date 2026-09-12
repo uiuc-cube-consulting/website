@@ -25,6 +25,11 @@ import {
   MIN_REVIEWERS_PER_APPLICANT,
   resolveReviewerPool,
 } from "@/features/03-recruitment-ats/lib/assignment";
+import {
+  DECISION_EXPORTS,
+  decisionExportQuery,
+  isCountableFromStage,
+} from "@/features/03-recruitment-ats/lib/export";
 import { DISAGREEMENT_THRESHOLD, type DecisionRow } from "@/features/03-recruitment-ats/lib/decision";
 import { type Round } from "@/features/03-recruitment-ats/lib/rounds";
 import { FlagBadge } from "@/features/03-recruitment-ats/components/FlagBadge";
@@ -359,6 +364,15 @@ export function RecruitingDashboard() {
   const inRound = roundFilter === "written" ? written : data.applicants;
   const stageCounts = new Map<string, number>();
   for (const r of inRound) stageCounts.set(r.applicant.stage, (stageCounts.get(r.applicant.stage) ?? 0) + 1);
+  // The same tally over the WHOLE cycle, for the export buttons below. Reusing
+  // `stageCounts` would make the number beside a download swing with the
+  // written/everyone toggle — a control that changes what is on screen and
+  // nothing about what lands in the file. A count that disagrees with the file
+  // it labels is worse than no count.
+  const cycleStageCounts = new Map<string, number>();
+  for (const r of data.applicants) {
+    cycleStageCounts.set(r.applicant.stage, (cycleStageCounts.get(r.applicant.stage) ?? 0) + 1);
+  }
 
   const reviewCounts = {
     none: inRound.filter((r) => r.reviewCount === 0).length,
@@ -663,35 +677,42 @@ export function RecruitingDashboard() {
                 ↓ Export CSV
               </a>
             )}
-            {/* The per-round lists, as named buttons rather than a filter the
-                exec has to assemble.
-
-                They exist because the stage column cannot express them. Everyone
-                cut on their written application and everyone cut after being
-                interviewed both sit at `rejected`, and those two groups get
-                different letters — one has never met us, the other spent forty
-                minutes in a room with two members. Handing someone a filter and
-                trusting them to reconstruct the difference at 1am on decision
-                night is how the wrong template goes to 227 people. */}
-            {canManage && (
-              <>
-                <a
-                  href="/api/recruitment/export?round=first_round&stage=rejected"
-                  className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)]"
-                  title="Everyone who was interviewed in the first round and then turned down — not the written rejections"
-                >
-                  ↓ Rejected after first round
-                </a>
-                <a
-                  href="/api/recruitment/export?round=final_round"
-                  className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)]"
-                  title="Everyone who reached the final round, whatever has happened to them since"
-                >
-                  ↓ Reached final round
-                </a>
-              </>
-            )}
           </div>
+
+          {/* ── Decision lists ──────────────────────────────────────────────
+              The groups a decision email actually goes out to, each as its own
+              named button. What they are and why they cannot be assembled from
+              the stage filter beside them lives with the list itself, in
+              lib/export.ts DECISION_EXPORTS.
+
+              On their own row rather than trailing the filters: these have
+              nothing to do with what is on screen — every one of them exports
+              the whole cycle's worth of that group regardless of the search box,
+              the stage filter, or the written/everyone toggle. Sitting them in
+              the filter row would imply otherwise. */}
+          {canManage && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Decision lists
+              </span>
+              {DECISION_EXPORTS.map((x) => {
+                const n = isCountableFromStage(x)
+                  ? (cycleStageCounts.get(x.stage as string) ?? 0)
+                  : null;
+                return (
+                  <a
+                    key={x.label}
+                    href={`/api/recruitment/export${decisionExportQuery(x)}`}
+                    title={x.title}
+                    className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--bg-dark)] hover:border-[var(--gold)]"
+                  >
+                    ↓ {x.label}
+                    {n !== null && <span className="ml-1 font-normal text-[var(--muted)]">({n})</span>}
+                  </a>
+                );
+              })}
+            </div>
+          )}
           {/* Bulk decisions, exec only — mirrors `canDecide`, and the API refuses
               everyone else regardless. Appears only once something is ticked, so
               it never takes space from the list it acts on. */}
