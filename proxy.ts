@@ -22,6 +22,11 @@ export default auth((req) => {
   if ((pathname.startsWith("/portal/admin") || strikeReview) && session.user.role !== "exec") {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
+  // Reviewing point submissions is exec-only. Submitting is not a page of its
+  // own — it's a section of the dashboard, open to every member.
+  if (pathname.startsWith("/portal/points/review") && session.user.role !== "exec") {
+    return NextResponse.redirect(new URL("/portal", req.url));
+  }
   // Filing a strike (/portal/strikes/new) is limited to PMs + exec.
   if (pathname === "/portal/strikes/new" && !["exec", "project_manager"].includes(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
