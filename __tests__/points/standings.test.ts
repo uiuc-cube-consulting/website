@@ -6,6 +6,7 @@
 
 import {
   buildStandings,
+  categoryTotals,
   isOnBoard,
   totalFor,
   validateAward,
@@ -73,6 +74,12 @@ describe("everyone starts at zero", () => {
     expect(rows.every((r) => r.points === 0 && r.entries === 0)).toBe(true);
   });
 
+  it("starts every category at zero too", () => {
+    const rows = buildStandings(roster, []);
+    expect(rows.every((r) => r.uncategorized === 0)).toBe(true);
+    expect(rows[0].categories).toEqual({ fundamentals: 0, professional: 0, social: 0 });
+  });
+
   it("orders an all-zero board alphabetically rather than arbitrarily", () => {
     expect(buildStandings(roster, []).map((r) => r.name)).toEqual([
       "Advit Arora",
@@ -128,6 +135,55 @@ describe("totals", () => {
   });
 });
 
+describe("categories", () => {
+  it("breaks each member's total down by category", () => {
+    const rows = buildStandings(roster, [
+      { member_id: "m1", delta: 2, category: "professional" },
+      { member_id: "m1", delta: 1, category: "social" },
+      { member_id: "m1", delta: 3, category: "fundamentals" },
+      { member_id: "m2", delta: 1, category: "social" },
+    ]);
+    const bryan = rows.find((r) => r.member_id === "m1")!;
+    expect(bryan.categories).toEqual({ fundamentals: 3, professional: 2, social: 1 });
+    expect(bryan.points).toBe(6);
+    expect(rows.find((r) => r.member_id === "m2")!.categories).toEqual({ fundamentals: 0, professional: 0, social: 1 });
+  });
+
+  it("nets a deduction against the category it was made in", () => {
+    const { categories } = categoryTotals([
+      { delta: 3, category: "social" },
+      { delta: -1, category: "social" },
+      { delta: 2, category: "professional" },
+    ]);
+    expect(categories).toEqual({ fundamentals: 0, professional: 2, social: 2 });
+  });
+
+  it("keeps entries without a category in the total rather than dropping them", () => {
+    // Anything awarded before db/point-categories.sql ran has no category. It
+    // still counted then, so the total must not shrink now.
+    const bryan = buildStandings(roster, [
+      { member_id: "m1", delta: 4 },
+      { member_id: "m1", delta: 1, category: null },
+      { member_id: "m1", delta: 2, category: "social" },
+    ]).find((r) => r.member_id === "m1")!;
+    expect(bryan.uncategorized).toBe(5);
+    expect(bryan.categories.social).toBe(2);
+    expect(bryan.points).toBe(7);
+  });
+
+  it("always has categories plus uncategorized adding up to the total", () => {
+    const rows = buildStandings(roster, [
+      { member_id: "m3", delta: 5, category: "fundamentals" },
+      { member_id: "m3", delta: -2, category: "professional" },
+      { member_id: "m3", delta: 1 },
+    ]);
+    for (const r of rows) {
+      const sum = r.categories.fundamentals + r.categories.professional + r.categories.social + r.uncategorized;
+      expect(sum).toBe(r.points);
+    }
+  });
+});
+
 describe("ranking", () => {
   it("gives tied members the same rank and skips the next (1,2,2,4)", () => {
     const rows = buildStandings(roster, [
@@ -159,31 +215,37 @@ describe("ranking", () => {
 });
 
 describe("award validation", () => {
-  it("accepts a normal award", () => {
-    expect(validateAward(5, "Attended GM")).toBeNull();
+  it("accepts a normal award in a category", () => {
+    expect(validateAward(5, "Attended GM", "fundamentals")).toBeNull();
   });
 
   it("accepts a deduction", () => {
-    expect(validateAward(-3, "Missed deadline")).toBeNull();
+    expect(validateAward(-3, "Missed deadline", "professional")).toBeNull();
   });
 
   it("rejects zero, which would be a row that says nothing", () => {
-    expect(validateAward(0, "why")).toMatch(/not be zero/);
+    expect(validateAward(0, "why", "social")).toMatch(/not be zero/);
   });
 
   it("rejects fractions and non-numbers", () => {
-    expect(validateAward(1.5, "x")).toMatch(/whole number/);
-    expect(validateAward("5", "x")).toMatch(/whole number/);
+    expect(validateAward(1.5, "x", "social")).toMatch(/whole number/);
+    expect(validateAward("5", "x", "social")).toMatch(/whole number/);
   });
 
   it("bounds the size so a fat-finger can't hand out 100000", () => {
-    expect(validateAward(MAX_DELTA + 1, "x")).toMatch(/between/);
-    expect(validateAward(-(MAX_DELTA + 1), "x")).toMatch(/between/);
-    expect(validateAward(MAX_DELTA, "x")).toBeNull();
+    expect(validateAward(MAX_DELTA + 1, "x", "social")).toMatch(/between/);
+    expect(validateAward(-(MAX_DELTA + 1), "x", "social")).toMatch(/between/);
+    expect(validateAward(MAX_DELTA, "x", "social")).toBeNull();
   });
 
   it("requires a real reason, so a total is always explainable", () => {
-    expect(validateAward(5, "")).toMatch(/reason is required/);
-    expect(validateAward(5, "   ")).toMatch(/reason is required/);
+    expect(validateAward(5, "", "social")).toMatch(/reason is required/);
+    expect(validateAward(5, "   ", "social")).toMatch(/reason is required/);
+  });
+
+  it("requires one of the three categories", () => {
+    expect(validateAward(5, "Coffee chat", undefined)).toMatch(/Pick a category/);
+    expect(validateAward(5, "Coffee chat", "leadership")).toMatch(/Pick a category/);
+    expect(validateAward(5, "Coffee chat", "Social")).toMatch(/Pick a category/);
   });
 });

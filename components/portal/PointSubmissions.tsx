@@ -6,11 +6,13 @@ import {
   POINT_CATEGORIES,
   MAX_NOTE,
   categoryLabel,
+  emptyCategoryTotals,
   eventsIn,
   findEvent,
   missingRequiredEvents,
   progressFor,
   repeatsLeft,
+  type CategoryTotals,
   type Cohort,
   type PointCategory,
   type SubmissionRow,
@@ -21,6 +23,8 @@ export type SubmissionsResponse = {
   rows: SubmissionRow[];
   isExec: boolean;
   cohort: Cohort;
+  /** The viewer's own ledger totals per category. Zeros for exec. */
+  ledgerTotals?: CategoryTotals;
   tableMissing?: boolean;
   error?: string;
 };
@@ -118,7 +122,9 @@ export function PointSubmissions() {
         </p>
       )}
 
-      {data && <ProgressCards rows={rows} cohort={cohort} />}
+      {data && (
+        <ProgressCards rows={rows} cohort={cohort} ledger={data.ledgerTotals ?? emptyCategoryTotals()} />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <SubmitForm
@@ -133,8 +139,8 @@ export function PointSubmissions() {
   );
 }
 
-function ProgressCards({ rows, cohort }: { rows: SubmissionRow[]; cohort: Cohort }) {
-  const progress = progressFor(cohort, rows);
+function ProgressCards({ rows, cohort, ledger }: { rows: SubmissionRow[]; cohort: Cohort; ledger: CategoryTotals }) {
+  const progress = progressFor(cohort, ledger, rows);
   const missing = missingRequiredEvents(cohort, rows);
 
   return (
@@ -142,7 +148,7 @@ function ProgressCards({ rows, cohort }: { rows: SubmissionRow[]; cohort: Cohort
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {progress.map((p) => {
           const met = p.approved >= p.required;
-          const pct = Math.min(100, Math.round((p.approved / p.required) * 100));
+          const pct = Math.max(0, Math.min(100, Math.round((p.approved / p.required) * 100)));
           return (
             <div key={p.category} className="rounded-2xl border border-[var(--border)] bg-white p-5">
               <div className="flex items-baseline justify-between gap-3">
@@ -174,8 +180,8 @@ function ProgressCards({ rows, cohort }: { rows: SubmissionRow[]; cohort: Cohort
         })}
       </div>
       <p className="mt-3 text-xs text-[var(--muted)] leading-relaxed">
-        {cohort === "new" ? "New-member requirements." : "Returning-member requirements."} Only approved
-        submissions count toward these.
+        {cohort === "new" ? "New-member requirements." : "Returning-member requirements."} Counts approved
+        submissions and any points exec award you in each category.
         {missing.length > 0 && <> Still required: {missing.map((e) => e.label).join(", ")}.</>}
       </p>
     </div>

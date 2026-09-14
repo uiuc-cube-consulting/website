@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Loader2, Minus, Plus, Search, Trophy } from "lucide-react";
+import { Check, ChevronDown, Loader2, Minus, Plus, Search, Trophy, X } from "lucide-react";
 import { withRanks, type StandingsRow } from "@/lib/points";
+import { POINT_CATEGORIES, categoryLabel, cohortFor, type PointCategory } from "@/lib/point-catalog";
 
 type Entry = {
   id: string;
   member_id: string;
   delta: number;
   reason: string;
+  category: PointCategory | null;
   created_at: string;
   awarded_by_name: string | null;
 };
@@ -18,7 +20,14 @@ type ApiResponse = {
   entries?: Entry[];
   canAward?: boolean;
   ledgerMissing?: boolean;
+  categoriesMissing?: boolean;
   error?: string;
+};
+
+const SHORT_LABELS: Record<PointCategory, string> = {
+  fundamentals: "Fund.",
+  professional: "Prof.",
+  social: "Social",
 };
 
 export function PointsLookup() {
@@ -26,6 +35,7 @@ export function PointsLookup() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [awardingId, setAwardingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -97,8 +107,14 @@ export function PointsLookup() {
           Showing the roster on zero.
         </p>
       )}
+      {canAward && data?.categoriesMissing && !data.ledgerMissing && (
+        <p className="px-5 py-3 text-sm text-amber-800 bg-amber-50 border-b border-amber-200">
+          Point categories aren&rsquo;t set up yet — run <code>db/point-categories.sql</code> in Supabase.
+          Awarding is paused until then so no points land without a category.
+        </p>
+      )}
 
-      <div className="max-h-[420px] overflow-y-auto">
+      <div className="max-h-[520px] overflow-y-auto">
         {error && <p className="p-6 text-sm text-red-700" role="alert">{error}</p>}
 
         {!error && data === null && (
@@ -117,82 +133,176 @@ export function PointsLookup() {
         )}
 
         {filtered && filtered.length > 0 && (
-          <ul className="divide-y divide-[var(--border)]">
-            {filtered.map((r) => {
-              const theirs = (data?.entries ?? []).filter((e) => e.member_id === r.member_id);
-              const open = openId === r.member_id;
-              return (
-                <li key={r.member_id} className="hover:bg-[var(--bg-cream)]/30">
-                  <div className="px-5 md:px-6 py-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <span className="text-xs font-bold text-[var(--gold-deep)] tabular-nums w-6 text-right">
-                        {String(r.rank).padStart(2, "0")}
-                      </span>
-                      <span className="font-medium text-[var(--bg-dark)] truncate">{r.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {theirs.length > 0 && (
-                        <button
-                          onClick={() => setOpenId(open ? null : r.member_id)}
-                          className="text-[11px] text-[var(--muted)] hover:text-[var(--bg-dark)] inline-flex items-center gap-1"
-                          aria-expanded={open}
-                        >
-                          {theirs.length} {theirs.length === 1 ? "award" : "awards"}
-                          <ChevronDown size={12} className={open ? "rotate-180 transition-transform" : "transition-transform"} />
-                        </button>
-                      )}
-                      <span className="font-display font-extrabold text-[var(--bg-dark)] tabular-nums w-10 text-right">
-                        {r.points}
-                      </span>
-                      {canAward && <AwardButton row={r} onDone={load} />}
-                    </div>
-                  </div>
+          <>
+            {/* Column headings line up with the fixed-width cells on the right of
+                each row. Below `sm` the breakdown moves under the name instead. */}
+            <div className="hidden sm:flex sticky top-0 z-10 bg-white border-b border-[var(--border)] px-5 md:px-6 py-2 items-center justify-between gap-4 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              <span className="pl-10">Member</span>
+              <div className="flex items-center gap-3">
+                {POINT_CATEGORIES.map((c) => (
+                  <span key={c.key} title={c.label} className="w-14 text-center">
+                    {SHORT_LABELS[c.key]}
+                  </span>
+                ))}
+                <span className="w-10 text-right">Total</span>
+                {canAward && <span className="w-7" aria-hidden />}
+              </div>
+            </div>
 
-                  {open && theirs.length > 0 && (
-                    <ul className="px-5 md:px-6 pb-4 space-y-1.5">
-                      {theirs.map((e) => (
-                        <li key={e.id} className="flex items-start justify-between gap-3 text-xs">
-                          <span className="text-[var(--muted)]">
-                            {e.reason}
-                            {e.awarded_by_name && <span className="opacity-70"> · {e.awarded_by_name}</span>}
-                            <span className="opacity-70">
-                              {" "}· {new Date(e.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            <ul className="divide-y divide-[var(--border)]">
+              {filtered.map((r) => {
+                const theirs = (data?.entries ?? []).filter((e) => e.member_id === r.member_id);
+                const open = openId === r.member_id;
+                const awarding = awardingId === r.member_id;
+                const cohort = cohortFor(r.role);
+                return (
+                  <li key={r.member_id} className="hover:bg-[var(--bg-cream)]/30">
+                    <div className="px-5 md:px-6 py-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <span className="text-xs font-bold text-[var(--gold-deep)] tabular-nums w-6 text-right shrink-0">
+                          {String(r.rank).padStart(2, "0")}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-[var(--bg-dark)] truncate">{r.name}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--muted)]">
+                            <span className="sm:hidden tabular-nums">
+                              {POINT_CATEGORIES.map((c) => `${SHORT_LABELS[c.key]} ${r.categories[c.key]}`).join(" · ")}
                             </span>
-                          </span>
-                          <span className={`font-semibold tabular-nums shrink-0 ${e.delta > 0 ? "text-emerald-700" : "text-red-600"}`}>
-                            {e.delta > 0 ? "+" : ""}{e.delta}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                            {r.uncategorized !== 0 && (
+                              <span className="tabular-nums">{r.uncategorized} uncategorized</span>
+                            )}
+                            {theirs.length > 0 && (
+                              <button
+                                onClick={() => setOpenId(open ? null : r.member_id)}
+                                className="hover:text-[var(--bg-dark)] inline-flex items-center gap-1"
+                                aria-expanded={open}
+                              >
+                                {theirs.length} {theirs.length === 1 ? "award" : "awards"}
+                                <ChevronDown size={12} className={open ? "rotate-180 transition-transform" : "transition-transform"} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {POINT_CATEGORIES.map((c) => {
+                          const value = r.categories[c.key];
+                          const required = c.required[cohort];
+                          const met = value >= required;
+                          return (
+                            <span
+                              key={c.key}
+                              title={`${c.label}: ${value} of ${required} required`}
+                              className={`hidden sm:block w-14 text-center text-sm tabular-nums ${
+                                met ? "font-semibold text-emerald-700" : "text-[var(--bg-dark)]"
+                              }`}
+                            >
+                              {value}
+                            </span>
+                          );
+                        })}
+                        <span className="font-display font-extrabold text-[var(--bg-dark)] tabular-nums w-10 text-right">
+                          {r.points}
+                        </span>
+                        {canAward && (
+                          <button
+                            onClick={() => setAwardingId(awarding ? null : r.member_id)}
+                            aria-expanded={awarding}
+                            aria-label={awarding ? `Close award form for ${r.name}` : `Award points to ${r.name}`}
+                            title={awarding ? "Close" : `Award points to ${r.name}`}
+                            className={`grid place-items-center w-7 h-7 rounded-lg border transition-colors ${
+                              awarding
+                                ? "border-[var(--gold)] text-[var(--gold-deep)]"
+                                : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)]"
+                            }`}
+                          >
+                            {awarding ? <X size={14} /> : <Plus size={14} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {awarding && (
+                      <AwardPanel row={r} onDone={load} disabled={Boolean(data?.categoriesMissing)} />
+                    )}
+
+                    {open && theirs.length > 0 && (
+                      <ul className="px-5 md:px-6 pb-4 space-y-1.5">
+                        {theirs.map((e) => (
+                          <li key={e.id} className="flex items-start justify-between gap-3 text-xs">
+                            <span className="text-[var(--muted)]">
+                              <span className="font-medium text-[var(--bg-dark)]">
+                                {e.category ? categoryLabel(e.category) : "Uncategorized"}
+                              </span>
+                              {" · "}
+                              {e.reason}
+                              {e.awarded_by_name && <span className="opacity-70"> · {e.awarded_by_name}</span>}
+                              <span className="opacity-70">
+                                {" "}· {new Date(e.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              </span>
+                            </span>
+                            <span className={`font-semibold tabular-nums shrink-0 ${e.delta > 0 ? "text-emerald-700" : "text-red-600"}`}>
+                              {e.delta > 0 ? "+" : ""}{e.delta}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
+
+      {filtered && filtered.length > 0 && (
+        <p className="px-5 md:px-6 py-3 border-t border-[var(--border)] text-[11px] text-[var(--muted)]">
+          A category turns green once the member meets its requirement: new members{" "}
+          {POINT_CATEGORIES.map((c) => c.required.new).join(" / ")}, returning members{" "}
+          {POINT_CATEGORIES.map((c) => c.required.returning).join(" / ")} (fundamentals / professional / social).
+        </p>
+      )}
     </div>
   );
 }
 
 /**
- * Exec-only award control. Points are appended as ledger entries, so a mistake
- * is fixed with an offsetting negative entry rather than by editing a total —
- * which is why the form takes a signed amount and a required reason.
+ * Exec-only award form for one member. Every award goes into a category, so a
+ * member's fundamentals / professional / social totals are always the sum of
+ * explained entries, and a mistake is fixed with an offsetting deduction in the
+ * same category rather than by editing a total. It stays open after saving so
+ * exec can score several categories for one person in a row.
  */
-function AwardButton({ row, onDone }: { row: StandingsRow; onDone: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+function AwardPanel({
+  row,
+  onDone,
+  disabled,
+}: {
+  row: StandingsRow;
+  onDone: () => Promise<void>;
+  disabled: boolean;
+}) {
+  const [category, setCategory] = useState<PointCategory | null>(null);
   const [amount, setAmount] = useState("1");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
 
   async function submit(sign: 1 | -1) {
     const delta = sign * Math.abs(parseInt(amount, 10) || 0);
-    if (!delta || !reason.trim()) {
-      setErr(!delta ? "Enter an amount." : "A reason is required.");
+    setDone(null);
+    if (!category) {
+      setErr("Pick a category.");
+      return;
+    }
+    if (!delta) {
+      setErr("Enter an amount.");
+      return;
+    }
+    if (!reason.trim()) {
+      setErr("A reason is required.");
       return;
     }
     setBusy(true);
@@ -201,15 +311,14 @@ function AwardButton({ row, onDone }: { row: StandingsRow; onDone: () => Promise
       const r = await fetch("/api/points", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: row.member_id, delta, reason: reason.trim() }),
+        body: JSON.stringify({ member_id: row.member_id, delta, reason: reason.trim(), category }),
       });
-      const j = await r.json();
+      const j: { error?: string } = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || "Could not award points.");
-      setDone(true);
+      setDone(`${delta > 0 ? "+" : ""}${delta} ${categoryLabel(category)} for ${row.name}.`);
       setReason("");
       setAmount("1");
       await onDone();
-      setTimeout(() => { setDone(false); setOpen(false); }, 900);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not award points.");
     } finally {
@@ -217,60 +326,76 @@ function AwardButton({ row, onDone }: { row: StandingsRow; onDone: () => Promise
     }
   }
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="grid place-items-center w-7 h-7 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)] transition-colors"
-        aria-label={`Award points to ${row.name}`}
-        title={`Award points to ${row.name}`}
-      >
-        <Plus size={14} />
-      </button>
-    );
-  }
-
   return (
-    <div className="flex items-center gap-1.5">
-      <input
-        type="number"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        className="w-14 rounded-lg border border-[var(--border)] px-2 py-1 text-xs tabular-nums focus:outline-none focus:border-[var(--gold)]"
-        aria-label="Amount"
-      />
-      <input
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        placeholder="Reason (required)"
-        className="w-40 rounded-lg border border-[var(--border)] px-2 py-1 text-xs focus:outline-none focus:border-[var(--gold)]"
-        aria-label="Reason"
-      />
-      <button
-        onClick={() => void submit(1)}
-        disabled={busy}
-        className="grid place-items-center w-7 h-7 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-        aria-label="Add points"
-        title="Add"
-      >
-        {busy ? <Loader2 size={13} className="animate-spin" /> : done ? <Check size={13} /> : <Plus size={13} />}
-      </button>
-      <button
-        onClick={() => void submit(-1)}
-        disabled={busy}
-        className="grid place-items-center w-7 h-7 rounded-lg border border-[var(--border)] text-red-600 hover:bg-red-50 disabled:opacity-50"
-        aria-label="Deduct points"
-        title="Deduct"
-      >
-        <Minus size={13} />
-      </button>
-      <button
-        onClick={() => { setOpen(false); setErr(null); }}
-        className="text-[11px] text-[var(--muted)] hover:text-[var(--bg-dark)] px-1"
-      >
-        Cancel
-      </button>
-      {err && <span className="text-[11px] text-red-600 max-w-[10rem]">{err}</span>}
+    <div className="mx-5 md:mx-6 mb-4 rounded-xl border border-[var(--border)] bg-[var(--bg-cream)]/40 p-4 space-y-3">
+      <div role="group" aria-label="Category" className="flex flex-wrap items-center gap-2">
+        {POINT_CATEGORIES.map((c) => {
+          const active = category === c.key;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setCategory(c.key)}
+              className={`rounded-full px-3 py-1 text-xs border transition-colors ${
+                active
+                  ? "bg-[var(--bg-dark)] text-white border-[var(--bg-dark)]"
+                  : "bg-white border-[var(--border)] text-[var(--bg-dark)] hover:border-[var(--gold)]"
+              }`}
+            >
+              {c.label}{" "}
+              <span className={`tabular-nums ${active ? "text-white/70" : "text-[var(--muted)]"}`}>
+                {row.categories[c.key]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          aria-label="Amount"
+          className="w-16 rounded-lg border border-[var(--border)] bg-white px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:border-[var(--gold)]"
+        />
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Reason (required)"
+          aria-label="Reason"
+          className="flex-1 min-w-[10rem] rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+        />
+        <button
+          onClick={() => void submit(1)}
+          disabled={busy || disabled}
+          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 text-white text-sm px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+          Add
+        </button>
+        <button
+          onClick={() => void submit(-1)}
+          disabled={busy || disabled}
+          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-white text-red-600 text-sm px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+        >
+          <Minus size={13} />
+          Deduct
+        </button>
+      </div>
+
+      {err && (
+        <p role="alert" className="text-xs text-red-600">
+          {err}
+        </p>
+      )}
+      {done && (
+        <p role="status" className="text-xs text-emerald-700 inline-flex items-center gap-1">
+          <Check size={12} /> {done}
+        </p>
+      )}
     </div>
   );
 }

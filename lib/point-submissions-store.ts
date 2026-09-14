@@ -8,8 +8,15 @@
 
 import { randomUUID } from "crypto";
 import { createServerClient } from "@/lib/supabase/server";
-import type { PointCategory, SubmissionRow, SubmissionStatus } from "@/lib/point-catalog";
+import {
+  emptyCategoryTotals,
+  type CategoryTotals,
+  type PointCategory,
+  type SubmissionRow,
+  type SubmissionStatus,
+} from "@/lib/point-catalog";
 import { extensionFor, type EvidenceMime } from "@/lib/point-evidence";
+import { categoryTotals, type PointEntry } from "@/lib/points";
 
 /** PRIVATE bucket. Photos are only ever served through the evidence route. */
 export const EVIDENCE_BUCKET = "point-evidence";
@@ -178,6 +185,19 @@ export async function reviewSubmission(
   });
   if (error) return failure(error);
   return { ok: true, outcome: String(data) };
+}
+
+/**
+ * A member's points per category, from the ledger: approved submissions plus
+ * whatever exec awarded by hand. Zeros when the ledger or its category column
+ * isn't there yet, which is all the ledger could say in that state anyway.
+ */
+export async function ledgerCategoryTotals(memberId: string): Promise<CategoryTotals> {
+  const sb = db();
+  if (!sb) return emptyCategoryTotals();
+  const { data, error } = await sb.from("point_entries").select("delta, category").eq("member_id", memberId);
+  if (error || !data) return emptyCategoryTotals();
+  return categoryTotals(data as Pick<PointEntry, "delta" | "category">[]).categories;
 }
 
 /** Pending count for the exec dashboard card. Null when the table isn't there yet. */

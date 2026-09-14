@@ -7,6 +7,7 @@ import { PointsLookup } from "@/components/portal/PointsLookup";
 import { PointSubmissions } from "@/components/portal/PointSubmissions";
 import { ResourcesGrid } from "@/components/portal/ResourcesGrid";
 import { PORTAL_RESOURCES, SITE } from "@/lib/content";
+import { canSubmitPoints } from "@/lib/point-catalog";
 import { countPendingSubmissions } from "@/lib/point-submissions-store";
 import { AnonymousNoteDialog } from "@/features/06-portal-feedback/components/AnonymousNoteDialog";
 import { anonymousRecipients } from "@/features/06-portal-feedback/lib/anonymous-email";
@@ -53,9 +54,14 @@ export default async function PortalDashboard() {
 
   const firstName = session.user.name?.split(/\s+/)[0] ?? "consultant";
   const isExec = session.user.role === "exec";
+  // Project managers, senior consultants, returning members and members submit
+  // points; exec review them. A session with no role gets neither.
+  const canSubmit = canSubmitPoints(session.user.role);
   const quickLinks = isExec
     ? QUICK_LINKS.map((q) => (q.href === "#submit-points" ? REVIEW_POINTS_LINK : q))
-    : QUICK_LINKS;
+    : canSubmit
+      ? QUICK_LINKS
+      : QUICK_LINKS.filter((q) => q.href !== "#submit-points");
   // Null when db/point-submissions.sql hasn't been run yet.
   const pendingPoints = isExec ? await countPendingSubmissions() : null;
 
@@ -112,55 +118,58 @@ export default async function PortalDashboard() {
       <section id="points" className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Track your standing" title="Points tracker" />
         <p className="mt-3 text-[var(--muted)] max-w-2xl">
-          Search by name to see a point total. Approved point submissions are added here automatically.
+          Search by name to see a point total and how it splits across fundamentals, professional, and social.
+          Approved point submissions are added automatically.
         </p>
         <div className="mt-6">
           <PointsLookup />
         </div>
       </section>
 
-      <section id="submit-points" className="mt-16 scroll-mt-24">
-        <SectionHeader
-          eyebrow={isExec ? "Exec review" : "Earn points"}
-          title={isExec ? "Point submissions" : "Submit points"}
-        />
-        {isExec ? (
-          <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <span className="grid place-items-center w-11 h-11 rounded-xl bg-[var(--bg-cream)] text-[var(--gold-deep)] shrink-0">
-                <ClipboardCheck size={20} />
-              </span>
-              <div>
-                <p className="font-display font-bold text-[var(--bg-dark)]">
-                  {pendingPoints === null
-                    ? "Review queue"
-                    : pendingPoints === 0
-                      ? "Nothing waiting for review"
-                      : `${pendingPoints} ${pendingPoints === 1 ? "submission" : "submissions"} waiting for review`}
-                </p>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {pendingPoints === null
-                    ? "Run db/point-submissions.sql in Supabase to turn on member submissions."
-                    : "Members submit events with a photo. Approving adds the points to their total."}
-                </p>
+      {(isExec || canSubmit) && (
+        <section id="submit-points" className="mt-16 scroll-mt-24">
+          <SectionHeader
+            eyebrow={isExec ? "Exec review" : "Earn points"}
+            title={isExec ? "Point submissions" : "Submit points"}
+          />
+          {isExec ? (
+            <div className="mt-6 rounded-2xl border border-[var(--border)] bg-white p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <span className="grid place-items-center w-11 h-11 rounded-xl bg-[var(--bg-cream)] text-[var(--gold-deep)] shrink-0">
+                  <ClipboardCheck size={20} />
+                </span>
+                <div>
+                  <p className="font-display font-bold text-[var(--bg-dark)]">
+                    {pendingPoints === null
+                      ? "Review queue"
+                      : pendingPoints === 0
+                        ? "Nothing waiting for review"
+                        : `${pendingPoints} ${pendingPoints === 1 ? "submission" : "submissions"} waiting for review`}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {pendingPoints === null
+                      ? "Run db/point-categories.sql, then db/point-submissions.sql, in Supabase to turn on member submissions."
+                      : "Members submit events with a photo. Approving adds the points to their total in that event's category."}
+                  </p>
+                </div>
               </div>
+              <Link href="/portal/points/review" className="btn btn-gold text-xs px-4 py-2 self-start md:self-auto">
+                Open review queue
+              </Link>
             </div>
-            <Link href="/portal/points/review" className="btn btn-gold text-xs px-4 py-2 self-start md:self-auto">
-              Open review queue
-            </Link>
-          </div>
-        ) : (
-          <>
-            <p className="mt-3 text-[var(--muted)] max-w-2xl">
-              Log a fundamentals, professional, or social event with a photo of you there. Points count once exec
-              approve them.
-            </p>
-            <div className="mt-6">
-              <PointSubmissions />
-            </div>
-          </>
-        )}
-      </section>
+          ) : (
+            <>
+              <p className="mt-3 text-[var(--muted)] max-w-2xl">
+                Log a fundamentals, professional, or social event with a photo of you there. Points count once exec
+                approve them.
+              </p>
+              <div className="mt-6">
+                <PointSubmissions />
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <section id="resources" className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Toolkit" title="Resources" />

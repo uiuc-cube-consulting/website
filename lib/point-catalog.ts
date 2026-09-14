@@ -1,11 +1,13 @@
-// Point submissions — the event menu members submit against, and the rules a
-// submission is checked by. Pure and client-safe: the form and the API import
-// the same table, so what the form offers is exactly what the server accepts.
+// Point categories and submissions — the event menu members submit against,
+// and the rules a submission is checked by. Pure and client-safe: the form, the
+// standings board and the API import the same table, so what the UI offers is
+// exactly what the server accepts.
 //
 // Source: the exec "Point Breakdowns" sheet (FA26). Points and max repeats are
 // fixed per event, so a member picks WHAT they did and the points follow from
 // it. Nobody types a number that exec then has to second-guess. Exec can still
-// award or deduct anything ad hoc from the standings board (/api/points).
+// award or deduct points in any category by hand from the standings board
+// (/api/points).
 
 export type PointCategory = "fundamentals" | "professional" | "social";
 export type Cohort = "new" | "returning";
@@ -32,6 +34,27 @@ export const POINT_CATEGORIES: {
   { key: "professional", label: "Professional", required: { new: 6, returning: 3 } },
   { key: "social", label: "Social", required: { new: 5, returning: 3 } },
 ];
+
+export type CategoryTotals = Record<PointCategory, number>;
+
+export function emptyCategoryTotals(): CategoryTotals {
+  return { fundamentals: 0, professional: 0, social: 0 };
+}
+
+export function isPointCategory(value: unknown): value is PointCategory {
+  return POINT_CATEGORIES.some((c) => c.key === value);
+}
+
+/**
+ * Who may submit points: every role on the points board. Listed out rather than
+ * "anyone but exec", so a session with no role, or a role added to the schema
+ * later, isn't let in by default.
+ */
+export const SUBMITTER_ROLES = ["project_manager", "senior_consultant", "returning_member", "member"] as const;
+
+export function canSubmitPoints(role?: string | null): boolean {
+  return Boolean(role && (SUBMITTER_ROLES as readonly string[]).includes(role));
+}
 
 function event(
   category: PointCategory,
@@ -186,30 +209,31 @@ export type CategoryProgress = {
   category: PointCategory;
   label: string;
   required: number;
-  /** Points from approved submissions. */
+  /** Points in the ledger for this category: approved submissions plus exec awards. */
   approved: number;
-  /** Points waiting on exec. */
+  /** Points from submissions still waiting on exec. */
   pending: number;
 };
 
 /**
- * Progress toward each category's requirement, from submissions only. Points
- * exec award by hand on the standings board carry no category, so they count
- * toward the total but not here.
+ * Progress toward each category's requirement.
+ *
+ * Approved points come from the LEDGER (`ledger`, the member's per-category sums
+ * of point_entries), not from approved submissions. An approval writes a ledger
+ * entry, and exec also award category points by hand on the standings board, so
+ * counting approved submissions as well would count those points twice. Pending
+ * points come from submissions, because they aren't in the ledger yet.
  */
-export function progressFor(cohort: Cohort, subs: SubmissionLike[]): CategoryProgress[] {
-  return POINT_CATEGORIES.map((c) => {
-    const inCategory = subs.filter((s) => s.category === c.key);
-    const sum = (status: SubmissionStatus) =>
-      inCategory.filter((s) => s.status === status).reduce((n, s) => n + s.points, 0);
-    return {
-      category: c.key,
-      label: c.label,
-      required: c.required[cohort],
-      approved: sum("approved"),
-      pending: sum("pending"),
-    };
-  });
+export function progressFor(cohort: Cohort, ledger: CategoryTotals, subs: SubmissionLike[]): CategoryProgress[] {
+  return POINT_CATEGORIES.map((c) => ({
+    category: c.key,
+    label: c.label,
+    required: c.required[cohort],
+    approved: ledger[c.key],
+    pending: subs
+      .filter((s) => s.category === c.key && s.status === "pending")
+      .reduce((n, s) => n + s.points, 0),
+  }));
 }
 
 /** Required (**) events a new member hasn't submitted yet. Returning members have none. */

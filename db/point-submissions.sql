@@ -1,13 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- CUBE portal — point submissions (member-submitted, exec-reviewed)
 -- ─────────────────────────────────────────────────────────────────────────────
--- Run in the Supabase SQL editor AFTER db/schema.sql and db/points.sql (this
--- references `members` and `point_entries`). Idempotent: safe to re-run.
+-- Run in the Supabase SQL editor AFTER db/schema.sql, db/points.sql and
+-- db/point-categories.sql (this references `members` and
+-- `point_entries.category`). Idempotent: safe to re-run.
 --
 -- Members submit an event from the Point Breakdowns sheet (lib/point-catalog.ts)
 -- with a photo as evidence. Nothing counts until exec approve it; approval then
--- appends a normal row to `point_entries`, so the standings board, totals and
--- history all keep working exactly as they do for points exec award by hand.
+-- appends a normal row to `point_entries` in the event's category, so the
+-- standings board, totals and breakdowns all keep working exactly as they do
+-- for points exec award by hand.
 --
 -- ── Why submissions are a separate table and not pending point_entries ──────
 -- The ledger's promise is that every row in it counts. Mixing in rows that are
@@ -54,7 +56,7 @@ create index if not exists point_submissions_status_idx on point_submissions (st
 -- ── RLS: deny anon by default; the server service role bypasses RLS ──────────
 alter table point_submissions enable row level security;
 -- (No policies. Submitting goes through POST /api/points/submissions, which is
---  any non-exec member; reviewing through /api/points/submissions/[id]/review,
+--  the four member roles; reviewing through /api/points/submissions/[id]/review,
 --  which is exec-only. Both check the session themselves.)
 
 -- ── Review, atomically ───────────────────────────────────────────────────────
@@ -80,14 +82,15 @@ declare
   current_status text;
   target_member  uuid;
   award          integer;
+  award_category text;
   entry_id       uuid;
 begin
   if p_decision not in ('approved', 'rejected') then
     raise exception 'p_decision must be approved or rejected, got %', p_decision;
   end if;
 
-  select status, member_id, points
-    into current_status, target_member, award
+  select status, member_id, points, category
+    into current_status, target_member, award, award_category
     from point_submissions
    where id = p_id
      for update;
@@ -100,8 +103,10 @@ begin
   end if;
 
   if p_decision = 'approved' then
-    insert into point_entries (member_id, delta, reason, awarded_by)
-    values (target_member, award, p_reason, p_reviewer)
+    -- Lands in the submission's category, so an approved resume review counts
+    -- toward the member's professional total.
+    insert into point_entries (member_id, delta, reason, awarded_by, category)
+    values (target_member, award, p_reason, p_reviewer, award_category)
     returning id into entry_id;
   end if;
 
@@ -138,6 +143,8 @@ on conflict (id) do nothing;
 -- ── Verify ───────────────────────────────────────────────────────────────────
 --   select status, count(*) from point_submissions group by status;
 --
---   -- Every approval produced exactly one ledger entry:
---   select count(*) from point_submissions
---   where status = 'approved' and point_entry_id is null;   -- expect 0
+--   -- Every approval produced exactly one ledger entry, in the right category:
+--   select count(*) from point_submissions s
+--   left join point_entries p on p.id = s.point_entry_id
+--   where s.status = 'approved'
+--     and (p.id is null or p.category is distinct from s.category);   -- expect 0

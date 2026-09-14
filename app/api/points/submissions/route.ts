@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { cohortFor, validateSubmission } from "@/lib/point-catalog";
+import { canSubmitPoints, cohortFor, emptyCategoryTotals, validateSubmission } from "@/lib/point-catalog";
 import { decodeEvidence } from "@/lib/point-evidence";
-import { createSubmission, listSubmissions } from "@/lib/point-submissions-store";
+import { createSubmission, ledgerCategoryTotals, listSubmissions } from "@/lib/point-submissions-store";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +13,9 @@ const NOT_SET_UP =
  * GET /api/points/submissions
  *
  * Exec get every submission (the review queue). Everyone else gets only their
- * own. A submission carries a photo and a note about who the member met, which
- * is not something the rest of the roster needs to read.
+ * own, plus their per-category ledger totals for the progress bars. A
+ * submission carries a photo and a note about who the member met, which is not
+ * something the rest of the roster needs to read.
  */
 export async function GET() {
   const session = await auth();
@@ -26,16 +27,25 @@ export async function GET() {
   const isExec = role === "exec";
   const cohort = cohortFor(role);
 
-  const result = await listSubmissions(isExec ? {} : { memberId });
+  const [result, ledgerTotals] = await Promise.all([
+    listSubmissions(isExec ? {} : { memberId }),
+    isExec ? Promise.resolve(emptyCategoryTotals()) : ledgerCategoryTotals(memberId),
+  ]);
+
   if (!result.ok) {
-    if (result.missing) return NextResponse.json({ rows: [], isExec, cohort, tableMissing: true });
+    if (result.missing) {
+      return NextResponse.json({ rows: [], isExec, cohort, ledgerTotals, tableMissing: true });
+    }
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
-  return NextResponse.json({ rows: result.rows, isExec, cohort });
+  return NextResponse.json({ rows: result.rows, isExec, cohort, ledgerTotals });
 }
 
 /**
- * POST /api/points/submissions — submit an event for review. Any non-exec member.
+ * POST /api/points/submissions — submit an event for review.
+ *
+ * Open to project managers, senior consultants, returning members and members
+ * (SUBMITTER_ROLES in lib/point-catalog.ts).
  *
  * body: { event_key, occurred_on: "YYYY-MM-DD", note?: string, photo: data URL }
  *
@@ -48,13 +58,14 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.memberId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Exec aren't on the points board (lib/points.ts), so an approved submission
-  // would add to a total nothing displays.
-  if (session.user.role === "exec") {
-    return NextResponse.json(
-      { error: "Exec aren't on the points board, so there's nothing to submit points toward." },
-      { status: 403 }
-    );
+  if (!canSubmitPoints(session.user.role)) {
+    // Exec aren't on the points board (lib/points.ts), so an approved
+    // submission would add to a total nothing displays.
+    const error =
+      session.user.role === "exec"
+        ? "Exec aren't on the points board, so there's nothing to submit points toward."
+        : "Your role can't submit points.";
+    return NextResponse.json({ error }, { status: 403 });
   }
   const memberId = session.user.memberId;
 
