@@ -1,6 +1,13 @@
 -- CUBE portal — FA26 projects + rosters for the accountability tracker.
--- Run AFTER db/schema.sql, db/seed-members-fa26.sql, and
+-- Run AFTER db/schema.sql, db/seed-members-fa26.sql,
+-- db/seed-new-members-fa26.sql, and
 -- features/05-accountability-tracker/db/schema.sql.
+--
+-- ⚠ db/seed-new-members-fa26.sql is on the UNMERGED branch chore/fa26-new-members
+-- (commit 629b3ec). The 30 first-semester consultants seated below are already in
+-- the live `members` table, so this file runs clean against production today —
+-- but rebuilding a database from `main` alone seats none of them, and Check 1
+-- reports all 30. Merge that branch.
 --
 -- Run the WHOLE file in one go (it builds a temp table that later statements read).
 -- Idempotent: re-running updates dates and seats in place and adds anyone new.
@@ -8,11 +15,34 @@
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BLOCK 1 (projects) and the PM/SC seats in BLOCK 2 are filled in. CONSULTANT
--- seats are in for all seven, as given on 2026-09-01.
+-- seats are in for all seven, as given on 2026-09-01 and extended on 2026-09-15.
 --
--- One person is deliberately absent: Lakshya Agarwal is in the member seed but on
--- no project, so nobody rates them and the last check below reports them on every
--- run. Add a consultant row if that is an oversight rather than the intent.
+-- THE 2026-09-15 INTAKE. The 30 first-semester members who accepted FA26 offers
+-- take a 'consultant' seat here, in week 3 of an 11-week semester. Two of them
+-- sit differently from the assignment sheet: Nico Crevier is on Wrike, not
+-- Deloitte, and Anjan Adhiyaman is on Deloitte, not Wrike.
+--
+-- Their members.role is plain `member`, which is NOT in ACCOUNTABILITY_ROLES
+-- (features/05-accountability-tracker/lib/access.ts), so none of them can open
+-- /portal/accountability. That is correct and needs no change: a consultant is
+-- rated in the grid, never a reader of it — canViewProject deliberately hides a
+-- consultant's own ratings from them whatever their org role.
+--
+-- Two knock-on effects of seating them mid-semester, both expected:
+--   · Weeks 1-2 go from "unrated" to "incomplete" in the exec overview.
+--     weekCompletion measures every elapsed week against the CURRENT roster
+--     (lib/types.ts), so these 30 retroactively widen grids nobody could have
+--     filled. With only 6 ratings on record cohort-wide, those weeks read as
+--     missed already — this changes the number, not the verdict.
+--   · Project consultant counts jump from 2-3 to 6-9, so the Friday reminder
+--     asks each PM for roughly triple the cells it did last week.
+--
+-- Lakshya Agarwal ("Lucky") is no longer absent: he takes the SENIOR CONSULTANT
+-- seat on VerityXR as of 2026-09-15. He was in the member seed but on no project
+-- all semester, which meant nobody rated him and the last check below reported
+-- him on every run. His members.role stays `returning_member` — the seat is what
+-- grants rating authority, the same as Krithika on VerityXR and William on
+-- VoiceOS, both of whom hold SC seats under that role.
 --
 -- Seats, which are per project and independent of members.role:
 --   'project_manager' / 'senior_consultant' → fill in the weekly grid
@@ -93,9 +123,16 @@ create temp table roster (project_name text, email text, seat text);
 insert into roster values
   ('VerityXR', 'hiralp3@illinois.edu',  'project_manager'),   -- Hiral Palakurty
   ('VerityXR', 'kn35@illinois.edu',     'senior_consultant'), -- Krithika Nekkanti
+  ('VerityXR', 'lakshya6@illinois.edu', 'senior_consultant'), -- Lakshya Agarwal ("Lucky")
   ('VerityXR', 'aryaar3@illinois.edu',  'consultant'),        -- Aryaa Rawat
   ('VerityXR', 'kvatsa2@illinois.edu',  'consultant'),        -- Krish Vatsa
-  ('VerityXR', 'rahilts2@illinois.edu', 'consultant');        -- Rahil Shah
+  ('VerityXR', 'rahilts2@illinois.edu', 'consultant'),        -- Rahil Shah
+  -- 2026-09-15 intake
+  ('VerityXR', 'ruchar2@illinois.edu',  'consultant'),        -- Rucha Rajadhyax
+  ('VerityXR', 'diyadd2@illinois.edu',  'consultant'),        -- Diya Deshpande
+  ('VerityXR', 'aanya3@illinois.edu',   'consultant'),        -- Aanya Shah
+  ('VerityXR', 'tvisham3@illinois.edu', 'consultant'),        -- Tvisha Mishra
+  ('VerityXR', 'etran36@illinois.edu',  'consultant');        -- Elizabeth "Ellie" Tran
 
 -- ── Deloitte ─────────────────────────────────────────────────────────────────
 insert into roster values
@@ -104,14 +141,24 @@ insert into roster values
   ('Deloitte', 'aadis2@illinois.edu',   'senior_consultant'), -- Aadi Shah
   ('Deloitte', 'ajle2@illinois.edu',    'consultant'),        -- Adrian Le
   ('Deloitte', 'dchau319@illinois.edu', 'consultant'),        -- Diya Chaudhari
-  ('Deloitte', 'vivaanb2@illinois.edu', 'consultant');        -- Vivaan Bommareddi
+  ('Deloitte', 'vivaanb2@illinois.edu', 'consultant'),        -- Vivaan Bommareddi
+  -- 2026-09-15 intake
+  ('Deloitte', 'nivetha5@illinois.edu', 'consultant'),        -- Nivetha Subramanian
+  ('Deloitte', 'ayushk10@illinois.edu', 'consultant'),        -- Ayush Kulkarni
+  ('Deloitte', 'ddey5@illinois.edu',    'consultant'),        -- Debanshi Dey
+  ('Deloitte', 'anjan2@illinois.edu',   'consultant');        -- Anjan Adhiyaman (assignment sheet says Wrike)
 
 -- ── Replit ───────────────────────────────────────────────────────────────────
 insert into roster values
   ('Replit', 'chloeat2@illinois.edu', 'project_manager'),   -- Chloe Tam
   ('Replit', 'kalip3@illinois.edu',   'senior_consultant'), -- Kali Patel
   ('Replit', 'hnguy115@illinois.edu', 'consultant'),        -- Huyen Nguyen
-  ('Replit', 'ripp3@illinois.edu',    'consultant');        -- Malcom Ripp
+  ('Replit', 'ripp3@illinois.edu',    'consultant'),        -- Malcom Ripp
+  -- 2026-09-15 intake
+  ('Replit', 'llchien2@illinois.edu', 'consultant'),        -- Leon Chien
+  ('Replit', 'iwchan2@illinois.edu',  'consultant'),        -- Indalina Chan
+  ('Replit', 'adarshr6@illinois.edu', 'consultant'),        -- Adarsh Rao
+  ('Replit', 'carsont4@illinois.edu', 'consultant');        -- Carson Turner
 
 -- ── Wrike ────────────────────────────────────────────────────────────────────
 insert into roster values
@@ -119,7 +166,12 @@ insert into roster values
   ('Wrike', 'aranjan6@illinois.edu', 'senior_consultant'), -- Aarushi Ranjan
   ('Wrike', 'ayaanc2@illinois.edu',  'senior_consultant'), -- Ayaan Chawla
   ('Wrike', 'sinturi2@illinois.edu', 'consultant'),        -- Satviki Inturi
-  ('Wrike', 'taniyaa2@illinois.edu', 'consultant');        -- Taniya Agrawal
+  ('Wrike', 'taniyaa2@illinois.edu', 'consultant'),        -- Taniya Agrawal
+  -- 2026-09-15 intake
+  ('Wrike', 'aroshy2@illinois.edu',  'consultant'),        -- Ashra Roshy
+  ('Wrike', 'mjkuze@illinois.edu',   'consultant'),        -- Maximilian Kuzera
+  ('Wrike', 'dbollig2@illinois.edu', 'consultant'),        -- Duane Bollig
+  ('Wrike', 'crevier3@illinois.edu', 'consultant');        -- Nico Crevier (assignment sheet says Deloitte)
 
 -- ── Mando ────────────────────────────────────────────────────────────────────
 insert into roster values
@@ -127,7 +179,13 @@ insert into roster values
   ('Mando', 'awanj1@illinois.edu',   'senior_consultant'), -- Anushka Wanjara
   ('Mando', 'bdb6@illinois.edu',     'senior_consultant'), -- Benjamin Brown
   ('Mando', 'kkalra3@illinois.edu',  'consultant'),        -- Krish Kalra
-  ('Mando', 'nikhill2@illinois.edu', 'consultant');        -- Nikhil Lalwani
+  ('Mando', 'nikhill2@illinois.edu', 'consultant'),        -- Nikhil Lalwani
+  -- 2026-09-15 intake
+  ('Mando', 'adesa44@illinois.edu',  'consultant'),        -- Aadi Desai
+  ('Mando', 'ilic3@illinois.edu',    'consultant'),        -- Stefan Ilic
+  ('Mando', 'veerazt2@illinois.edu', 'consultant'),        -- Veeraz Thakkar
+  ('Mando', 'nbj2@illinois.edu',     'consultant'),        -- Nevin Joseph
+  ('Mando', 'ateuer2@illinois.edu',  'consultant');        -- Avan Teuer
 
 -- ── VoiceOS ──────────────────────────────────────────────────────────────────
 -- The assignment table lists William as "1/2" — shared or half-time. Recorded as
@@ -137,7 +195,12 @@ insert into roster values
   ('VoiceOS', 'nutheti2@illinois.edu', 'project_manager'),   -- Veda Nutheti
   ('VoiceOS', 'wchen236@illinois.edu', 'senior_consultant'), -- William Chen
   ('VoiceOS', 'arjunrw2@illinois.edu', 'consultant'),        -- Arjun Wadhwa
-  ('VoiceOS', 'bryanz4@illinois.edu',  'consultant');        -- Bryan Zhang
+  ('VoiceOS', 'bryanz4@illinois.edu',  'consultant'),        -- Bryan Zhang
+  -- 2026-09-15 intake
+  ('VoiceOS', 'kl77@illinois.edu',     'consultant'),        -- Krystal Lee
+  ('VoiceOS', 'angelaz9@illinois.edu', 'consultant'),        -- Angela Zhang
+  ('VoiceOS', 'ndutia2@illinois.edu',  'consultant'),        -- Nikhil Dutia (not Nikhil Lalwani, on Mando)
+  ('VoiceOS', 'aadid3@illinois.edu',   'consultant');        -- Aadi Dang
 
 -- ── SolutionExec ─────────────────────────────────────────────────────────────
 -- Also called "GTM Shift" — one project, two names. SolutionExec is the one the
@@ -149,11 +212,20 @@ insert into roster values
 -- Aadi Kenchammana ("Aadi K" in the table) is a different person from Aadi Shah,
 -- who is SC on Deloitte. Both are in db/seed-members-fa26.sql — run that file
 -- first, or this project's PM row is skipped by Check 1.
+--
+-- Eric Zheng held a consultant seat here and is gone: he was removed from the
+-- live `members` table as inactive on 2026-09-11, and dropping his row from the
+-- member seed (commit 629b3ec) without dropping it here would have left this
+-- file re-adding a seat for someone Check 1 can no longer resolve.
 insert into roster values
   ('SolutionExec', 'aadik3@illinois.edu',   'project_manager'),   -- Aadi Kenchammana
   ('SolutionExec', 'aaravg2@illinois.edu',  'senior_consultant'), -- Aarav Gupta
-  ('SolutionExec', 'elzheng2@illinois.edu', 'consultant'),        -- Eric Zheng
-  ('SolutionExec', 'gmonago2@illinois.edu', 'consultant');        -- Grace Monago
+  ('SolutionExec', 'gmonago2@illinois.edu', 'consultant'),        -- Grace Monago
+  -- 2026-09-15 intake
+  ('SolutionExec', 'itapere2@illinois.edu', 'consultant'),        -- Isaiah Tapere
+  ('SolutionExec', 'arai23@illinois.edu',   'consultant'),        -- Atiksh Rai
+  ('SolutionExec', 'wblum2@illinois.edu',   'consultant'),        -- Will Blum
+  ('SolutionExec', 'apm18@illinois.edu',    'consultant');        -- Andrew Malichky
 
 -- ── Apply the roster ─────────────────────────────────────────────────────────
 insert into project_members (project_id, member_id, seat)
