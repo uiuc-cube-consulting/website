@@ -10,6 +10,7 @@ Gemini key for synthesized answers.
 | `app/portal/brain/page.tsx` | **new** — shim | Auth-gated `/portal/brain` route. |
 | `app/api/brain/route.ts` | **new** — shim (POST) + local `dynamic` | Retrieve + answer endpoint. |
 | `app/portal/layout.tsx` | **+1 line** in `<nav>` | "CUBE Brain" link. |
+| `__tests__/brain/` | Retrieval and answer-generation tests | Tests production code; Gemini calls are mocked. |
 | `.env.example` | **+ Gemini section** | `GEMINI_API_KEY`, `GEMINI_MODEL`. |
 
 ## Configuration
@@ -28,11 +29,11 @@ The corpus is internal (CUBE's own past projects) and the route is auth-gated, s
 material stays within the member boundary. Review Google's data-use terms for the Gemini API tier
 you use. Keep any externally-facing/productized version (menu #6) on isolated, consented corpora.
 
-## Data + eval
+## Data + tests
 
 ```bash
 node features/04-cube-brain-rag/scripts/build-corpus.mjs   # rebuild after new semesters
-node features/04-cube-brain-rag/scripts/eval.mjs            # retrieval gate (4/4 expected)
+npm test -- --runInBand __tests__/brain                  # production retrieval + answer modes
 ```
 
 ## Verify
