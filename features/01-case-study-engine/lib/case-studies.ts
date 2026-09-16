@@ -109,7 +109,8 @@ function haystack(s: CaseStudy): string {
 
 /** Pure filter+sort used by both the client UI and the API route. */
 export function filterCaseStudies(studies: CaseStudy[], opts: FilterOptions = {}): CaseStudy[] {
-  const tokens = (opts.query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const tokens = (opts.query ?? "").toLowerCase().split(/\s+/).filter(Boolean)
+    .map((token) => new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   const areas = opts.areas?.filter(Boolean) ?? [];
   const term = opts.term && opts.term !== "all" ? opts.term : "";
 
@@ -118,7 +119,7 @@ export function filterCaseStudies(studies: CaseStudy[], opts: FilterOptions = {}
     if (areas.length && !areas.some((a) => s.practiceAreas.includes(a))) return false;
     if (tokens.length) {
       const hay = haystack(s);
-      if (!tokens.every((t) => hay.includes(t))) return false;
+      if (!tokens.every((token) => token.test(hay))) return false;
     }
     return true;
   });
