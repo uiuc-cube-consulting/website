@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { OwnStrikeRow, FiledStrikeRow, ExecStrikeRow, StatusBadge } from "@/components/portal/StrikeCard";
+import { OwnStrikeRow, FiledStrikeRow, ExecStrikeRow } from "@/components/portal/StrikeCard";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,6 @@ export default async function StrikesPage() {
   const { memberId, role } = session.user;
   const supabase = createServerClient();
 
-  const canFile = ["exec", "project_manager", "senior_consultant"].includes(role);
 
   // ── Exec view ────────────────────────────────────────────────────────────
   if (role === "exec") {

@@ -94,7 +94,7 @@ async function main() {
         await writeFile(out, buf);
         manifest[bucket].push({ url: u, file: `/scraped/${bucket}/${name}`, bytes: buf.length });
         process.stdout.write(".");
-      } catch (e) {
+      } catch {
         process.stdout.write("x");
       }
     }

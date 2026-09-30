@@ -28,7 +28,6 @@ export default async function PortalLayout({
   // (auth.ts → session.user.role).
   const role = session?.user?.role;
   const isExec = role === "exec";
-  const isLeadership = isExec || role === "project_manager" || role === "senior_consultant";
   // Interviewing is open to every member — matches canInterviewRole() in the ATS.
   const isInterviewer = canInterviewRole(role);
   // Recruiting visibility is a cycle-to-cycle exec toggle (lib/visibility.ts),
