@@ -3,7 +3,7 @@
 The cubeconsulting.org website, rebuilt in Next.js so the team can edit it in code instead of through the Wix editor. It also includes a members-only portal: a dashboard (calendar, points, resources), case studies, CUBE Brain, strikes, accountability, and recruiting tools.
 
 - **First-time setup** (Supabase, SQL files, env vars): [SETUP.md](SETUP.md)
-- **Portal features** (what each one is, how it's wired in): [features/README.md](features/README.md) and each `features/NN-*/README.md`
+- **Portal features** (what each one is, how it's wired in): [features/README.md](features/README.md) and each feature's own `features/NN-*/README.md` (01–05; 06 has none yet)
 
 ## Stack
 
@@ -32,7 +32,7 @@ app/
   (public)/                public site: home, projects, services, about, join-us, contact, apply
   portal/                  members-only area (layout.tsx holds the role-aware nav)
   api/                     route handlers (many are one-line re-exports from features/)
-features/                  self-contained portal features, each with its own app/, lib/, components/, db/
+features/                  self-contained portal features, each with its own app/, lib/, components/ (db/ for all but 01 and 04)
   01-case-study-engine/    /portal/case-studies
   02-pipeline-crm/         /portal/pipeline (currently switched off)
   03-recruitment-ats/      /apply, /portal/recruiting, /portal/interview, /portal/flags
