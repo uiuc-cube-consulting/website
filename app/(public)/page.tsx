@@ -43,7 +43,7 @@ export default function HomePage() {
             <div className="max-w-2xl">
               <p className="eyebrow">This semester</p>
               <h2 className="mt-4 font-display font-extrabold text-[var(--bg-dark)] text-4xl md:text-5xl leading-[1.05]">
-                Seven teams, seven clients.
+                {PROJECTS.length} teams, {PROJECTS.length} clients.
               </h2>
               <p className="mt-5 text-[var(--muted)] text-[17px] leading-relaxed">
                 Every engagement runs the full UIUC semester, from kickoff to final
