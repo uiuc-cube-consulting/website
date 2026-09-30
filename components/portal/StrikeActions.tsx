@@ -14,7 +14,7 @@ import {
   upgradeTemplate,
   requesterUpgradeTemplate,
 } from "@/lib/email/strikes";
-import { weightLabel, strikeLabel } from "@/lib/strikes";
+import { weightLabel } from "@/lib/strikes";
 
 type Strike = {
   id: string;

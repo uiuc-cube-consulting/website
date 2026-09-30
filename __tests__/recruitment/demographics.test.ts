@@ -147,10 +147,10 @@ describe("demographicsReport", () => {
   });
 
   it("calculates mean first round interview score out of 32 for completed interviews", () => {
-    const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as any, weighted_total: 12 };
-    const r1Beh: Review = { ...review("a1", 14), kind: "behavioral", scores: { total: 14 } as any, weighted_total: 14 };
-    const r2Case: Review = { ...review("a2", 10), kind: "case", scores: { total: 10 } as any, weighted_total: 10 };
-    const r2Beh: Review = { ...review("a2", 12), kind: "behavioral", scores: { total: 12 } as any, weighted_total: 12 };
+    const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as unknown as Review["scores"], weighted_total: 12 };
+    const r1Beh: Review = { ...review("a1", 14), kind: "behavioral", scores: { total: 14 } as unknown as Review["scores"], weighted_total: 14 };
+    const r2Case: Review = { ...review("a2", 10), kind: "case", scores: { total: 10 } as unknown as Review["scores"], weighted_total: 10 };
+    const r2Beh: Review = { ...review("a2", 12), kind: "behavioral", scores: { total: 12 } as unknown as Review["scores"], weighted_total: 12 };
 
     const r = demographicsReport(applicants, [r1Case, r1Beh, r2Case, r2Beh], STAGE_ORDER);
     const she = r.groups.find((g) => g.group === "she")!;
@@ -161,8 +161,8 @@ describe("demographicsReport", () => {
   it("calculates mean final round interview score out of 12 for completed final interviews", () => {
     // One sheet, several graders in the room: the candidate's final-round score
     // is the mean of what those graders wrote, not a sum across rubrics.
-    const g1: Review = { ...review("a1", 10), kind: "final", scores: { total: 10 } as any, weighted_total: 10 };
-    const g2: Review = { ...review("a1", 9), kind: "final", scores: { total: 9 } as any, weighted_total: 9 };
+    const g1: Review = { ...review("a1", 10), kind: "final", scores: { total: 10 } as unknown as Review["scores"], weighted_total: 10 };
+    const g2: Review = { ...review("a1", 9), kind: "final", scores: { total: 9 } as unknown as Review["scores"], weighted_total: 9 };
 
     const r = demographicsReport(applicants, [g1, g2], STAGE_ORDER);
     const she = r.groups.find((g) => g.group === "she")!;
@@ -171,7 +171,7 @@ describe("demographicsReport", () => {
   });
 
   it("requires both first-round rubrics before a round score counts", () => {
-    const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as any, weighted_total: 12 };
+    const r1Case: Review = { ...review("a1", 12), kind: "case", scores: { total: 12 } as unknown as Review["scores"], weighted_total: 12 };
     const r = demographicsReport(applicants, [r1Case], STAGE_ORDER);
     const she = r.groups.find((g) => g.group === "she")!;
     expect(she.firstRoundReviewed).toBe(0);
