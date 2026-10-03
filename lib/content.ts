@@ -177,6 +177,8 @@ export type Project = {
 //     ],
 //   },
 
+export const CURRENT_TERM = "Fall 2026";
+
 export const PROJECTS: Project[] = [
   {
     name: "Deloitte",
