@@ -29,7 +29,6 @@ import {
   type Clients,
 } from "@/features/03-recruitment-ats/lib/drive-write";
 import { notesDocRequests } from "@/features/03-recruitment-ats/lib/rubric-doc";
-import { CASE_RUBRIC, BEHAVIORAL_RUBRIC } from "@/features/03-recruitment-ats/lib/interview";
 
 const ROOT = process.env.RECRUITING_DRIVE_ROOT_FOLDER_ID;
 const HAS_CREDS = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && ROOT);
