@@ -300,7 +300,7 @@ export const ALUMNI_PLACEMENTS: Brand[] = [
   { name: "Capital One",     logo: "/alumni/capital-one.webp" },
   { name: "Citi",            logo: "/alumni/citi.png" },
   { name: "Synchrony",       logo: "/alumni/synchrony.png" },
-  { name: "Intuit",          logo: "/alumni/intuit.png" },
+  { name: "DRW",             logo: "/alumni/drw.svg",      mono: true },
   { name: "Rivian",          logo: "/alumni/rivian.png" },
   { name: "Caterpillar",     logo: "/alumni/caterpillar.png" },
   { name: "Boeing",          logo: "/alumni/boeing.png", darkInk: true },
