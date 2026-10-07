@@ -70,6 +70,31 @@ export type FetchOptions = {
   to?: Date;
 };
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const eventCache = new Map<string, { expiresAt: number; promise: Promise<CalendarResult> }>();
+
+/**
+ * The cache is intentionally process-local; each serverless instance has its
+ * own cache. Keep the in-flight request too so simultaneous portal visits share
+ * one Google call. Only successful results remain cached.
+ */
+function cachedEvents(key: string, load: () => Promise<CalendarResult>): Promise<CalendarResult> {
+  const now = Date.now();
+  const cached = eventCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+  if (cached) eventCache.delete(key);
+
+  const promise = load().then((result) => {
+    if (!result.ok && eventCache.get(key)?.promise === promise) eventCache.delete(key);
+    return result;
+  }, (error) => {
+    if (eventCache.get(key)?.promise === promise) eventCache.delete(key);
+    throw error;
+  });
+  eventCache.set(key, { expiresAt: now + CACHE_TTL_MS, promise });
+  return promise;
+}
+
 /**
  * Upcoming events, soonest first.
  *
@@ -103,42 +128,47 @@ export async function fetchUpcomingEvents(opts: FetchOptions = {}): Promise<Cale
     return horizon;
   })();
 
-  try {
-    const res = await cal.events.list({
-      calendarId,
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: opts.maxResults ?? 50,
-    });
-    return { ok: true, events: normalizeEvents((res.data.items ?? []) as RawEvent[]) };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  const request = {
+    calendarId,
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: true,
+    orderBy: "startTime" as const,
+    maxResults: opts.maxResults ?? 50,
+  };
+  const cacheKey = JSON.stringify([request.calendarId, request.timeMin, request.timeMax, request.maxResults]);
 
-    // The two setup mistakes produce opaque Google errors. Name them, because
-    // "Not Found" on a calendar that plainly exists is genuinely baffling.
-    if (/has not been used in project|is disabled/i.test(msg)) {
-      return {
-        ok: false,
-        error: "The Google Calendar API is not enabled for this project.",
-        hint: "Enable it in Google Cloud → cube-project-496921 → APIs & Services → Library.",
-      };
+  return cachedEvents(cacheKey, async () => {
+    try {
+      const res = await cal.events.list(request);
+      return { ok: true, events: normalizeEvents((res.data.items ?? []) as RawEvent[]) };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+
+      // The two setup mistakes produce opaque Google errors. Name them, because
+      // "Not Found" on a calendar that plainly exists is genuinely baffling.
+      if (/has not been used in project|is disabled/i.test(msg)) {
+        return {
+          ok: false,
+          error: "The Google Calendar API is not enabled for this project.",
+          hint: "Enable it in Google Cloud → cube-project-496921 → APIs & Services → Library.",
+        };
+      }
+      if (/not ?found|404/i.test(msg)) {
+        return {
+          ok: false,
+          error: `The service account cannot see "${calendarId}".`,
+          hint: "Share the calendar with the service account's client_email as \"See all event details\".",
+        };
+      }
+      if (/forbidden|403|insufficient/i.test(msg)) {
+        return {
+          ok: false,
+          error: "The service account is not allowed to read this calendar.",
+          hint: "Re-share it with \"See all event details\" rather than \"See only free/busy\".",
+        };
+      }
+      return { ok: false, error: msg };
     }
-    if (/not ?found|404/i.test(msg)) {
-      return {
-        ok: false,
-        error: `The service account cannot see "${calendarId}".`,
-        hint: "Share the calendar with the service account's client_email as \"See all event details\".",
-      };
-    }
-    if (/forbidden|403|insufficient/i.test(msg)) {
-      return {
-        ok: false,
-        error: "The service account is not allowed to read this calendar.",
-        hint: "Re-share it with \"See all event details\" rather than \"See only free/busy\".",
-      };
-    }
-    return { ok: false, error: msg };
-  }
+  });
 }
