@@ -22,9 +22,6 @@ import { toDisplayDays, todayKey, CLUB_TIME_ZONE } from "@/lib/calendar-format";
 // than two — a request to learn the date, then a request for the month.
 
 export const dynamic = "force-dynamic";
-// The calendar changes on human timescales; a short cache keeps a busy portal
-// from making a Google request per page view.
-export const revalidate = 300;
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
