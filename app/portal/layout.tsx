@@ -28,7 +28,6 @@ export default async function PortalLayout({
   // (auth.ts → session.user.role).
   const role = session?.user?.role;
   const isExec = role === "exec";
-  const isLeadership = isExec || role === "project_manager" || role === "senior_consultant";
   // Interviewing is open to every member — matches canInterviewRole() in the ATS.
   const isInterviewer = canInterviewRole(role);
   // Recruiting visibility is a cycle-to-cycle exec toggle (lib/visibility.ts),
@@ -49,6 +48,7 @@ export default async function PortalLayout({
     { href: "/portal", label: "Dashboard" },
     { href: "/portal/case-studies", label: "Case Studies" },
     { href: "/portal/brain", label: "CUBE Brain" },
+    { href: "/portal/alumni", label: "Alumni" },
     // PMs file strikes; exec see the review dashboard (below).
     ...(role === "project_manager" ? [{ href: "/portal/strikes/new", label: "File a Strike" }] : []),
     // Leadership tools — only the roles that can use them.

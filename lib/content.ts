@@ -177,6 +177,8 @@ export type Project = {
 //     ],
 //   },
 
+export const CURRENT_TERM = "Fall 2026";
+
 export const PROJECTS: Project[] = [
   {
     name: "Deloitte",
@@ -277,6 +279,7 @@ export const ALUMNI_PLACEMENTS: Brand[] = [
   { name: "Meta",            logo: "/alumni/meta.png" },
   { name: "OpenAI",          logo: "/alumni/openai.svg",   mono: true },
   { name: "NVIDIA",          logo: "/alumni/nvidia.svg",   mono: true },
+  { name: "Texas Instruments", logo: "/alumni/texas-instruments.svg", mono: true },
   { name: "Adobe",           logo: "/alumni/adobe.png" },
   { name: "Oracle",          logo: "/alumni/oracle.svg",   mono: true },
   { name: "Rippling",        logo: "/alumni/rippling.svg", mono: true },
@@ -291,14 +294,17 @@ export const ALUMNI_PLACEMENTS: Brand[] = [
   { name: "KPMG",            logo: "/alumni/kpmg.png" },
   { name: "Crowe",           logo: "/alumni/crowe.png" },
   { name: "Citadel",         logo: "/alumni/citadel.svg",  mono: true },
+  { name: "Jump Trading",    logo: "/alumni/jump-trading.svg", mono: true },
   { name: "CME Group",       logo: "/alumni/cme-group.svg", mono: true },
+  { name: "JPMorgan Chase",  logo: "/alumni/jpmorgan-chase.svg", mono: true },
   { name: "Capital One",     logo: "/alumni/capital-one.webp" },
   { name: "Citi",            logo: "/alumni/citi.png" },
   { name: "Synchrony",       logo: "/alumni/synchrony.png" },
-  { name: "Intuit",          logo: "/alumni/intuit.png" },
+  { name: "DRW",             logo: "/alumni/drw.svg",      mono: true },
   { name: "Rivian",          logo: "/alumni/rivian.png" },
   { name: "Caterpillar",     logo: "/alumni/caterpillar.png" },
   { name: "Boeing",          logo: "/alumni/boeing.png", darkInk: true },
+  { name: "SpaceX",          logo: "/alumni/spacex.svg",   mono: true },
 ];
 
 export const FALL_RECRUITMENT = {

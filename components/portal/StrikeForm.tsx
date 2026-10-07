@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MemberSearch, type MemberOption } from "@/components/portal/MemberSearch";
 import { EmailEditorModal, type EmailPayload } from "@/components/portal/EmailEditorModal";
 import { approvalTemplate } from "@/lib/email/strikes";
@@ -111,9 +112,9 @@ export function StrikeForm({ isExec }: Props) {
               : `Your strike request against ${selectedMember?.name} has been submitted for exec review.`}
           </p>
         </div>
-        <a href="/portal/strikes" className="btn btn-gold text-sm px-5 py-2 mt-2">
+        <Link href="/portal/strikes" className="btn btn-gold text-sm px-5 py-2 mt-2">
           View strikes
-        </a>
+        </Link>
       </div>
     );
   }

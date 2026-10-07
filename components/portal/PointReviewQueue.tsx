@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Search, X } from "lucide-react";
+import { Check, ImageOff, Loader2, Search, X } from "lucide-react";
 import { MAX_NOTE, categoryLabel, type SubmissionRow, type SubmissionStatus } from "@/lib/point-catalog";
 import {
   SubmissionStatusBadge,
@@ -170,22 +170,32 @@ function ReviewCard({ submission: s, onReviewed }: { submission: SubmissionRow; 
 
   return (
     <li className="rounded-2xl border border-[var(--border)] bg-white overflow-hidden flex flex-col">
-      <a
-        href={evidenceUrl(s.id)}
-        target="_blank"
-        rel="noreferrer"
-        className="block bg-[var(--bg-cream)]"
-        title="Open the full-size photo"
-      >
-        {/* Served by our own auth-checked route; next/image can't proxy it. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={evidenceUrl(s.id)}
-          alt={`Photo ${who} submitted for ${s.event_label}`}
-          loading="lazy"
-          className="w-full aspect-[4/3] object-cover"
-        />
-      </a>
+      {s.has_photo ? (
+        <a
+          href={evidenceUrl(s.id)}
+          target="_blank"
+          rel="noreferrer"
+          className="block bg-[var(--bg-cream)]"
+          title="Open the full-size photo"
+        >
+          {/* Served by our own auth-checked route; next/image can't proxy it. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={evidenceUrl(s.id)}
+            alt={`Photo ${who} submitted for ${s.event_label}`}
+            loading="lazy"
+            className="w-full aspect-[4/3] object-cover"
+          />
+        </a>
+      ) : (
+        <div className="w-full aspect-[4/3] bg-[var(--bg-cream)] grid place-items-center text-center px-6">
+          <div>
+            <ImageOff size={28} className="mx-auto text-[var(--muted)]" />
+            <p className="mt-2 text-sm font-medium text-[var(--bg-dark)]">No photo attached</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">Check the note, or ask them for proof before approving.</p>
+          </div>
+        </div>
+      )}
 
       <div className="p-5 flex-1 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">

@@ -14,7 +14,6 @@ in CUBE's past engagements, with citations. v1 seeds its corpus from the 102 pas
   README.md  SPEC.md  INTEGRATION.md
   data/corpus.json            generated corpus (committed) — 96 chunks
   scripts/build-corpus.mjs    rebuilds corpus.json from past_projects.json
-  scripts/eval.mjs            retrieval sanity gate (run before trusting answers)
   lib/corpus.ts               TF-IDF retrieval (swap-in point for pgvector)
   lib/generate.ts             SERVER-ONLY: Gemini (REST) or extractive fallback
   components/BrainChat.tsx     chat UI with citations
@@ -22,10 +21,14 @@ in CUBE's past engagements, with citations. v1 seeds its corpus from the 102 pas
   app/api/brain/route.ts       auth-gated retrieve + answer
 ```
 
-## Run / rebuild / eval
+## Run / rebuild / test
 
 ```bash
 npm run dev                                              # then /portal/brain (sign in)
 node features/04-cube-brain-rag/scripts/build-corpus.mjs # rebuild corpus
-node features/04-cube-brain-rag/scripts/eval.mjs         # retrieval checks
+npm test -- --runInBand __tests__/brain                # retrieval + answer checks
 ```
+
+`__tests__/brain/` tests the production retriever against four topic queries and
+stopword-only input, plus empty, extractive, and Gemini answers. API calls are mocked;
+no Gemini key is needed. These checks also run as part of `npm test`.

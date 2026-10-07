@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ProjectShowcase } from "@/components/ProjectShowcase";
 import { PageHero } from "@/components/PageHero";
-import { PROJECTS } from "@/lib/content";
+import { PROJECTS, CURRENT_TERM } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Projects",
@@ -12,7 +12,7 @@ export default function ProjectsPage() {
   return (
     <>
       <PageHero
-        eyebrow="Fall 2026"
+        eyebrow={CURRENT_TERM}
         title="Our Projects."
         blurb="Every semester our teams partner with founders, operators, and engineering leaders to ship deliverables that move their business forward. Here&rsquo;s a snapshot of what we&rsquo;re building this term."
       />
@@ -25,7 +25,7 @@ export default function ProjectsPage() {
               Engagements in flight.
             </h2>
             <p className="mt-5 text-[var(--muted)] text-[17px] leading-relaxed">
-              Seven teams, seven clients. Each project runs the full UIUC semester from kickoff to final delivery.
+              {PROJECTS.length} teams, {PROJECTS.length} clients. Each project runs the full UIUC semester from kickoff to final delivery.
             </p>
           </div>
           <div className="mt-12 grid md:grid-cols-2 gap-6 md:gap-8">

@@ -1,8 +1,8 @@
 /**
  * Point submission routes — who may submit, who may review, who may see the
  * photo. Project managers, senior consultants, returning members and members
- * submit; only exec review; a photo is visible to the member who submitted it
- * and to exec, nobody else.
+ * submit, with or without a photo; only exec review; a photo is visible to the
+ * member who submitted it and to exec, nobody else.
  */
 
 import { NextRequest } from "next/server";
@@ -67,6 +67,7 @@ function row(over: Partial<SubmissionWithEvidence> = {}): SubmissionWithEvidence
     points: 1,
     occurred_on: "2026-09-12",
     note: null,
+    has_photo: true,
     status: "pending",
     reviewed_at: null,
     review_note: null,
@@ -140,10 +141,30 @@ describe("POST /api/points/submissions", () => {
     expect(store.createSubmission).not.toHaveBeenCalled();
   });
 
-  it("requires a photo", async () => {
-    const res = await submit({ photo: undefined });
+  it.each([undefined, null, ""])("accepts a submission without a photo (photo: %p)", async (photo) => {
+    const res = await submit({ photo });
+    expect(res.status).toBe(201);
+    expect(store.createSubmission).toHaveBeenCalledTimes(1);
+    expect(store.createSubmission.mock.calls[0][1]).toBeNull();
+  });
+
+  it("still refuses a photo that is attached but invalid, rather than dropping it", async () => {
+    const svg = `data:image/svg+xml;base64,${Buffer.from("<svg onload=alert(1)>").toString("base64")}`;
+    const res = await submit({ photo: svg });
     expect(res.status).toBe(400);
     expect(store.createSubmission).not.toHaveBeenCalled();
+  });
+
+  it("explains which SQL to run when the live table still requires a photo", async () => {
+    store.createSubmission.mockResolvedValueOnce({
+      ok: false,
+      missing: false,
+      outdated: true,
+      error: "Submitting without a photo isn't switched on yet. Exec need to run db/point-submissions-optional-photo.sql in Supabase. Attach a photo for now.",
+    });
+    const res = await submit({ photo: undefined });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toMatch(/point-submissions-optional-photo\.sql/);
   });
 
   it("takes the points, label and category from the catalog, not the request", async () => {
@@ -274,6 +295,14 @@ describe("GET /api/points/submissions/[id]/evidence", () => {
   it("refuses any other member", async () => {
     mockSession = { user: OTHER };
     expect((await evidence()).status).toBe(403);
+    expect(store.downloadEvidence).not.toHaveBeenCalled();
+  });
+
+  it("404s, without touching storage, when no photo was attached", async () => {
+    store.getSubmission.mockResolvedValue(row({ has_photo: false, evidence_path: null, evidence_mime: null }));
+    const res = await evidence();
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toMatch(/no photo/i);
     expect(store.downloadEvidence).not.toHaveBeenCalled();
   });
 
