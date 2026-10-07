@@ -6,7 +6,7 @@
 -- `point_entries.category`). Idempotent: safe to re-run.
 --
 -- Members submit an event from the Point Breakdowns sheet (lib/point-catalog.ts)
--- with a photo as evidence. Nothing counts until exec approve it; approval then
+-- with a photo as evidence (optional since db/point-submissions-optional-photo.sql). Nothing counts until exec approve it; approval then
 -- appends a normal row to `point_entries` in the event's category, so the
 -- standings board, totals and breakdowns all keep working exactly as they do
 -- for points exec award by hand.
@@ -35,8 +35,9 @@ create table if not exists point_submissions (
   occurred_on     date not null,
   note            text check (note is null or length(note) <= 500),
 
-  -- Object key in the private `point-evidence` bucket. NOT NULL: the photo is
-  -- uploaded before the row is inserted, so a submission without one can't exist.
+  -- Object key in the private `point-evidence` bucket. The photo is uploaded
+  -- before the row is inserted. db/point-submissions-optional-photo.sql later
+  -- drops NOT NULL here, so members can submit without a photo.
   evidence_path   text not null,
   evidence_mime   text not null check (evidence_mime in ('image/png', 'image/jpeg', 'image/webp')),
 

@@ -64,6 +64,25 @@ export function decodeEvidence(dataUrl: unknown): DecodedEvidence {
   return { ok: true, bytes, mime };
 }
 
+export type Evidence = { bytes: Uint8Array; mime: EvidenceMime };
+
+export type OptionalEvidence = { ok: true; evidence: Evidence | null } | { ok: false; error: string };
+
+/**
+ * The photo is optional: strongly encouraged, but a member can submit without
+ * one. No photo at all is `evidence: null`. A photo that IS attached still goes
+ * through every check in decodeEvidence, so making it optional doesn't loosen
+ * what can get stored.
+ */
+export function decodeOptionalEvidence(value: unknown): OptionalEvidence {
+  if (value === undefined || value === null || (typeof value === "string" && !value.trim())) {
+    return { ok: true, evidence: null };
+  }
+  const decoded = decodeEvidence(value);
+  if (!decoded.ok) return decoded;
+  return { ok: true, evidence: { bytes: decoded.bytes, mime: decoded.mime } };
+}
+
 export function extensionFor(mime: EvidenceMime): string {
   if (mime === "image/jpeg") return "jpg";
   if (mime === "image/webp") return "webp";

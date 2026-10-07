@@ -103,6 +103,8 @@ export type SubmissionRow = {
   /** YYYY-MM-DD */
   occurred_on: string;
   note: string | null;
+  /** Photos are optional, so the UI needs to know whether there is one to show. */
+  has_photo: boolean;
   status: SubmissionStatus;
   reviewed_at: string | null;
   review_note: string | null;

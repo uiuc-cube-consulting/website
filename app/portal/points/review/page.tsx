@@ -26,7 +26,7 @@ export default async function PointReviewPage() {
         Review submissions
       </h1>
       <p className="mt-3 text-[var(--muted)] max-w-2xl">
-        Check the photo matches the event. Approving adds the points to the member&rsquo;s total on the standings
+        Check the photo matches the event. Photos are optional, so for one without, go by the note. Approving adds the points to the member&rsquo;s total on the standings
         board. Rejecting shows your note to them on their submission.
       </p>
       <div className="mt-8">

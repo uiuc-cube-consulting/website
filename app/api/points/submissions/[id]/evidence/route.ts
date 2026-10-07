@@ -25,6 +25,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Only exec and the member who submitted this can view the photo." }, { status: 403 });
   }
 
+  // Photos are optional, so a submission may have nothing to show.
+  if (!submission.evidence_path) {
+    return NextResponse.json({ error: "No photo was attached to this submission." }, { status: 404 });
+  }
+
   const bytes = await downloadEvidence(submission.evidence_path);
   if (!bytes) return NextResponse.json({ error: "Photo could not be read." }, { status: 404 });
 
