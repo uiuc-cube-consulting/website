@@ -25,7 +25,7 @@ import {
   type SubmissionLike,
   type SubmissionStatus,
 } from "@/lib/point-catalog";
-import { decodeEvidence, MAX_EVIDENCE_BYTES } from "@/lib/point-evidence";
+import { decodeEvidence, decodeOptionalEvidence, MAX_EVIDENCE_BYTES } from "@/lib/point-evidence";
 
 const NOW = new Date("2026-09-13T18:00:00Z");
 
@@ -222,5 +222,24 @@ describe("decodeEvidence", () => {
       ok: false,
       error: "That photo is too large. Try a smaller one.",
     });
+  });
+});
+
+describe("decodeOptionalEvidence", () => {
+  const JPEG = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]).toString("base64")}`;
+
+  it.each([undefined, null, "", "   "])("treats %p as no photo", (value) => {
+    expect(decodeOptionalEvidence(value)).toEqual({ ok: true, evidence: null });
+  });
+
+  it("decodes a photo that is attached", () => {
+    const result = decodeOptionalEvidence(JPEG);
+    expect(result).toMatchObject({ ok: true, evidence: { mime: "image/jpeg" } });
+  });
+
+  it("applies every decodeEvidence check to an attached photo", () => {
+    const svg = Buffer.from("<svg onload=alert(1)>").toString("base64");
+    expect(decodeOptionalEvidence(`data:image/svg+xml;base64,${svg}`)).toMatchObject({ ok: false });
+    expect(decodeOptionalEvidence("not a data url")).toMatchObject({ ok: false });
   });
 });

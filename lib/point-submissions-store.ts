@@ -15,15 +15,20 @@ import {
   type SubmissionRow,
   type SubmissionStatus,
 } from "@/lib/point-catalog";
-import { extensionFor, type EvidenceMime } from "@/lib/point-evidence";
+import { extensionFor, type Evidence } from "@/lib/point-evidence";
 import { categoryTotals, type PointEntry } from "@/lib/points";
 
 /** PRIVATE bucket. Photos are only ever served through the evidence route. */
 export const EVIDENCE_BUCKET = "point-evidence";
 
-export type SubmissionWithEvidence = SubmissionRow & { evidence_path: string; evidence_mime: string };
+/** Both null when the member submitted without a photo. */
+export type SubmissionWithEvidence = SubmissionRow & { evidence_path: string | null; evidence_mime: string | null };
 
-export type StoreFailure = { ok: false; missing: boolean; error: string };
+/**
+ * `outdated`: the table exists but predates a migration this call needs, e.g. a
+ * photo-less submission before db/point-submissions-optional-photo.sql has run.
+ */
+export type StoreFailure = { ok: false; missing: boolean; outdated?: boolean; error: string };
 export type ListResult = { ok: true; rows: SubmissionRow[] } | StoreFailure;
 export type CreateResult = { ok: true; row: SubmissionRow } | StoreFailure;
 /** `outcome` is what review_point_submission returned, e.g. 'approved' or 'already_rejected'. */
@@ -53,7 +58,8 @@ function failure(error: { code?: string; message: string } | null): StoreFailure
 }
 
 const COLUMNS =
-  "id, created_at, member_id, category, event_key, event_label, points, occurred_on, note, " +
+  // evidence_path is read only to derive has_photo; toRow never passes it on.
+  "id, created_at, member_id, category, event_key, event_label, points, occurred_on, note, evidence_path, " +
   "status, reviewed_at, review_note, member:member_id ( full_name, email, role ), reviewer:reviewed_by ( full_name )";
 
 type Embedded<T> = T | T[] | null | undefined;
@@ -64,8 +70,8 @@ function one<T>(value: Embedded<T>): T | null {
 type RawRow = Omit<SubmissionRow, "member_name" | "member_email" | "member_role" | "reviewer_name"> & {
   member?: Embedded<{ full_name: string | null; email: string | null; role: string | null }>;
   reviewer?: Embedded<{ full_name: string | null }>;
-  evidence_path?: string;
-  evidence_mime?: string;
+  evidence_path?: string | null;
+  evidence_mime?: string | null;
 };
 
 function toRow(raw: RawRow): SubmissionRow {
@@ -83,6 +89,7 @@ function toRow(raw: RawRow): SubmissionRow {
     points: raw.points,
     occurred_on: raw.occurred_on,
     note: raw.note,
+    has_photo: Boolean(raw.evidence_path),
     status: raw.status as SubmissionStatus,
     reviewed_at: raw.reviewed_at,
     review_note: raw.review_note,
@@ -104,29 +111,37 @@ export async function listSubmissions(opts: { memberId?: string }): Promise<List
   return { ok: true, rows: ((data ?? []) as unknown as RawRow[]).map(toRow) };
 }
 
-/** One submission including where its photo is stored, or null if there is no such row. */
+/** One submission including where its photo is stored (if it has one), or null if there is no such row. */
 export async function getSubmission(id: string): Promise<SubmissionWithEvidence | null> {
   const sb = db();
   if (!sb || !id) return null;
 
   const { data, error } = await sb
     .from("point_submissions")
-    .select(`${COLUMNS}, evidence_path, evidence_mime`)
+    .select(`${COLUMNS}, evidence_mime`)
     .eq("id", id)
     .maybeSingle();
   // A malformed id is a Postgres cast error (22P02), which is still "no such row".
   if (error || !data) return null;
 
   const raw = data as unknown as RawRow;
-  return { ...toRow(raw), evidence_path: String(raw.evidence_path), evidence_mime: String(raw.evidence_mime) };
+  return { ...toRow(raw), evidence_path: raw.evidence_path ?? null, evidence_mime: raw.evidence_mime ?? null };
 }
 
+// Postgres not_null_violation: on an insert without a photo, it means the live
+// table still has the original NOT NULL on evidence_path.
+const NOT_NULL_VIOLATION = "23502";
+
+const OPTIONAL_PHOTO_NOT_SET_UP =
+  "Submitting without a photo isn't switched on yet. Exec need to run " +
+  "db/point-submissions-optional-photo.sql in Supabase. Attach a photo for now.";
+
 /**
- * Store the photo, then the row.
+ * Store the photo (if there is one), then the row.
  *
- * In that order so `evidence_path` can be NOT NULL: a submission row never
- * exists without its evidence. If the insert fails, the orphaned photo is
- * removed again.
+ * In that order so a row that names a photo always has one behind it. If the
+ * insert fails, the orphaned photo is removed again. With no photo, both
+ * evidence columns are null.
  */
 export async function createSubmission(
   input: {
@@ -138,28 +153,34 @@ export async function createSubmission(
     occurred_on: string;
     note: string | null;
   },
-  evidence: { bytes: Uint8Array; mime: EvidenceMime }
+  evidence: Evidence | null
 ): Promise<CreateResult> {
   const sb = db();
   if (!sb) return NOT_CONFIGURED;
 
-  const path = `${input.member_id}/${randomUUID()}.${extensionFor(evidence.mime)}`;
-  const upload = await sb.storage.from(EVIDENCE_BUCKET).upload(path, evidence.bytes, {
-    contentType: evidence.mime,
-    upsert: false,
-  });
-  if (upload.error) {
-    return { ok: false, missing: /bucket not found/i.test(upload.error.message), error: upload.error.message };
+  let path: string | null = null;
+  if (evidence) {
+    path = `${input.member_id}/${randomUUID()}.${extensionFor(evidence.mime)}`;
+    const upload = await sb.storage.from(EVIDENCE_BUCKET).upload(path, evidence.bytes, {
+      contentType: evidence.mime,
+      upsert: false,
+    });
+    if (upload.error) {
+      return { ok: false, missing: /bucket not found/i.test(upload.error.message), error: upload.error.message };
+    }
   }
 
   const { data, error } = await sb
     .from("point_submissions")
-    .insert({ ...input, evidence_path: path, evidence_mime: evidence.mime })
+    .insert({ ...input, evidence_path: path, evidence_mime: evidence?.mime ?? null })
     .select(COLUMNS)
     .single();
 
   if (error || !data) {
-    await sb.storage.from(EVIDENCE_BUCKET).remove([path]);
+    if (path) await sb.storage.from(EVIDENCE_BUCKET).remove([path]);
+    if (!evidence && error?.code === NOT_NULL_VIOLATION) {
+      return { ok: false, missing: false, outdated: true, error: OPTIONAL_PHOTO_NOT_SET_UP };
+    }
     return failure(error);
   }
   return { ok: true, row: toRow(data as unknown as RawRow) };

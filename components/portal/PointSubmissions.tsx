@@ -246,11 +246,6 @@ function SubmitForm({
       setError("Enter the date of the event.");
       return;
     }
-    if (!photo) {
-      setError("Attach a photo of you at the event.");
-      return;
-    }
-
     setBusy(true);
     try {
       const r = await fetch("/api/points/submissions", {
@@ -260,7 +255,11 @@ function SubmitForm({
       });
       const j: { error?: string } = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || `Couldn't submit (${r.status}).`);
-      setDone(`Submitted "${selected.label}" for review.`);
+      setDone(
+        photo
+          ? `Submitted "${selected.label}" for review.`
+          : `Submitted "${selected.label}" for review without a photo.`
+      );
       setEventKey("");
       setDate("");
       setNote("");
@@ -278,7 +277,8 @@ function SubmitForm({
       <div>
         <p className="font-display font-bold text-[var(--bg-dark)]">Submit points</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Pick what you did and attach a photo of you there. Exec review every submission before the points count.
+          Pick what you did and, if you can, attach a photo of you there. Exec review every submission before the
+          points count.
         </p>
       </div>
 
@@ -361,7 +361,10 @@ function SubmitForm({
         </label>
 
         <div>
-          <span className={fieldLabel}>Photo evidence</span>
+          <span className={fieldLabel}>
+            Photo evidence{" "}
+            <span className="normal-case font-normal tracking-normal">(optional, highly recommended)</span>
+          </span>
           {photo ? (
             <div className="mt-2 relative inline-block">
               {/* A local data URL preview; next/image has nothing to optimise here. */}
@@ -386,6 +389,12 @@ function SubmitForm({
               {photoBusy ? "Processing…" : "Add a photo"}
               <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="sr-only" />
             </label>
+          )}
+          {!photo && !photoBusy && (
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              A photo of you at the event is the quickest way to get approved. No photo? Use the note to say who
+              you met or what you did.
+            </p>
           )}
         </div>
       </div>
@@ -455,14 +464,18 @@ function MySubmissions({ rows, loading }: { rows: SubmissionRow[]; loading: bool
                   <p className="font-medium text-[var(--bg-dark)]">{s.event_label}</p>
                   <p className="mt-0.5 text-xs text-[var(--muted)]">
                     {categoryLabel(s.category)} · {formatDay(s.occurred_on)} ·{" "}
-                    <a
-                      href={evidenceUrl(s.id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline hover:text-[var(--gold-deep)]"
-                    >
-                      photo
-                    </a>
+                    {s.has_photo ? (
+                      <a
+                        href={evidenceUrl(s.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:text-[var(--gold-deep)]"
+                      >
+                        photo
+                      </a>
+                    ) : (
+                      "no photo"
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

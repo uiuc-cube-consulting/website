@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { canSubmitPoints, cohortFor, emptyCategoryTotals, validateSubmission } from "@/lib/point-catalog";
-import { decodeEvidence } from "@/lib/point-evidence";
+import { decodeOptionalEvidence } from "@/lib/point-evidence";
 import { createSubmission, ledgerCategoryTotals, listSubmissions } from "@/lib/point-submissions-store";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ const NOT_SET_UP =
  *
  * Exec get every submission (the review queue). Everyone else gets only their
  * own, plus their per-category ledger totals for the progress bars. A
- * submission carries a photo and a note about who the member met, which is not
+ * submission can carry a photo and a note about who the member met, which is not
  * something the rest of the roster needs to read.
  */
 export async function GET() {
@@ -47,7 +47,11 @@ export async function GET() {
  * Open to project managers, senior consultants, returning members and members
  * (SUBMITTER_ROLES in lib/point-catalog.ts).
  *
- * body: { event_key, occurred_on: "YYYY-MM-DD", note?: string, photo: data URL }
+ * body: { event_key, occurred_on: "YYYY-MM-DD", note?: string, photo?: data URL }
+ *
+ * The photo is optional but encouraged (the form says so). When one is sent it
+ * must pass every check in lib/point-evidence.ts; a bad photo is refused, not
+ * quietly dropped.
  *
  * Only the event is taken from the request. Its category, label and points come
  * from the catalog, so a hand-edited request can't claim 50 points for a
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const photo = decodeEvidence(body.photo);
+  const photo = decodeOptionalEvidence(body.photo);
   if (!photo.ok) return NextResponse.json({ error: photo.error }, { status: 400 });
 
   // Their own history, for the repeat limit.
@@ -105,12 +109,12 @@ export async function POST(req: NextRequest) {
       occurred_on: checked.occurredOn,
       note: checked.note,
     },
-    { bytes: photo.bytes, mime: photo.mime }
+    photo.evidence
   );
   if (!created.ok) {
-    return created.missing
-      ? NextResponse.json({ error: NOT_SET_UP }, { status: 503 })
-      : NextResponse.json({ error: created.error }, { status: 500 });
+    if (created.missing) return NextResponse.json({ error: NOT_SET_UP }, { status: 503 });
+    if (created.outdated) return NextResponse.json({ error: created.error }, { status: 503 });
+    return NextResponse.json({ error: created.error }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, submission: created.row }, { status: 201 });
