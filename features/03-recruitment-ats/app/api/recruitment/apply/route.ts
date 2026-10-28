@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createApplicant } from "@/features/03-recruitment-ats/lib/store";
 import { getActiveCycle } from "@/features/03-recruitment-ats/lib/visibility";
+import { validateIntake } from "@/features/03-recruitment-ats/lib/intake";
 
 // Public endpoint — the applicant intake form posts here. No auth (anyone can apply),
 // but writes go through the server service role; the table is RLS-locked to anon.
@@ -13,34 +14,22 @@ import { getActiveCycle } from "@/features/03-recruitment-ats/lib/visibility";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let body: Record<string, unknown>;
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const name = String(body.name ?? "").trim();
-  const email = String(body.email ?? "").trim();
-  if (!name || !email || !/.+@.+\..+/.test(email)) {
-    return NextResponse.json({ ok: false, error: "Name and a valid email are required." }, { status: 400 });
-  }
-
-  // Everything except the core fields is captured as free-form responses.
-  const CORE = new Set(["name", "email", "year", "major", "college"]);
-  const responses: Record<string, string> = {};
-  for (const [k, v] of Object.entries(body)) {
-    if (!CORE.has(k)) responses[k] = String(v ?? "");
+  const intake = validateIntake(body);
+  if (intake.kind === "honeypot") return NextResponse.json({ ok: true });
+  if (intake.kind === "invalid") {
+    return NextResponse.json({ ok: false, error: intake.error }, { status: 400 });
   }
 
   const result = await createApplicant({
-    name,
-    email,
+    ...intake.applicant,
     cycle: await getActiveCycle(),
-    year: body.year ? String(body.year) : undefined,
-    major: body.major ? String(body.major) : undefined,
-    college: body.college ? String(body.college) : undefined,
-    responses,
   });
 
   if (result.demo) {

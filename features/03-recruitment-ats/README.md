@@ -8,6 +8,12 @@ compounds — better recruiting → better members → better deliverables.
 Backed by **Supabase** (already a dependency). Until it's configured, the console and
 analytics run on demo data so you can explore the whole flow; writes are disabled in demo mode.
 
+The public intake route accepts only the form's seven text fields: short fields
+are capped at 200 characters, `why` and `proud` at 3,000. The shared validator in
+`lib/intake.ts` rejects malformed or oversized input, drops unknown fields, and
+silently accepts filled honeypots without writing. Browser `maxLength` values use
+the same constants. These guards are not a replacement for rate limiting.
+
 ```
 03-recruitment-ats/
   README.md            ← you are here
