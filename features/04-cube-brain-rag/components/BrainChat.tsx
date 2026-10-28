@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Send } from "lucide-react";
+import { BRAIN_QUESTION_LIMIT } from "../lib/limits";
 
 type Msg = {
   role: "user" | "assistant";
@@ -100,6 +101,7 @@ export function BrainChat() {
         className="flex items-center gap-2 border-t border-[var(--border)] p-3"
       >
         <input
+          maxLength={BRAIN_QUESTION_LIMIT}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about a topic, client, or approach…"

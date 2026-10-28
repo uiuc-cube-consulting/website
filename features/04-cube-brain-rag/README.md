@@ -32,3 +32,8 @@ npm test -- --runInBand __tests__/brain                # retrieval + answer chec
 `__tests__/brain/` tests the production retriever against four topic queries and
 stopword-only input, plus empty, extractive, and Gemini answers. API calls are mocked;
 no Gemini key is needed. These checks also run as part of `npm test`.
+
+Questions are capped at 500 characters using `lib/limits.ts` in both the input
+and API. Invalid, blank or oversized questions return 400 before retrieval or
+generation; signed-out requests return 401. Route tests mock auth and generation,
+so validation never spends Gemini tokens.
