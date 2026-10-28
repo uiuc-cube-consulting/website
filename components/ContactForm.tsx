@@ -19,20 +19,17 @@ export function ContactForm() {
     const data = new FormData(form);
     const formspreeId = process.env.NEXT_PUBLIC_FORMSPREE_ID;
     if (!formspreeId) {
-  if (process.env.NODE_ENV !== "production") {
-    // Development only: simulate success so the UI can be reviewed.
-    await new Promise((r) => setTimeout(r, 400));
-    setState("success");
-    form.reset();
-    return;
-  }
-
-  setError(
-    `The contact form is temporarily unavailable. Please email ${SITE.email} directly.`
-  );
-  setState("error");
-  return;
-}
+      if (process.env.NODE_ENV !== "production") {
+        // Development only: simulate success so the UI can be reviewed.
+        await new Promise((r) => setTimeout(r, 400));
+        setState("success");
+        form.reset();
+        return;
+      }
+      setError("The contact form is temporarily unavailable.");
+      setState("error");
+      return;
+    }
     try {
       const r = await fetch(`https://formspree.io/f/${formspreeId}`, {
         method: "POST",
@@ -55,10 +52,8 @@ export function ContactForm() {
         <CheckCircle2 className="mx-auto text-[var(--brand-gold)]" size={36} />
         <h3 className="mt-4 text-xl font-semibold text-[var(--brand-navy)]">Thanks for submitting!</h3>
         {process.env.NODE_ENV !== "production" && (
-  <p className="mt-2 text-sm text-[var(--muted)]">
-    (dev: not actually sent)
-  </p>
-)}
+          <p className="mt-2 text-sm text-[var(--muted)]">(dev: not actually sent)</p>
+        )}
         <p className="mt-2 text-sm text-[var(--muted)]">
           We&apos;ll be in touch shortly. In the meantime, feel free to drop us a line at{" "}
           <a className="underline" href={`mailto:${SITE.email}`}>{SITE.email}</a>.
@@ -107,20 +102,11 @@ export function ContactForm() {
       </div>
 
       {error && (
-  <p role="alert" className="text-sm text-red-700">
-    {error}
-    {!process.env.NEXT_PUBLIC_FORMSPREE_ID &&
-      process.env.NODE_ENV === "production" && (
-        <>
-          {" "}
-          <a className="underline" href={`mailto:${SITE.email}`}>
-            Email us directly
-          </a>
-          .
-        </>
+        <p role="alert" className="text-sm text-red-700">
+          {error} You can also email us at{" "}
+          <a className="underline" href={`mailto:${SITE.email}`}>{SITE.email}</a>.
+        </p>
       )}
-  </p>
-)}
 
       <button
         type="submit"
