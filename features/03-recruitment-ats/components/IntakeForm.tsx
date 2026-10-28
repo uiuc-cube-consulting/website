@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { INTAKE_SHORT_LIMIT, INTAKE_ANSWER_LIMIT } from "../lib/intake";
 
 type Status = { kind: "idle" | "submitting" | "ok" | "demo" | "error"; message?: string };
 
@@ -43,36 +44,40 @@ export function IntakeForm() {
 
   return (
     <form onSubmit={onSubmit} className="rounded-3xl border border-[var(--border)] bg-white p-6 md:p-8">
+      <label className="sr-only" aria-hidden="true">
+        Company website
+        <input name="company_website" tabIndex={-1} autoComplete="off" />
+      </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="text-sm font-medium text-[var(--bg-dark)]">Full name *</span>
-          <input name="name" required className={`mt-1.5 ${FIELD}`} placeholder="Jordan Ellis" />
+          <input name="name" required maxLength={INTAKE_SHORT_LIMIT} className={`mt-1.5 ${FIELD}`} placeholder="Jordan Ellis" />
         </label>
         <label className="block">
           <span className="text-sm font-medium text-[var(--bg-dark)]">Email *</span>
-          <input name="email" type="email" required className={`mt-1.5 ${FIELD}`} placeholder="you@illinois.edu" />
+          <input name="email" type="email" required maxLength={INTAKE_SHORT_LIMIT} className={`mt-1.5 ${FIELD}`} placeholder="you@illinois.edu" />
         </label>
         <label className="block">
           <span className="text-sm font-medium text-[var(--bg-dark)]">Year</span>
-          <input name="year" className={`mt-1.5 ${FIELD}`} placeholder="Sophomore" />
+          <input name="year" maxLength={INTAKE_SHORT_LIMIT} className={`mt-1.5 ${FIELD}`} placeholder="Sophomore" />
         </label>
         <label className="block">
           <span className="text-sm font-medium text-[var(--bg-dark)]">Major</span>
-          <input name="major" className={`mt-1.5 ${FIELD}`} placeholder="Industrial Engineering" />
+          <input name="major" maxLength={INTAKE_SHORT_LIMIT} className={`mt-1.5 ${FIELD}`} placeholder="Industrial Engineering" />
         </label>
         <label className="block sm:col-span-2">
           <span className="text-sm font-medium text-[var(--bg-dark)]">College</span>
-          <input name="college" className={`mt-1.5 ${FIELD}`} placeholder="Grainger Engineering" />
+          <input name="college" maxLength={INTAKE_SHORT_LIMIT} className={`mt-1.5 ${FIELD}`} placeholder="Grainger Engineering" />
         </label>
       </div>
 
       <label className="mt-4 block">
         <span className="text-sm font-medium text-[var(--bg-dark)]">Why CUBE?</span>
-        <textarea name="why" rows={3} className={`mt-1.5 ${FIELD}`} placeholder="What draws you to consulting at CUBE?" />
+        <textarea name="why" maxLength={INTAKE_ANSWER_LIMIT} rows={3} className={`mt-1.5 ${FIELD}`} placeholder="What draws you to consulting at CUBE?" />
       </label>
       <label className="mt-4 block">
         <span className="text-sm font-medium text-[var(--bg-dark)]">Something you&rsquo;re proud of</span>
-        <textarea name="proud" rows={3} className={`mt-1.5 ${FIELD}`} placeholder="A project, role, or result you led." />
+        <textarea name="proud" maxLength={INTAKE_ANSWER_LIMIT} rows={3} className={`mt-1.5 ${FIELD}`} placeholder="A project, role, or result you led." />
       </label>
 
       {status.kind === "demo" && (
