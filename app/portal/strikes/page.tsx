@@ -4,6 +4,8 @@ import { createServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { OwnStrikeRow, FiledStrikeRow, ExecStrikeRow } from "@/components/portal/StrikeCard";
+import { StrikeBreakdown } from "@/components/portal/StrikeBreakdown";
+import { strikeBreakdown } from "@/lib/strikes";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +19,19 @@ export default async function StrikesPage() {
 
   // ── Exec view ────────────────────────────────────────────────────────────
   if (role === "exec") {
-    const { data: allStrikes } = await supabase
-      .from("strikes")
-      .select(`
-        id, strike_type, effective_type, reason, status, created_at,
-        member:member_id ( id, full_name, email ),
-        filer:filed_by ( id, full_name, email )
-      `)
-      .order("created_at", { ascending: false });
+    const [{ data: allStrikes }, { data: roster }] = await Promise.all([
+      supabase
+        .from("strikes")
+        .select(`
+          id, member_id, strike_type, effective_type, reason, status, created_at,
+          member:member_id ( id, full_name, email ),
+          filer:filed_by ( id, full_name, email )
+        `)
+        .order("created_at", { ascending: false }),
+      supabase.from("members").select("id, full_name, email, role"),
+    ]);
+
+    const buckets = strikeBreakdown(roster ?? [], allStrikes ?? []);
 
     const pending = (allStrikes ?? []).filter((s) => s.status === "pending");
     const rest = (allStrikes ?? []).filter((s) => s.status !== "pending");
@@ -43,6 +50,8 @@ export default async function StrikesPage() {
             File a strike
           </Link>
         </div>
+
+        <StrikeBreakdown buckets={buckets} />
 
         {/* Pending queue */}
         <section>
