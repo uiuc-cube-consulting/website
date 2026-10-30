@@ -34,6 +34,11 @@ it("does not duplicate current people into alumni when exact email or LinkedIn m
 it("does not merge namesakes on name alone", () => {
   expect(buildNetwork([member], [], [{ ...alumnus, full_name: member.full_name! }], [], false)).toHaveLength(2);
 });
+it("retains ambiguous alumni when exact identifiers point to different members", () => {
+  const other = { ...member, id: "another", email: "other@example.com" };
+  const rows = buildNetwork([member, other], [profile], [{ ...alumnus, linkedin_url: profile.linkedin, email: other.email }], [], false);
+  expect(rows).toHaveLength(3);
+});
 it("invalidates a source review when the linked profile changes", () => {
   const row = buildNetwork([member], [{ ...profile, directory_visible: true, linkedin: "https://www.linkedin.com/in/new-example/" }], [], [review], false)[0];
   expect(row.review).toBeNull();

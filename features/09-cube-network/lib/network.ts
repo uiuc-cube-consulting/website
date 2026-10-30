@@ -32,8 +32,10 @@ export function parseReview(value: unknown): ReviewInput {
 
 /** Names are not identity keys. Deduplicate only exact LinkedIn/email matches. */
 export function buildNetwork(members: Member[], profiles: SharedProfile[], alumni: Alumnus[], reviews: Review[], isExec: boolean): Alumnus[] {
-  const memberEmails = new Set(members.map((m) => m.email.trim().toLowerCase()));
-  const memberLinks = new Set(profiles.map((p) => normalizeLinkedIn(p.linkedin)?.toLowerCase()).filter(Boolean));
+  const identities = members.map((m) => ({
+    id: m.id, email: m.email.trim().toLowerCase(),
+    link: normalizeLinkedIn(profiles.find((p) => p.member_id === m.id)?.linkedin ?? "")?.toLowerCase(),
+  }));
   const current = members.map((m): Alumnus => {
     const p = profiles.find((p) => p.member_id === m.id);
     const shared = p?.directory_visible === true;
@@ -48,10 +50,14 @@ export function buildNetwork(members: Member[], profiles: SharedProfile[], alumn
       source: "manual", updated_at: p?.updated_at ?? "", profile_confirmed_at: shared ? p?.updated_at ?? null : null,
     };
   });
-  const former = alumni.filter((a) => !(
-    (a.email && memberEmails.has(a.email.trim().toLowerCase()))
-    || (a.linkedin_url && memberLinks.has(normalizeLinkedIn(a.linkedin_url)?.toLowerCase()))
-  )).map((a) => ({ ...a, membership: "alumni" as const }));
+  const former = alumni.filter((a) => {
+    const link = normalizeLinkedIn(a.linkedin_url ?? "")?.toLowerCase();
+    const email = a.email?.trim().toLowerCase();
+    const matches = identities.filter((m) => (email && m.email === email) || (link && m.link === link));
+    // Conflicting identifiers/shared profile URLs need a human; never drop a row
+    // simply because one of several current people may be a match.
+    return matches.length !== 1;
+  }).map((a) => ({ ...a, membership: "alumni" as const }));
   return [...current, ...former].map((row) => {
     const review = reviews.find((r) => row.member_id ? r.member_id === row.member_id : r.alumni_id === row.id);
     // Editing a LinkedIn link invalidates the previous link/education linkage.
