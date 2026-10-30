@@ -75,7 +75,7 @@ export default async function PortalLayout({
           out of flow as `absolute inset-x-0 top-full` so opening it can never
           change the header's height. */}
       <header className="relative sticky top-0 z-50 bg-[var(--bg-dark)] text-[var(--fg-on-dark)]">
-        <div className="container-x flex h-16 md:h-20 items-center justify-between gap-2 md:gap-6">
+        <div className="container-x flex h-20 items-center justify-between gap-2 md:gap-6">
           <Link href="/portal" className="flex shrink-0 items-center gap-3 group">
             <Image src="/cube-logo.png" alt="" width={40} height={40} className="w-9 h-9" />
             <span className="font-display font-extrabold leading-[1.02] tracking-[0.04em] text-[13px] md:text-[15px]">
