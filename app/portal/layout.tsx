@@ -111,7 +111,7 @@ export default async function PortalLayout({
                 <Link
                   href="/portal/profile"
                   aria-label={`Open profile for ${name || email}`}
-                  className="max-w-28 truncate rounded-sm text-xs text-white/75 underline underline-offset-4 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)] sm:max-w-40"
+                  className="max-w-28 truncate rounded-sm text-xs text-white/75 underline underline-offset-4 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--gold)] sm:max-w-40"
                 >
                   {name || email}
                 </Link>
