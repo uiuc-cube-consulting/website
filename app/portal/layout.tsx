@@ -46,7 +46,6 @@ export default async function PortalLayout({
   const navLinks: PortalNavLink[] = [
     // Core — everyone. Calendar / Points / Resources live as sections on the Dashboard.
     { href: "/portal", label: "Dashboard" },
-    { href: "/portal/profile", label: "My Profile" },
     { href: "/portal/case-studies", label: "Case Studies" },
     { href: "/portal/brain", label: "CUBE Brain" },
     { href: "/portal/alumni", label: "CUBE Network" },
@@ -76,8 +75,8 @@ export default async function PortalLayout({
           out of flow as `absolute inset-x-0 top-full` so opening it can never
           change the header's height. */}
       <header className="relative sticky top-0 z-50 bg-[var(--bg-dark)] text-[var(--fg-on-dark)]">
-        <div className="container-x flex h-16 md:h-20 items-center justify-between gap-6">
-          <Link href="/portal" className="flex items-center gap-3 group">
+        <div className="container-x flex h-16 md:h-20 items-center justify-between gap-2 md:gap-6">
+          <Link href="/portal" className="flex shrink-0 items-center gap-3 group">
             <Image src="/cube-logo.png" alt="" width={40} height={40} className="w-9 h-9" />
             <span className="font-display font-extrabold leading-[1.02] tracking-[0.04em] text-[13px] md:text-[15px]">
               <span className="block">CUBE</span>
@@ -95,7 +94,7 @@ export default async function PortalLayout({
             <Link href="/" className="nav-link">Public Site</Link>
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {/* Mobile only. "Public Site" is appended here rather than living in
                 `navLinks`, because the desktop nav renders it after a divider as
                 a leave-the-portal action rather than as another portal page. */}
@@ -107,11 +106,15 @@ export default async function PortalLayout({
                   "use server";
                   await signOut({ redirectTo: "/" });
                 }}
-                className="flex items-center gap-3"
+                className="flex min-w-0 flex-col items-center gap-1 sm:flex-row sm:gap-3"
               >
-                <span className="hidden sm:inline text-xs text-white/55">
+                <Link
+                  href="/portal/profile"
+                  aria-label={`Open profile for ${name || email}`}
+                  className="max-w-28 truncate rounded-sm text-xs text-white/75 underline underline-offset-4 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)] sm:max-w-40"
+                >
                   {name || email}
-                </span>
+                </Link>
                 <button type="submit" className="btn btn-gold text-xs px-4 py-2">
                   Sign out
                 </button>
