@@ -66,6 +66,8 @@ export default async function PortalLayout({
     ...(FLAG_INTAKE_ENABLED ? [{ href: "/portal/flags", label: "Flags" }] : []),
     ...(isInterviewer && recruitingOpen ? [{ href: "/portal/interview", label: "Interviews" }] : []),
   ];
+  // Keep shared project delivery beside Dashboard, before leadership-only tools.
+  navLinks.splice(1, 0, { href: "/portal/projects", label: "Projects" });
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-cream)]/40">
@@ -83,7 +85,7 @@ export default async function PortalLayout({
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-6 text-[14px]" aria-label="Portal">
+          <nav className="hidden min-w-0 flex-1 overflow-x-auto whitespace-nowrap py-2 md:flex items-center gap-5 text-[14px]" aria-label="Portal">
             {navLinks.map((link) => (
               <Link key={link.href} href={link.href} className="nav-link">
                 {link.label}
