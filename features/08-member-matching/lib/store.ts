@@ -19,7 +19,7 @@ function check(error: DBError) {
   if (error.code === "P0001") throw new StoreError("This semester cannot accept that change. Refresh to check its status and projects.", 409);
   throw new StoreError("Could not save or load matching data. Please try again.");
 }
-const PROFILE_COLUMNS = "member_id,bio,major,graduation_year,website,linkedin,interests,skills,learning_goals";
+const PROFILE_COLUMNS = "member_id,bio,major,graduation_year,website,linkedin,interests,skills,learning_goals,directory_visible,open_to_mentor,share_email";
 const MEMBER_COLUMNS = "id,full_name,email,role,cohort";
 
 /** Re-check the live roster, not a potentially stale JWT role. */

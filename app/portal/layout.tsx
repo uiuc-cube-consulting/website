@@ -49,7 +49,7 @@ export default async function PortalLayout({
     { href: "/portal/profile", label: "My Profile" },
     { href: "/portal/case-studies", label: "Case Studies" },
     { href: "/portal/brain", label: "CUBE Brain" },
-    { href: "/portal/alumni", label: "Alumni" },
+    { href: "/portal/alumni", label: "CUBE Network" },
     // PMs file strikes; exec see the review dashboard (below).
     ...(role === "project_manager" ? [{ href: "/portal/strikes/new", label: "File a Strike" }] : []),
     // Leadership tools — only the roles that can use them.

@@ -98,12 +98,20 @@ function ProfileForm({ profile, onSave }: { profile: Profile; onSave: (v: Profil
       <InterestPicker selected={draft.interests} onChange={(v) => set("interests", v)} label="What are you interested in?" />
       <Field label="What do you want to learn?" hint="Think about skills, industries, or the kind of work you want to try."><textarea rows={3} maxLength={1000} className={inputClass} value={draft.learning_goals} onChange={(e) => set("learning_goals", e.target.value)} placeholder="This year, I’d like to get better at…" /></Field>
       <div className="grid gap-5 sm:grid-cols-2"><Field label="Personal website / portfolio" hint="Optional"><input type="url" className={inputClass} maxLength={300} value={draft.website} onChange={(e) => set("website", e.target.value)} placeholder="https://" /></Field><Field label="LinkedIn" hint="Optional"><input type="url" className={inputClass} maxLength={300} value={draft.linkedin} onChange={(e) => set("linkedin", e.target.value)} placeholder="https://linkedin.com/in/…" /></Field></div>
+      <fieldset className="space-y-4 rounded-xl bg-[var(--bg-cream)] p-5">
+        <legend className="text-sm font-semibold">CUBE network & mentoring</legend>
+        <p className="text-xs leading-relaxed text-[var(--muted)]">Your roster name and CUBE role appear in the members-only directory. Choose whether to share your major, skills, interests and LinkedIn. Your bio, learning goals and project preferences always stay private to you and exec.</p>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1" checked={draft.directory_visible} onChange={(e) => setDraft((d) => ({ ...d, directory_visible: e.target.checked, ...(!e.target.checked ? { open_to_mentor: false, share_email: false } : {}) }))} />Share my directory profile with CUBE members</label>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1" disabled={!draft.directory_visible} checked={draft.open_to_mentor} onChange={(e) => set("open_to_mentor", e.target.checked)} />I’m open to mentoring / coffee chats</label>
+        <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1" disabled={!draft.directory_visible} checked={draft.share_email} onChange={(e) => set("share_email", e.target.checked)} />Show my roster email to signed-in CUBE members</label>
+        <p className="text-xs text-[var(--muted)]">Saving confirms these shared details are current. You can turn sharing off at any time. <a className="font-semibold text-[var(--brand)] underline" href="/portal/alumni">Visit the CUBE network →</a></p>
+      </fieldset>
       <Notice text={error} error /><Notice text={status} /><button disabled={busy} className="btn btn-gold disabled:opacity-50">{busy ? "Saving…" : "Save profile"}<ArrowUpRight size={17} /></button>
     </div>
     <aside className={`${cardClass} space-y-5`}>
       <span className="inline-flex rounded-xl bg-[var(--bg-cream)] p-3 text-[var(--brand)]"><Sparkles size={22} /></span><h2 className="text-xl">A profile that grows with you.</h2>
       <p className="text-sm leading-relaxed text-[var(--muted)]">Your profile is ongoing. Project preferences are a fresh choice each semester—updating one never overwrites the other.</p>
-      <div className="border-t border-[var(--border)] pt-5"><p className="flex items-center gap-2 text-sm font-semibold"><LockKeyhole size={15} /> Who can see this?</p><p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">Only you and exec. Your profile, interests and ranked preferences are not published on the public website or shared with other members.</p></div>
+      <div className="border-t border-[var(--border)] pt-5"><p className="flex items-center gap-2 text-sm font-semibold"><LockKeyhole size={15} /> Who can see this?</p><p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">You and exec. You can opt in to share selected details in the members-only directory. Project preferences and learning goals are never shared with other members, and nothing is published on the public website.</p></div>
       <p className="text-xs leading-relaxed text-[var(--muted)]">Completeness counts your major, graduation year, bio, skills, interests and learning goals. Links are always optional.</p>
     </aside>
   </form>;
