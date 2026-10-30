@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CalendarDays, Trophy, FolderOpen, Mail, Camera, ClipboardCheck } from "lucide-react";
+import { CalendarDays, Trophy, FolderOpen, Mail, Camera, ClipboardCheck, Compass } from "lucide-react";
 import { CalendarEmbed } from "@/components/portal/CalendarEmbed";
 import { PointsLookup } from "@/components/portal/PointsLookup";
 import { PointSubmissions } from "@/components/portal/PointSubmissions";
@@ -104,6 +104,14 @@ export default async function PortalDashboard() {
           );
         })}
       </nav>
+
+      <Link href="/portal/profile" className="mt-6 flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-white p-6 transition-colors hover:border-[var(--brand)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-4">
+          <span className="rounded-xl bg-[var(--bg-cream)] p-3 text-[var(--brand)]"><Compass size={22} /></span>
+          <div><p className="font-display font-bold">Your profile & project preferences</p><p className="mt-1 text-sm text-[var(--muted)]">Share your interests, build your profile and choose the projects you want to work on each semester.</p></div>
+        </div>
+        <span className="shrink-0 text-sm font-semibold text-[var(--brand)]">{isExec ? "Open matching workspace →" : "Find your next project →"}</span>
+      </Link>
 
       <section id="calendar" className="mt-16 scroll-mt-24">
         <SectionHeader eyebrow="Upcoming" title="Calendar" />

@@ -46,6 +46,7 @@ export default async function PortalLayout({
   const navLinks: PortalNavLink[] = [
     // Core — everyone. Calendar / Points / Resources live as sections on the Dashboard.
     { href: "/portal", label: "Dashboard" },
+    { href: "/portal/profile", label: "My Profile" },
     { href: "/portal/case-studies", label: "Case Studies" },
     { href: "/portal/brain", label: "CUBE Brain" },
     { href: "/portal/alumni", label: "Alumni" },
