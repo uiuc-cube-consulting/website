@@ -26,8 +26,11 @@ must be explicitly closed before the next is published.
 
 ## Privacy and authorization
 
-- Profiles (including interests and learning goals) are private to their owner
-  and exec. This does not publish a public biography or member directory.
+- Full profiles and project preferences are private to their owner and exec.
+  The network extension adds explicit opt-in sharing of major, interests,
+  skills and LinkedIn to signed-in members, with separate email and mentoring
+  consent. Bio, learning goals and project preferences are never in directory
+  responses. Nothing is published on the public site.
 - A request rechecks the live member roster, including the current role.
   Request bodies cannot change member identity, role, cohort or roster names.
 - Ordinary members cannot retrieve draft catalogs, other members' profiles,

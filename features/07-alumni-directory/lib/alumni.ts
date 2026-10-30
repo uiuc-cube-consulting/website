@@ -27,6 +27,19 @@ export type Alumnus = {
   open_to_mentor: boolean;
   source: Source;
   updated_at: string;
+  /** Network extension. Legacy rows are alumni by default. */
+  membership?: "member" | "exec" | "alumni";
+  member_id?: string;
+  interests?: string[];
+  skills?: string[];
+  profile_confirmed_at?: string | null;
+  review?: {
+    identity_status: "unknown" | "evidence_found" | "conflict";
+    uiuc_status: "unknown" | "evidence_found" | "conflict";
+    source_url: string;
+    checked_at: string;
+    notes?: string;
+  } | null;
 };
 
 // ── Fields of study ──────────────────────────────────────────────────────────
@@ -83,10 +96,20 @@ export type FilterOptions = {
   company?: string; // exact company, or "" for any
   mentorsOnly?: boolean;
   sort?: SortKey;
+  membership?: "all" | "member" | "exec" | "alumni";
+  interest?: string;
+  needsReview?: boolean;
 };
 
 function haystack(a: Alumnus): string {
-  return [a.full_name, a.headline, a.company, a.position, a.major].filter(Boolean).join(" ").toLowerCase();
+  return [a.full_name, a.headline, a.company, a.position, a.major, ...(a.interests ?? []), ...(a.skills ?? [])].filter(Boolean).join(" ").toLowerCase();
+}
+
+/** A recent edit is not education/identity verification or employment proof. */
+export function needsDirectoryReview(a: Alumnus, now = Date.now()): boolean {
+  const reviewed = a.review;
+  return !reviewed || reviewed.identity_status !== "evidence_found" || reviewed.uiuc_status !== "evidence_found"
+    || !Number.isFinite(Date.parse(reviewed.checked_at)) || now - Date.parse(reviewed.checked_at) > 180 * 86400000;
 }
 
 /**
@@ -105,6 +128,9 @@ export function filterAlumni(alumni: Alumnus[], opts: FilterOptions = {}): Alumn
   const company = opts.company?.trim().toLowerCase() ?? "";
 
   const out = alumni.filter((a) => {
+    if (opts.membership && opts.membership !== "all" && (a.membership ?? "alumni") !== opts.membership) return false;
+    if (opts.interest && !(a.interests ?? []).includes(opts.interest)) return false;
+    if (opts.needsReview && !needsDirectoryReview(a)) return false;
     if (status && a.campus_status !== status) return false;
     if (opts.mentorsOnly && !a.open_to_mentor) return false;
     if (company && (a.company ?? "").toLowerCase() !== company) return false;

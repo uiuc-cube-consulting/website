@@ -1,3 +1,5 @@
+import { normalizeLinkedIn } from "@/features/07-alumni-directory/lib/alumni";
+
 export const INTERESTS = [
   "Strategy", "Technology", "Data & analytics", "Marketing", "Finance",
   "Operations", "Healthcare", "Sustainability", "Social impact", "Product",
@@ -12,10 +14,14 @@ export type Profile = {
   interests: string[];
   skills: string[];
   learning_goals: string;
+  directory_visible: boolean;
+  open_to_mentor: boolean;
+  share_email: boolean;
 };
 export const EMPTY_PROFILE: Profile = {
   bio: "", major: "", graduation_year: null, website: "", linkedin: "",
   interests: [], skills: [], learning_goals: "",
+  directory_visible: false, open_to_mentor: false, share_email: false,
 };
 export type Member = { id: string; full_name: string | null; email: string; role: string; cohort: string | null };
 export type Cycle = { id: string; name: string; status: "draft" | "open" | "closed"; deadline: string | null; created_at: string };
@@ -72,13 +78,21 @@ export function parseProfile(value: unknown): Profile {
   const v = object(value);
   const interests = list(v.interests, "interests", 10);
   if (interests.some((s) => !(INTERESTS as readonly string[]).includes(s))) throw new InputError("Choose interests from the list.");
+  for (const key of ["directory_visible", "open_to_mentor", "share_email"]) {
+    if (v[key] !== undefined && typeof v[key] !== "boolean") throw new InputError("Directory sharing choices must be true or false.");
+  }
+  if (!v.directory_visible && (v.open_to_mentor || v.share_email)) throw new InputError("Enable directory profile sharing before sharing contact details or mentoring availability.");
+  const linkedin = url(v.linkedin, "LinkedIn");
+  const canonicalLinkedIn = normalizeLinkedIn(linkedin);
+  if (linkedin && !canonicalLinkedIn) throw new InputError("LinkedIn must be a linkedin.com/in/ profile URL.");
   return {
     bio: text(v.bio, "Bio", 800),
     major: text(v.major, "Major", 120),
     graduation_year: v.graduation_year === null ? null : integer(v.graduation_year, "Graduation year", 2000, 2100),
-    website: url(v.website, "Website"), linkedin: url(v.linkedin, "LinkedIn"),
+    website: url(v.website, "Website"), linkedin: canonicalLinkedIn ?? "",
     interests, skills: list(v.skills, "skills", 15),
     learning_goals: text(v.learning_goals, "Learning goals", 1000),
+    directory_visible: v.directory_visible === true, open_to_mentor: v.open_to_mentor === true, share_email: v.share_email === true,
   };
 }
 export function parsePreference(value: unknown): PreferenceInput {

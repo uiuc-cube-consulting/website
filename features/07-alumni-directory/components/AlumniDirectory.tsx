@@ -11,6 +11,8 @@ import {
   type Field,
   type SortKey,
 } from "@/features/07-alumni-directory/lib/alumni";
+import { INTERESTS } from "@/features/08-member-matching/lib/model";
+import { ReviewEditor } from "@/features/09-cube-network/components/ReviewEditor";
 import { AlumniCard } from "./AlumniCard";
 import { AlumniEditor } from "./AlumniEditor";
 
@@ -26,25 +28,30 @@ const STATUS_TABS: (CampusStatus | "all")[] = ["all", "on_campus", "off_campus",
  * Exec additionally get Add / Edit, which write through /api/alumni and patch
  * the local list from the response rather than reloading the page.
  */
-export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alumnus[]; isExec: boolean }) {
+export function AlumniDirectory({ initialAlumni, isExec, reviewEndpoint }: { initialAlumni: Alumnus[]; isExec: boolean; reviewEndpoint?: string }) {
   const [alumni, setAlumni] = useState(initialAlumni);
+  const [now] = useState(() => Date.now());
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<CampusStatus | "all">("all");
   const [fields, setFields] = useState<Field[]>([]);
   const [company, setCompany] = useState("");
   const [mentorsOnly, setMentorsOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("name");
+  const [membership, setMembership] = useState<"all" | "member" | "exec" | "alumni">("all");
+  const [interest, setInterest] = useState("");
+  const [needsReview, setNeedsReview] = useState(false);
+  const [reviewing, setReviewing] = useState<Alumnus | null>(null);
   // `null` = closed, "new" = adding, an Alumnus = editing that one.
   const [editing, setEditing] = useState<Alumnus | "new" | null>(null);
 
   const facets = useMemo(() => getFacets(alumni), [alumni]);
   const filtered = useMemo(
-    () => filterAlumni(alumni, { query, status, fields, company, mentorsOnly, sort }),
-    [alumni, query, status, fields, company, mentorsOnly, sort]
+    () => filterAlumni(alumni, { query, status, fields, company, mentorsOnly, sort, membership, interest, needsReview }),
+    [alumni, query, status, fields, company, mentorsOnly, sort, membership, interest, needsReview]
   );
 
   const activeFilterCount =
-    (query.trim() ? 1 : 0) + (status !== "all" ? 1 : 0) + fields.length + (company ? 1 : 0) + (mentorsOnly ? 1 : 0);
+    (query.trim() ? 1 : 0) + (status !== "all" ? 1 : 0) + fields.length + (company ? 1 : 0) + (mentorsOnly ? 1 : 0) + (membership !== "all" ? 1 : 0) + (interest ? 1 : 0) + (needsReview ? 1 : 0);
 
   function clear() {
     setQuery("");
@@ -52,6 +59,7 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
     setFields([]);
     setCompany("");
     setMentorsOnly(false);
+    setMembership("all"); setInterest(""); setNeedsReview(false);
   }
 
   function toggleField(field: Field) {
@@ -69,7 +77,7 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
   }
 
   const stats = [
-    { value: facets.total, label: "Alumni" },
+    { value: facets.total, label: "People in CUBE" },
     { value: facets.status.on_campus, label: "Still on campus" },
     { value: facets.status.off_campus, label: "Working / grad school" },
     { value: facets.mentors, label: "Open to mentoring" },
@@ -158,6 +166,8 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <select aria-label="CUBE membership" className={selectClass} value={membership} onChange={(e) => setMembership(e.target.value as typeof membership)}><option value="all">Everyone</option><option value="member">Current members</option><option value="exec">Current exec</option><option value="alumni">Alumni</option></select>
+          <select aria-label="Interest" className={selectClass} value={interest} onChange={(e) => setInterest(e.target.value)}><option value="">All interests</option>{INTERESTS.map((v) => <option key={v}>{v}</option>)}</select>
           <select aria-label="Filter by company" className={selectClass} value={company} onChange={(e) => setCompany(e.target.value)}>
             <option value="">Any company</option>
             {facets.companies.map(({ company: c, count }) => (
@@ -184,6 +194,7 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
             />
             Open to mentoring
           </label>
+          {isExec && <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={needsReview} onChange={(e) => setNeedsReview(e.target.checked)} />Needs source review</label>}
 
           {activeFilterCount > 0 && (
             <button
@@ -196,7 +207,7 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
           )}
 
           <span className="ml-auto text-sm text-[var(--muted)]" aria-live="polite">
-            {filtered.length} {filtered.length === 1 ? "alum" : "alumni"}
+            {filtered.length} {filtered.length === 1 ? "person" : "people"}
           </span>
         </div>
       </div>
@@ -204,13 +215,13 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
       {filtered.length > 0 ? (
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((a) => (
-            <AlumniCard key={a.id} alumnus={a} onEdit={isExec ? () => setEditing(a) : undefined} />
+            <AlumniCard key={a.id} alumnus={a} now={now} onEdit={isExec && !a.member_id ? () => setEditing(a) : undefined} onReview={isExec ? () => setReviewing(a) : undefined} />
           ))}
         </div>
       ) : (
         <div className="mt-12 rounded-3xl border border-dashed border-[var(--border)] bg-white/60 px-6 py-16 text-center">
           <p className="font-display text-xl font-bold text-[var(--bg-dark)]">
-            {alumni.length ? "No matching alumni" : "No alumni yet"}
+            {alumni.length ? "No matching people" : "No directory entries yet"}
           </p>
           <p className="mx-auto mt-2 max-w-md text-[var(--muted)]">
             {alumni.length ? "Try a broader search or remove a filter." : "Exec can add alumni here, or load them with the import script."}
@@ -231,6 +242,7 @@ export function AlumniDirectory({ initialAlumni, isExec }: { initialAlumni: Alum
           onDeleted={onDeleted}
         />
       )}
+      {reviewing && <ReviewEditor row={reviewing} endpoint={reviewEndpoint} onClose={() => setReviewing(null)} onSaved={(review) => { setAlumni((rows) => rows.map((row) => row.id === reviewing.id ? { ...row, review } : row)); setReviewing(null); }} />}
     </div>
   );
 }
