@@ -49,8 +49,8 @@ export default async function PortalLayout({
     { href: "/portal/case-studies", label: "Case Studies" },
     { href: "/portal/brain", label: "CUBE Brain" },
     { href: "/portal/alumni", label: "CUBE Network" },
-    // PMs file strikes; exec see the review dashboard (below).
-    ...(role === "project_manager" ? [{ href: "/portal/strikes/new", label: "File a Strike" }] : []),
+    // PMs and SCs file strikes; exec see the review dashboard (below).
+    ...(role === "project_manager" || role === "senior_consultant" ? [{ href: "/portal/strikes/new", label: "File a Strike" }] : []),
     // Leadership tools — only the roles that can use them.
     ...(isExec && PIPELINE_ENABLED ? [{ href: "/portal/pipeline", label: "Pipeline" }] : []),
     ...(isExec ? [{ href: "/portal/strikes", label: "Strikes" }] : []),

@@ -27,8 +27,8 @@ export default auth((req) => {
   if (pathname.startsWith("/portal/points/review") && session.user.role !== "exec") {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
-  // Filing a strike (/portal/strikes/new) is limited to PMs + exec.
-  if (pathname === "/portal/strikes/new" && !["exec", "project_manager"].includes(session.user.role)) {
+  // Filing a strike (/portal/strikes/new) is limited to PMs, SCs + exec.
+  if (pathname === "/portal/strikes/new" && !["exec", "project_manager", "senior_consultant"].includes(session.user.role)) {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 
