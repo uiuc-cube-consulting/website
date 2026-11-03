@@ -5,7 +5,7 @@
 //
 // Applicants who have moved on stay reachable here — any member may look somebody
 // up and flag them — but they are filtered out by default and cannot be re-scored.
-// The later rounds are worked in /portal/interview instead.
+// The later rounds are worked in the Interviews tab (InterviewConsole) instead.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {

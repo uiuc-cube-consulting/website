@@ -1,45 +1,8 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { InterviewConsole } from "@/features/03-recruitment-ats/components/InterviewConsole";
-import { canInterview } from "@/features/03-recruitment-ats/lib/interview";
-import { canViewRecruiting } from "@/features/03-recruitment-ats/lib/visibility";
 
-export const metadata: Metadata = {
-  title: "Interviews",
-  robots: { index: false, follow: false },
-};
-
-export default async function InterviewPage() {
-  const session = await auth();
-  if (!session?.user?.email) redirect("/portal/sign-in");
-  if (!canInterview(session.user.role)) redirect("/portal");
-  if (!(await canViewRecruiting(session.user.role))) redirect("/portal");
-
-  return (
-    <div className="container-x py-10 md:py-14">
-      <div>
-        <p className="eyebrow">Recruiting · Rounds 2 and 3</p>
-        <h1 className="mt-3 font-display text-4xl font-extrabold leading-[1.05] text-[var(--bg-dark)] md:text-5xl">
-          Interview console.
-        </h1>
-        <p className="mt-3 max-w-2xl text-[var(--muted)]">
-          Search the candidate you&rsquo;re about to interview and get their resume, case rubric, and
-          behavioral rubric on one screen. Your rubrics are yours — you fill in a copy for the
-          people you&rsquo;re interviewing, and the templates stay untouched.
-        </p>
-        <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-          The first round is staffed from the whole recruiting pool; the final round is exec only.
-          Written applications are scored in the{" "}
-          <a href="/portal/recruiting" className="font-semibold text-[var(--gold-deep)] hover:underline">
-            applications console
-          </a>
-          .
-        </p>
-      </div>
-      <div className="mt-8">
-        <InterviewConsole />
-      </div>
-    </div>
-  );
+// The interview console is a tab of /portal/recruiting now (see
+// components/RecruitingTabs.tsx). This route stays so old bookmarks and links
+// land on that tab rather than a 404.
+export default function InterviewPage() {
+  redirect("/portal/recruiting?tab=interviews");
 }

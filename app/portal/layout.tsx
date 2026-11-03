@@ -57,13 +57,13 @@ export default async function PortalLayout({
     // Accountability follows the project SEAT, not the title — returning members
     // can hold an SC seat, so they get the link too and the page decides.
     ...(isInterviewer ? [{ href: "/portal/accountability", label: "Accountability" }] : []),
+    // One page for every round — written applications and interviews are tabs.
     ...(recruitingOpen ? [{ href: "/portal/recruiting", label: "Recruiting" }] : []),
     // Flags are NOT behind `recruitingOpen`: they are filed at info nights and
     // coffee chats months before a cycle opens, which is exactly when the
     // recruiting console is shut. They are behind their own switch instead,
     // currently off for the incoming cohort — see lib/flag-intake-enabled.ts.
     ...(FLAG_INTAKE_ENABLED ? [{ href: "/portal/flags", label: "Flags" }] : []),
-    ...(isInterviewer && recruitingOpen ? [{ href: "/portal/interview", label: "Interviews" }] : []),
   ];
   // Keep shared project delivery beside Dashboard, before leadership-only tools.
   navLinks.splice(1, 0, { href: "/portal/projects", label: "Projects" });

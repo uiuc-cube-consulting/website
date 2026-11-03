@@ -1,2 +1,3 @@
-// Route shim — real page in the feature folder. Registers /portal/interview (auth-gated).
-export { default, metadata } from "@/features/03-recruitment-ats/app/portal/interview/page";
+// Route shim — real page in the feature folder. Registers /portal/interview, which
+// now only redirects to the Interviews tab of /portal/recruiting.
+export { default } from "@/features/03-recruitment-ats/app/portal/interview/page";

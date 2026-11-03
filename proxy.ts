@@ -4,7 +4,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { PIPELINE_ENABLED } from "@/features/02-pipeline-crm/lib/enabled";
-import { canInterviewRole } from "@/features/03-recruitment-ats/lib/access";
 import { FLAG_INTAKE_ENABLED } from "@/features/03-recruitment-ats/lib/flag-intake-enabled";
 // export { auth as proxy } from "@/types/auth";
 
@@ -63,13 +62,10 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/portal", req.url));
   }
 
-  // Interview console: every member role, same as scoring itself. An interview is
-  // staffed from whoever is in the room, so the console cannot be narrower than
-  // the write it exists to perform. The final round is still exec-only, enforced
-  // per-round inside the routes (lib/rounds.ts) rather than by path here.
-  if (pathname.startsWith("/portal/interview") && !canInterviewRole(session.user.role)) {
-    return NextResponse.redirect(new URL("/portal", req.url));
-  }
+  // Interview console: a tab of /portal/recruiting, open to every member role,
+  // same as scoring itself. /portal/interview only redirects there now. The final
+  // round is still exec-only, enforced per-round inside the routes (lib/rounds.ts)
+  // rather than by path here.
 
   return NextResponse.next();
 });
