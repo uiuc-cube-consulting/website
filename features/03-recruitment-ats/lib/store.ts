@@ -3,6 +3,7 @@
 // from client code.
 
 import { createServerClient } from "@/lib/supabase/server";
+import { likeEscape } from "@/lib/supabase/like";
 import { DEMO_APPLICANTS, DEMO_FLAGS, DEMO_PENDING_FLAGS, DEMO_REVIEWS } from "./demo";
 import {
   normalizeSubject,
@@ -383,18 +384,6 @@ export async function submitReview(input: {
   );
   if (error) return { ok: false, error: error.message };
   return { ok: true };
-}
-
-/**
- * Escape the LIKE metacharacters before an email is used as an `ilike` pattern.
- *
- * `_` matches any single character in LIKE and is perfectly legal in an email
- * local part, so an unescaped lookup for `first_last@illinois.edu` also matches
- * `firstXlast@illinois.edu` — silently attaching one person's flag to another.
- * `%` and the escape character itself have the same problem.
- */
-function likeEscape(value: string): string {
-  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 export type FlagResult = WriteResult & {
