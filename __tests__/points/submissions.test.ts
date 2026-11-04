@@ -110,7 +110,7 @@ describe("repeat limits", () => {
   it("counts pending and approved submissions but not rejected ones", () => {
     const subs = [sub("exec-1on1", "pending"), sub("exec-1on1", "approved"), sub("exec-1on1", "rejected")];
     expect(repeatsUsed(subs, "exec-1on1")).toBe(2);
-    expect(repeatsLeft(findEvent("exec-1on1")!, subs)).toBe(1);
+    expect(repeatsLeft(findEvent("exec-1on1")!, subs)).toBe(3);
   });
 
   it("never goes below zero", () => {

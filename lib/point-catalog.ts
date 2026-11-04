@@ -68,7 +68,7 @@ function event(
 }
 
 export const POINT_EVENTS: PointEvent[] = [
-  event("fundamentals", "exec-1on1", "1:1 with an exec member", 1, 3, true),
+  event("fundamentals", "exec-1on1", "1:1 with an exec member", 1, 5, true),
   event("fundamentals", "team-presentation", "Attend another team's midpoint or final presentation", 1, 2),
   event("fundamentals", "committee-meeting", "Attend a committee meeting", 1, 2, true),
   event("fundamentals", "social-repost", "Repost CUBE events and fundraisers on social media", 1, 2, true),
@@ -83,8 +83,8 @@ export const POINT_EVENTS: PointEvent[] = [
 
   event("social", "project-social", "Project-wide social", 1, 2),
   event("social", "consultant-1on1", "1:1 with a fellow consultant", 1, 1),
-  event("social", "pm-1on1", "1:1 with a PM (outside your project team)", 1, 2),
-  event("social", "sc-1on1", "1:1 with an SC (outside your project team)", 1, 2),
+  event("social", "pm-1on1", "1:1 with a PM (outside your project team)", 1, 4),
+  event("social", "sc-1on1", "1:1 with an SC (outside your project team)", 1, 4),
   event("social", "cube-social", "Attend a CUBE-wide social", 1, 2),
 ];
 
